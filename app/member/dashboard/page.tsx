@@ -10,6 +10,7 @@ import { Scenario, type Scenario as ScenarioType } from "@/lib/dataconnect/gener
 import { SCENARIOS, SCOPES, type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
 import { ScenarioScopeToggle } from "@/components/ScenarioScopeToggle";
+import { CompanyRollupTable } from "@/components/CompanyRollupTable";
 
 // Reads searchParams and the session cookie, so this is already dynamic — explicit for
 // clarity (plan §4).
@@ -102,7 +103,6 @@ async function AsvView({ scenario }: { scenario: ScenarioType }) {
     listCompanyRollups({ scenario }),
   ]);
   const totals = portfolio.rollupCaches[0];
-  const companyRows = rollupCaches.filter((r) => r.company);
 
   return (
     <>
@@ -118,28 +118,7 @@ async function AsvView({ scenario }: { scenario: ScenarioType }) {
         />
       </div>
 
-      <table className="w-full text-left text-sm">
-        <thead>
-          <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-            <th className="py-2 font-medium">Company</th>
-            <th className="py-2 font-medium">Sector</th>
-            <th className="py-2 text-right font-medium">MOIC</th>
-            <th className="py-2 text-right font-medium">Unrealized</th>
-            <th className="py-2 text-right font-medium">Realized</th>
-          </tr>
-        </thead>
-        <tbody>
-          {companyRows.map((r) => (
-            <tr key={r.companyKey} className="border-b border-zinc-100 dark:border-zinc-900">
-              <td className="py-2">{r.company!.name}</td>
-              <td className="py-2 text-zinc-500 dark:text-zinc-500">{r.company!.sector ?? "—"}</td>
-              <td className="py-2 text-right tabular-nums">{formatMoic(r.moic)}</td>
-              <td className="py-2 text-right tabular-nums">{formatCurrencyCompact(r.unrealizedValue)}</td>
-              <td className="py-2 text-right tabular-nums">{formatCurrencyCompact(r.realizedValue)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <CompanyRollupTable rows={rollupCaches} />
     </>
   );
 }

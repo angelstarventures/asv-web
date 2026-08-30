@@ -17,6 +17,8 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListMemberAllocations*](#listmemberallocations)
   - [*ListMemberValuations*](#listmembervaluations)
   - [*GetMemberByAuthUid*](#getmemberbyauthuid)
+  - [*ListAllMembers*](#listallmembers)
+  - [*GetMemberById*](#getmemberbyid)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -1081,6 +1083,222 @@ console.log(data.members);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.members);
+});
+```
+
+## ListAllMembers
+You can execute the `ListAllMembers` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listAllMembers(options?: ExecuteQueryOptions): QueryPromise<ListAllMembersData, undefined>;
+
+interface ListAllMembersRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAllMembersData, undefined>;
+}
+export const listAllMembersRef: ListAllMembersRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listAllMembers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAllMembersData, undefined>;
+
+interface ListAllMembersRef {
+  ...
+  (dc: DataConnect): QueryRef<ListAllMembersData, undefined>;
+}
+export const listAllMembersRef: ListAllMembersRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listAllMembersRef:
+```typescript
+const name = listAllMembersRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListAllMembers` query has no variables.
+### Return Type
+Recall that executing the `ListAllMembers` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListAllMembersData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListAllMembersData {
+  members: ({
+    id: string;
+    displayName: string;
+    email: string;
+    role: Role;
+    status: MemberStatus;
+    authUid?: string | null;
+    createdAt: TimestampString;
+  } & Member_Key)[];
+}
+```
+### Using `ListAllMembers`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listAllMembers } from '@asv/dataconnect-generated';
+
+
+// Call the `listAllMembers()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listAllMembers();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listAllMembers(dataConnect);
+
+console.log(data.members);
+
+// Or, you can use the `Promise` API.
+listAllMembers().then((response) => {
+  const data = response.data;
+  console.log(data.members);
+});
+```
+
+### Using `ListAllMembers`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listAllMembersRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listAllMembersRef()` function to get a reference to the query.
+const ref = listAllMembersRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listAllMembersRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.members);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.members);
+});
+```
+
+## GetMemberById
+You can execute the `GetMemberById` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+getMemberById(vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
+
+interface GetMemberByIdRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetMemberByIdVariables): QueryRef<GetMemberByIdData, GetMemberByIdVariables>;
+}
+export const getMemberByIdRef: GetMemberByIdRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+getMemberById(dc: DataConnect, vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
+
+interface GetMemberByIdRef {
+  ...
+  (dc: DataConnect, vars: GetMemberByIdVariables): QueryRef<GetMemberByIdData, GetMemberByIdVariables>;
+}
+export const getMemberByIdRef: GetMemberByIdRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getMemberByIdRef:
+```typescript
+const name = getMemberByIdRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `GetMemberById` query requires an argument of type `GetMemberByIdVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface GetMemberByIdVariables {
+  id: string;
+}
+```
+### Return Type
+Recall that executing the `GetMemberById` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `GetMemberByIdData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface GetMemberByIdData {
+  member?: {
+    id: string;
+    displayName: string;
+    email: string;
+    role: Role;
+    status: MemberStatus;
+    authUid?: string | null;
+    createdAt: TimestampString;
+  } & Member_Key;
+}
+```
+### Using `GetMemberById`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, getMemberById, GetMemberByIdVariables } from '@asv/dataconnect-generated';
+
+// The `GetMemberById` query requires an argument of type `GetMemberByIdVariables`:
+const getMemberByIdVars: GetMemberByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getMemberById()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await getMemberById(getMemberByIdVars);
+// Variables can be defined inline as well.
+const { data } = await getMemberById({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await getMemberById(dataConnect, getMemberByIdVars);
+
+console.log(data.member);
+
+// Or, you can use the `Promise` API.
+getMemberById(getMemberByIdVars).then((response) => {
+  const data = response.data;
+  console.log(data.member);
+});
+```
+
+### Using `GetMemberById`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, getMemberByIdRef, GetMemberByIdVariables } from '@asv/dataconnect-generated';
+
+// The `GetMemberById` query requires an argument of type `GetMemberByIdVariables`:
+const getMemberByIdVars: GetMemberByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getMemberByIdRef()` function to get a reference to the query.
+const ref = getMemberByIdRef(getMemberByIdVars);
+// Variables can be defined inline as well.
+const ref = getMemberByIdRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = getMemberByIdRef(dataConnect, getMemberByIdVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.member);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.member);
 });
 ```
 

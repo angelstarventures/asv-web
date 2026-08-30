@@ -12,6 +12,8 @@ import {
   listMemberAllocationsRef,
   listMemberValuationsRef,
   getMemberByAuthUidRef,
+  listAllMembersRef,
+  getMemberByIdRef,
   type ListCompaniesData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
@@ -28,6 +30,9 @@ import {
   type ListMemberValuationsVariables,
   type GetMemberByAuthUidData,
   type GetMemberByAuthUidVariables,
+  type ListAllMembersData,
+  type GetMemberByIdData,
+  type GetMemberByIdVariables,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -126,6 +131,19 @@ export async function getMemberByAuthUid(
 ): Promise<GetMemberByAuthUidData> {
   const res = await dc().executeQuery<GetMemberByAuthUidData, GetMemberByAuthUidVariables>(
     getMemberByAuthUidRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listAllMembers(): Promise<ListAllMembersData> {
+  const res = await dc().executeQuery<ListAllMembersData>(listAllMembersRef.operationName);
+  return res.data;
+}
+
+export async function getMemberById(vars: GetMemberByIdVariables): Promise<GetMemberByIdData> {
+  const res = await dc().executeQuery<GetMemberByIdData, GetMemberByIdVariables>(
+    getMemberByIdRef.operationName,
     vars
   );
   return res.data;

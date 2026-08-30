@@ -1,5 +1,6 @@
 import { getApps, initializeApp, type FirebaseOptions } from "firebase/app";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
@@ -13,15 +14,20 @@ const firebaseConfig: FirebaseOptions = {
 
 export const firebaseApp = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
+// Same region as functions/src/index.ts's setGlobalOptions — a callable region mismatch
+// resolves to a 404, not an auth error, so this must track that value exactly.
+export const functions = getFunctions(firebaseApp, "us-east1");
 
-// Local dev talks to the Auth emulator, never real user credentials on a workstation —
-// minting a session cookie needs real signing credentials that plain `next dev` doesn't
-// have (see lib/firebase/admin.ts and app/api/auth/session/route.ts). Guarded by a module
-// flag so a second `connectAuthEmulator` call (React Fast Refresh re-evaluating this module)
-// doesn't throw "already connected".
+// Local dev talks to the Auth/Functions emulators, never real user credentials on a
+// workstation — minting a session cookie needs real signing credentials that plain
+// `next dev` doesn't have (see lib/firebase/admin.ts and app/api/auth/session/route.ts).
+// Guarded by a module flag so a second connect*Emulator call (React Fast Refresh
+// re-evaluating this module) doesn't throw "already connected".
 declare global {
   // eslint-disable-next-line no-var
   var __ASV_AUTH_EMULATOR_CONNECTED__: boolean | undefined;
+  // eslint-disable-next-line no-var
+  var __ASV_FUNCTIONS_EMULATOR_CONNECTED__: boolean | undefined;
 }
 if (
   typeof window !== "undefined" &&
@@ -30,6 +36,14 @@ if (
 ) {
   connectAuthEmulator(auth, "http://127.0.0.1:9099");
   globalThis.__ASV_AUTH_EMULATOR_CONNECTED__ = true;
+}
+if (
+  typeof window !== "undefined" &&
+  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true" &&
+  !globalThis.__ASV_FUNCTIONS_EMULATOR_CONNECTED__
+) {
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+  globalThis.__ASV_FUNCTIONS_EMULATOR_CONNECTED__ = true;
 }
 
 // Protects the public, unauthenticated landing-page queries (board/member profiles, company

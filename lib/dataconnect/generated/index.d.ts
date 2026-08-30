@@ -113,6 +113,22 @@ export interface GetMemberByAuthUidVariables {
   authUid: string;
 }
 
+export interface GetMemberByIdData {
+  member?: {
+    id: string;
+    displayName: string;
+    email: string;
+    role: Role;
+    status: MemberStatus;
+    authUid?: string | null;
+    createdAt: TimestampString;
+  } & Member_Key;
+}
+
+export interface GetMemberByIdVariables {
+  id: string;
+}
+
 export interface GetPortfolioRollupData {
   rollupCaches: ({
     moic: number;
@@ -143,6 +159,18 @@ export interface InsertCompanyVariables {
 export interface LedgerEntry_Key {
   id: UUIDString;
   __typename?: 'LedgerEntry_Key';
+}
+
+export interface ListAllMembersData {
+  members: ({
+    id: string;
+    displayName: string;
+    email: string;
+    role: Role;
+    status: MemberStatus;
+    authUid?: string | null;
+    createdAt: TimestampString;
+  } & Member_Key)[];
 }
 
 export interface ListCompaniesData {
@@ -418,4 +446,28 @@ export const getMemberByAuthUidRef: GetMemberByAuthUidRef;
 
 export function getMemberByAuthUid(vars: GetMemberByAuthUidVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByAuthUidData, GetMemberByAuthUidVariables>;
 export function getMemberByAuthUid(dc: DataConnect, vars: GetMemberByAuthUidVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByAuthUidData, GetMemberByAuthUidVariables>;
+
+interface ListAllMembersRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAllMembersData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAllMembersData, undefined>;
+  operationName: string;
+}
+export const listAllMembersRef: ListAllMembersRef;
+
+export function listAllMembers(options?: ExecuteQueryOptions): QueryPromise<ListAllMembersData, undefined>;
+export function listAllMembers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAllMembersData, undefined>;
+
+interface GetMemberByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetMemberByIdVariables): QueryRef<GetMemberByIdData, GetMemberByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetMemberByIdVariables): QueryRef<GetMemberByIdData, GetMemberByIdVariables>;
+  operationName: string;
+}
+export const getMemberByIdRef: GetMemberByIdRef;
+
+export function getMemberById(vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
+export function getMemberById(dc: DataConnect, vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
 

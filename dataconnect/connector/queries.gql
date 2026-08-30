@@ -117,3 +117,30 @@ query GetMemberByAuthUid($authUid: String!) @auth(level: USER, insecureReason: "
     status
   }
 }
+
+# Admin-only in practice — proxy.ts blocks every /admin/* request whose session claim isn't
+# role=admin before this page (app/admin/members) ever renders; executed here with admin
+# trust regardless, same as every other query in this file (plan §3/§4).
+query ListAllMembers @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route, not by this directive — see the file header.") {
+  members(orderBy: { id: ASC }) {
+    id
+    displayName
+    email
+    role
+    status
+    authUid
+    createdAt
+  }
+}
+
+query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Same as ListAllMembers — gated by proxy.ts's role=admin check, not this directive.") {
+  member(key: { id: $id }) {
+    id
+    displayName
+    email
+    role
+    status
+    authUid
+    createdAt
+  }
+}
