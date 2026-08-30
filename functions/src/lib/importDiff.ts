@@ -1,6 +1,15 @@
 import { createHash } from "node:crypto";
 import { validateLedgerRecord } from "./schema-validate";
 import { query } from "./dataconnect-admin";
+import { LEDGER_TYPE_TO_ENUM, legacyTypeToEnum, type LegacyLedgerType } from "./enumMap";
+
+// Tolerant of both shapes `record.type` can carry: the legacy JSON string
+// ("Participating_PricedRound", from the original schema) or the DB enum form directly
+// ("CUSTOM" — mass-exported custom-event records never had a legacy string to begin with,
+// see ledger-massExport.ts's ENUM_TO_LEDGER_TYPE fallback).
+function normalizeTypeToEnum(type: string): string {
+  return type in LEDGER_TYPE_TO_ENUM ? legacyTypeToEnum(type as LegacyLedgerType) : type;
+}
 
 // Shared by ledger-massImportDiff/-Commit and functions/scripts/migrate-legacy-data.ts (plan
 // §3/§5) — one canonical notion of "is this the same record we already have."
@@ -19,9 +28,17 @@ export interface DiffResult {
 // "will be appended, existing entry is not modified"). Scenario is part of the key because one
 // record == one scenario's row; the same (date, company, type) legitimately exists as up to 3
 // separate rows, one per scenario, with potentially different values (valuation/health types).
+//
+// `type` is normalized to the DB enum form (legacyTypeToEnum) because the existing-rows side
+// of this comparison reads `le.type`, which is already the enum value — comparing the raw
+// legacy JSON string ("Participating_PricedRound") against the DB enum
+// ("PARTICIPATING_PRICED_ROUND") would never match, silently reclassifying every already-
+// migrated record as NEW on every re-run (caught by an idempotency re-run producing 64 rows
+// instead of skipping all 32 the second time).
 function naturalKey(record: Record<string, unknown>, scenarioOverride?: string): string {
   const scenario = (scenarioOverride ?? String(record.scenario ?? "")).toLowerCase();
-  return `${record.date}::${record.company}::${record.type}::${scenario}`;
+  const type = normalizeTypeToEnum(String(record.type));
+  return `${record.date}::${record.company}::${type}::${scenario}`;
 }
 
 // Excludes `scenario` — it's already part of the natural key/bucketing (via scenarioOverride

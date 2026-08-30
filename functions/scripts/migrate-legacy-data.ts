@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { initializeApp, cert } from "firebase-admin/app";
 import { withTransaction, query } from "../src/lib/dataconnect-admin";
 import { validateLedgerRecord } from "../src/lib/schema-validate";
 import { applyLedgerRecord } from "../src/lib/applyLedgerRecord";
@@ -94,10 +93,12 @@ const NON_DIVERGING_TYPES = new Set([
 
 async function upsertMembers(memberList: Record<string, string>, memberAliases: Record<string, string>): Promise<void> {
   await withTransaction(async (client) => {
+    // created_at has no real Postgres-level default (Data Connect's @default(expr:
+    // "request.time") is an API-layer default only) — raw `pg` inserts must set it explicitly.
     // Synthetic member so the audit trail correctly shows these rows weren't hand-entered.
     await client.query(
-      `INSERT INTO "member" (id, "display_name", email, role, status)
-       VALUES ($1, $2, 'system-migration@asv.internal', 'ADMIN', 'ACTIVE')
+      `INSERT INTO "member" (id, "display_name", email, role, status, "created_at")
+       VALUES ($1, $2, 'system-migration@asv.internal', 'ADMIN', 'ACTIVE', now())
        ON CONFLICT (id) DO NOTHING`,
       [SYSTEM_MIGRATION_MEMBER_ID, SYSTEM_MIGRATION_MEMBER_NAME]
     );
@@ -106,8 +107,8 @@ async function upsertMembers(memberList: Record<string, string>, memberAliases: 
       const name = memberAliases[rawName] ?? rawName;
       const email = `member-${id}@placeholder.asv.internal`; // real email set later via provisionMember
       await client.query(
-        `INSERT INTO "member" (id, "display_name", email, role, status)
-         VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE')
+        `INSERT INTO "member" (id, "display_name", email, role, status, "created_at")
+         VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', now())
          ON CONFLICT (id) DO UPDATE SET "display_name" = $2`,
         [id, name, email]
       );
@@ -122,12 +123,6 @@ interface ScenarioFile {
 
 async function run(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
-
-  initializeApp(
-    process.env.FIREBASE_SERVICE_ACCOUNT_JSON
-      ? { credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)) }
-      : {}
-  );
 
   const memberList = loadJson<Record<string, string>>(args.members);
   const companyAliases = args.companyAliases ? loadJson<Record<string, string>>(args.companyAliases) : {};
@@ -253,7 +248,11 @@ function logNearDuplicateReport(
   }
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exitCode = 1;
-});
+// The pg Pool and Cloud SQL Connector keep background sockets/timers open, so the process
+// never exits on its own once the migration work is done — force it here instead.
+run()
+  .catch((err) => {
+    console.error(err);
+    process.exitCode = 1;
+  })
+  .finally(() => process.exit(process.exitCode ?? 0));

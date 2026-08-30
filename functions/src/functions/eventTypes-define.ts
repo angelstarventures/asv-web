@@ -72,9 +72,10 @@ export const eventTypesDefine = onCall<DefineEventTypeInput, Promise<{ key: stri
   }
 
   await withTransaction(async (client) => {
+    // created_at has no real Postgres-level default — see the note in ledgerWriteBuilders.ts.
     await client.query(
-      `INSERT INTO "event_type_definition" (key, label, description, "is_builtin", "field_schema", "created_by_id")
-       VALUES ($1, $2, $3, false, $4::jsonb, $5)`,
+      `INSERT INTO "event_type_definition" (key, label, description, "is_builtin", "field_schema", "created_by_id", "created_at")
+       VALUES ($1, $2, $3, false, $4::jsonb, $5, now())`,
       [input.key, input.label, input.description ?? null, JSON.stringify(input.fields), caller.memberId]
     );
   });

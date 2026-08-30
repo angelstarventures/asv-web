@@ -44,9 +44,10 @@ export const documentsGetAccessUrl = onCall<GetAccessUrlInput, Promise<GetAccess
     const access = await checkDocumentAccess(caller.role, caller.memberId, doc.companyId, doc.docType);
 
     await withTransaction(async (client) => {
+      // accessed_at has no real Postgres-level default — see the note in ledgerWriteBuilders.ts.
       await client.query(
-        `INSERT INTO "document_access_log" ("document_id", "accessed_by_id", decision, reason)
-         VALUES ($1, $2, $3, $4)`,
+        `INSERT INTO "document_access_log" ("document_id", "accessed_by_id", decision, reason, "accessed_at")
+         VALUES ($1, $2, $3, $4, now())`,
         [doc.id, caller.memberId, access.granted ? "GRANTED" : "DENIED", access.reason]
       );
     });

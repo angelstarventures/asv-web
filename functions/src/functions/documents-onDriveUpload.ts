@@ -47,9 +47,10 @@ export const documentsOnDriveUpload = onCall<DocumentsOnDriveUploadInput, Promis
     );
 
     const documentId = await withTransaction(async (client) => {
+      // uploaded_at has no real Postgres-level default — see the note in ledgerWriteBuilders.ts.
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO "document" ("drive_file_id", "drive_url", "doc_type", "company_id", "uploaded_by_id")
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO "document" ("drive_file_id", "drive_url", "doc_type", "company_id", "uploaded_by_id", "uploaded_at")
+         VALUES ($1, $2, $3, $4, $5, now())
          RETURNING id`,
         [driveFileId, driveUrl, input.docType, input.companyId, caller.memberId]
       );

@@ -20,10 +20,14 @@ export interface LedgerEntryInput {
 }
 
 export async function insertLedgerEntry(client: PoolClient, input: LedgerEntryInput): Promise<string> {
+  // created_at has no real Postgres-level default — schema.gql's @default(expr:
+  // "request.time") is a Data Connect API-layer default only (unlike @default(expr:
+  // "uuidV4()"), which does compile to a real column default); raw `pg` inserts must set it
+  // explicitly. Confirmed by inspecting information_schema.columns against the live DB.
   const { rows } = await client.query<{ id: string }>(
     `INSERT INTO "ledger_entry"
-       ("company_id", scenario, type, "event_date", "source_document", "created_by_id", "needs_review")
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ("company_id", scenario, type, "event_date", "source_document", "created_by_id", "needs_review", "created_at")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
      RETURNING id`,
     [
       input.companyId,

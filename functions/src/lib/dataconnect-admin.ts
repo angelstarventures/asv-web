@@ -1,4 +1,4 @@
-import { Connector, IpAddressTypes, AuthTypes } from "@google-cloud/cloud-sql-connector";
+import { Connector, IpAddressTypes, AuthTypes, type ConnectorOptions } from "@google-cloud/cloud-sql-connector";
 import { Pool, type PoolClient } from "pg";
 
 // Raw `pg` against the same Cloud SQL Postgres instance Data Connect manages, used only where
@@ -16,7 +16,26 @@ let connector: Connector | undefined;
 async function getPool(): Promise<Pool> {
   if (pool) return pool;
 
-  connector = new Connector();
+  let auth: ConnectorOptions["auth"];
+  if (process.env.CLOUD_SQL_AUTH_MODE === "local") {
+    // Local CLI tools (functions/scripts/migrate-legacy-data.ts) run under the developer's
+    // own `firebase login` session, not a deployed Cloud Function's ADC — which plain `next
+    // dev`/`node` on a workstation doesn't have (see the scripts/*.js one-offs used to wire
+    // this up). Dynamically required so it's never loaded — and firebase-tools never needs to
+    // be installed — inside the deployed function bundle, where CLOUD_SQL_AUTH_MODE is unset.
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { FBToolsAuthClient } = require("firebase-tools/lib/gcp/cloudsql/fbToolsAuthClient");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { requireAuth } = require("firebase-tools/lib/requireAuth");
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { getGlobalDefaultAccount } = require("firebase-tools/lib/auth");
+    const account = getGlobalDefaultAccount();
+    if (!account) throw new Error("Not logged in — run `firebase login` first.");
+    await requireAuth({ user: account.user, tokens: account.tokens });
+    auth = new FBToolsAuthClient();
+  }
+
+  connector = new Connector({ auth });
   const clientOpts = await connector.getOptions({
     instanceConnectionName: INSTANCE_CONNECTION_NAME,
     // No VPC/private network is configured on asv-tracker-sql (Data Connect's free-trial
