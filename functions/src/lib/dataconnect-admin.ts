@@ -19,7 +19,10 @@ async function getPool(): Promise<Pool> {
   connector = new Connector();
   const clientOpts = await connector.getOptions({
     instanceConnectionName: INSTANCE_CONNECTION_NAME,
-    ipType: IpAddressTypes.PRIVATE,
+    // No VPC/private network is configured on asv-tracker-sql (Data Connect's free-trial
+    // provisioning only enables a public IP) — PRIVATE here would fail to connect. Revisit if
+    // the instance is later moved behind a VPC connector.
+    ipType: IpAddressTypes.PUBLIC,
     authType: AuthTypes.IAM,
   });
 
