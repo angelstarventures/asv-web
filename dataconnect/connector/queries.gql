@@ -144,3 +144,21 @@ query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Same as Li
     createdAt
   }
 }
+
+# Admin-only in practice (plan §4, ledger write flows). Selects only the plain-text columns —
+# fieldSchema is deliberately never selected here. It's jsonb holding a JSON *array*, and
+# Data Connect's GraphQL layer cannot coerce that shape into the schema's `String` type at
+# all, even for a bare by-id read (confirmed against the live service: "is invalid String:
+# unexpected value: [...] with type: []interface {}") — a sharper version of the jsonb
+# spike's caveat (plan §2) than "don't filter into it." functions/eventTypes-getByKey.ts
+# reads fieldSchema instead, straight through `pg` (which auto-parses jsonb), called from the
+# entry/[eventType] page's client half since it's a Cloud Functions callable, not a
+# Data Connect query.
+query ListCustomEventTypes @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route.") {
+  eventTypeDefinitions(where: { isBuiltin: { eq: false } }, orderBy: { createdAt: DESC }) {
+    id
+    key
+    label
+    description
+  }
+}

@@ -19,6 +19,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*GetMemberByAuthUid*](#getmemberbyauthuid)
   - [*ListAllMembers*](#listallmembers)
   - [*GetMemberById*](#getmemberbyid)
+  - [*ListCustomEventTypes*](#listcustomeventtypes)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -1299,6 +1300,102 @@ console.log(data.member);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.member);
+});
+```
+
+## ListCustomEventTypes
+You can execute the `ListCustomEventTypes` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listCustomEventTypes(options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
+
+interface ListCustomEventTypesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListCustomEventTypesData, undefined>;
+}
+export const listCustomEventTypesRef: ListCustomEventTypesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listCustomEventTypes(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
+
+interface ListCustomEventTypesRef {
+  ...
+  (dc: DataConnect): QueryRef<ListCustomEventTypesData, undefined>;
+}
+export const listCustomEventTypesRef: ListCustomEventTypesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listCustomEventTypesRef:
+```typescript
+const name = listCustomEventTypesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListCustomEventTypes` query has no variables.
+### Return Type
+Recall that executing the `ListCustomEventTypes` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListCustomEventTypesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListCustomEventTypesData {
+  eventTypeDefinitions: ({
+    id: UUIDString;
+    key: string;
+    label: string;
+    description?: string | null;
+  } & EventTypeDefinition_Key)[];
+}
+```
+### Using `ListCustomEventTypes`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listCustomEventTypes } from '@asv/dataconnect-generated';
+
+
+// Call the `listCustomEventTypes()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listCustomEventTypes();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listCustomEventTypes(dataConnect);
+
+console.log(data.eventTypeDefinitions);
+
+// Or, you can use the `Promise` API.
+listCustomEventTypes().then((response) => {
+  const data = response.data;
+  console.log(data.eventTypeDefinitions);
+});
+```
+
+### Using `ListCustomEventTypes`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listCustomEventTypesRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listCustomEventTypesRef()` function to get a reference to the query.
+const ref = listCustomEventTypesRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listCustomEventTypesRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.eventTypeDefinitions);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.eventTypeDefinitions);
 });
 ```
 

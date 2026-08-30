@@ -3,6 +3,9 @@ import type { EventTypeDef } from "./schema";
 // One EventTypeDef per LedgerEntryType (schema §mock-data/asv_master_portfolio_schema.json),
 // so DynamicEntryForm can render built-in and admin-defined custom types through the same
 // renderer (plan §4). CUSTOM is intentionally absent — those come from EventTypeDefinition rows.
+// Enum `options` are the actual Data Connect/Postgres enum values (schema.gql), not the
+// legacy JSON-schema's title-case strings (enumMap.ts's LEGACY_* keys) — these options are
+// submitted directly to the Cloud Functions below, which expect the DB casing verbatim.
 export const BUILTIN_EVENT_TYPES: EventTypeDef[] = [
   {
     key: "PARTICIPATING_PRICED_ROUND",
@@ -49,7 +52,7 @@ export const BUILTIN_EVENT_TYPES: EventTypeDef[] = [
     label: "Exit Event",
     isBuiltin: true,
     fields: [
-      { key: "exitType", label: "Exit Type", type: "enum", required: true, variesByScenario: false, options: ["Acquisition", "IPO", "Merger", "Shutdown", "Dissolution"] },
+      { key: "exitType", label: "Exit Type", type: "enum", required: true, variesByScenario: false, options: ["ACQUISITION", "IPO", "MERGER", "SHUTDOWN", "DISSOLUTION"] },
       { key: "totalExitValue", label: "Total Exit Value", type: "number", required: true, variesByScenario: false },
       { key: "asvTotalPayout", label: "ASV Total Payout", type: "number", required: true, variesByScenario: false },
       { key: "docLink", label: "Document Link", type: "string", required: true, variesByScenario: false },
@@ -84,7 +87,7 @@ export const BUILTIN_EVENT_TYPES: EventTypeDef[] = [
     fields: [
       { key: "flaggedDate", label: "Flagged Date", type: "date", required: true, variesByScenario: false },
       { key: "reason", label: "Reason", type: "text", required: true, variesByScenario: false },
-      { key: "auditType", label: "Audit Type", type: "enum", required: true, variesByScenario: false, options: ["Manual_Override", "Scheduled_Shariah_Review", "Strategic_Pivot_Audit"] },
+      { key: "auditType", label: "Audit Type", type: "enum", required: true, variesByScenario: false, options: ["MANUAL_OVERRIDE", "SCHEDULED_SHARIAH_REVIEW", "STRATEGIC_PIVOT_AUDIT"] },
       { key: "complianceOfficerNotes", label: "Compliance Officer Notes", type: "text", required: true, variesByScenario: false },
     ],
   },
@@ -93,8 +96,8 @@ export const BUILTIN_EVENT_TYPES: EventTypeDef[] = [
     label: "Company Update",
     isBuiltin: true,
     fields: [
-      { key: "health", label: "Health", type: "enum", required: true, variesByScenario: false, options: ["Green", "Yellow", "Red"] },
-      { key: "trajectory", label: "Trajectory", type: "enum", required: true, variesByScenario: false, options: ["Improving", "Stable", "Declining"] },
+      { key: "health", label: "Health", type: "enum", required: true, variesByScenario: false, options: ["GREEN", "YELLOW", "RED"] },
+      { key: "trajectory", label: "Trajectory", type: "enum", required: true, variesByScenario: false, options: ["IMPROVING", "STABLE", "DECLINING"] },
       { key: "highlights", label: "Highlights", type: "string[]", required: true, variesByScenario: false },
       { key: "lowlights", label: "Lowlights", type: "string[]", required: true, variesByScenario: false },
       { key: "upcomingPlans", label: "Upcoming Plans", type: "string[]", required: true, variesByScenario: false },

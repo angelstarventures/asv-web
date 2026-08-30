@@ -14,9 +14,11 @@ export { ledgerCreateInvestmentRound } from "./functions/ledger-createInvestment
 export { ledgerCreateValuationEvent } from "./functions/ledger-createValuationEvent";
 export { ledgerCreateComplianceFlag } from "./functions/ledger-createComplianceFlag";
 export { ledgerCreateCompanyUpdate } from "./functions/ledger-createCompanyUpdate";
+export { ledgerCreateExitEvent } from "./functions/ledger-createExitEvent";
 export { ledgerCustomEventWrite } from "./functions/ledger-customEventWrite";
 export { ledgerCustomEventRead } from "./functions/ledger-customEventRead";
 export { eventTypesDefine } from "./functions/eventTypes-define";
+export { eventTypesGetByKey } from "./functions/eventTypes-getByKey";
 export { ledgerMassExport } from "./functions/ledger-massExport";
 export { ledgerMassImportDiff } from "./functions/ledger-massImportDiff";
 export { ledgerMassImportCommit } from "./functions/ledger-massImportCommit";

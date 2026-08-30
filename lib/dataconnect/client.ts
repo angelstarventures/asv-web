@@ -14,6 +14,7 @@ import {
   getMemberByAuthUidRef,
   listAllMembersRef,
   getMemberByIdRef,
+  listCustomEventTypesRef,
   type ListCompaniesData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
@@ -33,6 +34,7 @@ import {
   type ListAllMembersData,
   type GetMemberByIdData,
   type GetMemberByIdVariables,
+  type ListCustomEventTypesData,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -146,5 +148,10 @@ export async function getMemberById(vars: GetMemberByIdVariables): Promise<GetMe
     getMemberByIdRef.operationName,
     vars
   );
+  return res.data;
+}
+
+export async function listCustomEventTypes(): Promise<ListCustomEventTypesData> {
+  const res = await dc().executeQuery<ListCustomEventTypesData>(listCustomEventTypesRef.operationName);
   return res.data;
 }

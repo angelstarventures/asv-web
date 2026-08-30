@@ -56,3 +56,34 @@ export function buildZodSchema(fields: EventTypeFieldDef[]) {
   }
   return z.object(shape);
 }
+
+const SCENARIOS = ["OPTIMISTIC", "BALANCED", "CONSERVATIVE"] as const;
+
+// Validates DynamicEntryForm's `shared` bucket (every variesByScenario: false field) before
+// submit — a fast client-side check ahead of the Cloud Function's own re-validation, not a
+// replacement for it.
+export function validateSharedValues(fields: EventTypeFieldDef[], shared: Record<string, unknown>): string[] {
+  const sharedFields = fields.filter((f) => !f.variesByScenario);
+  if (sharedFields.length === 0) return [];
+  const result = buildZodSchema(sharedFields).safeParse(shared);
+  if (result.success) return [];
+  return result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
+}
+
+// Same, for the three variesByScenario: true buckets.
+export function validatePerScenarioValues(
+  fields: EventTypeFieldDef[],
+  perScenario: Record<(typeof SCENARIOS)[number], Record<string, unknown>>
+): string[] {
+  const varyingFields = fields.filter((f) => f.variesByScenario);
+  if (varyingFields.length === 0) return [];
+  const schema = buildZodSchema(varyingFields);
+  const errors: string[] = [];
+  for (const scenario of SCENARIOS) {
+    const result = schema.safeParse(perScenario[scenario] ?? {});
+    if (!result.success) {
+      errors.push(...result.error.issues.map((issue) => `[${scenario}] ${issue.path.join(".")}: ${issue.message}`));
+    }
+  }
+  return errors;
+}

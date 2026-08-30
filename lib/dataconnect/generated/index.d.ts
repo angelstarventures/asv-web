@@ -218,6 +218,15 @@ export interface ListCompanyUpdatesForScenarioVariables {
   scenario: Scenario;
 }
 
+export interface ListCustomEventTypesData {
+  eventTypeDefinitions: ({
+    id: UUIDString;
+    key: string;
+    label: string;
+    description?: string | null;
+  } & EventTypeDefinition_Key)[];
+}
+
 export interface ListLedgerEntriesForScenarioData {
   ledgerEntries: ({
     id: UUIDString;
@@ -470,4 +479,16 @@ export const getMemberByIdRef: GetMemberByIdRef;
 
 export function getMemberById(vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
 export function getMemberById(dc: DataConnect, vars: GetMemberByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetMemberByIdData, GetMemberByIdVariables>;
+
+interface ListCustomEventTypesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListCustomEventTypesData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListCustomEventTypesData, undefined>;
+  operationName: string;
+}
+export const listCustomEventTypesRef: ListCustomEventTypesRef;
+
+export function listCustomEventTypes(options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
+export function listCustomEventTypes(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
 

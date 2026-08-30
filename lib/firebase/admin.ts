@@ -11,12 +11,18 @@ import { getAuth } from "firebase-admin/auth";
 // firebase-tools (a devDependency) is never loaded outside this local-only branch.
 function localFirebaseCliCredential(): Credential {
   // Server Components fan out with Promise.all (e.g. the dashboard's MineView), so several
-  // Data Connect calls request a token in the same tick. Without de-duping, concurrent calls
-  // each drive their own firebase-tools requireAuth()/token-refresh cycle against the same
-  // on-disk CLI credentials file, and racing writers there hand back an invalid token — this
-  // memoizes one in-flight fetch (and reuses it until near expiry) so only one refresh ever
-  // happens at a time.
-  let cached: { token: { access_token: string; expires_in: number }; fetchedAt: number } | null = null;
+  // Data Connect calls request a token in the same tick. `apiv2.getAccessToken()` already
+  // checks validity and refreshes internally (see firebase-tools/lib/apiv2.js) — it must be
+  // called fresh every time, never cached here on top of that. What still needs de-duping is
+  // concurrent *in-flight* calls: without it, several requests in the same tick each drive
+  // their own requireAuth()/refresh cycle against the same on-disk CLI credentials file, and
+  // racing writers there hand back an invalid token — this only memoizes the current fetch.
+  //
+  // firebase-admin's own FirebaseApp caches whatever `expires_in` this returns and won't call
+  // getAccessToken() again until that expires (app/firebase-app.js) — apiv2.getAccessToken()
+  // doesn't expose the real expiry, so report a short one (5 min) rather than the token's
+  // actual ~1hr lifetime, forcing frequent re-validation through firebase-tools' own
+  // haveValidTokens() check instead of trusting a token minted long ago in this dev session.
   let inFlight: Promise<{ access_token: string; expires_in: number }> | null = null;
 
   async function fetchToken() {
@@ -30,21 +36,17 @@ function localFirebaseCliCredential(): Credential {
     if (!account) throw new Error("Not logged in — run `firebase login` first.");
     await requireAuth({ user: account.user, tokens: account.tokens });
     const access_token: string = await apiv2.getAccessToken();
-    return { access_token, expires_in: 3600 };
+    return { access_token, expires_in: 300 };
   }
 
   return {
     async getAccessToken() {
-      const ageMs = cached ? Date.now() - cached.fetchedAt : Infinity;
-      if (cached && ageMs < 30 * 60 * 1000) return cached.token;
       if (!inFlight) {
         inFlight = fetchToken().finally(() => {
           inFlight = null;
         });
       }
-      const token = await inFlight;
-      cached = { token, fetchedAt: Date.now() };
-      return token;
+      return inFlight;
     },
   };
 }

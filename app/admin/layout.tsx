@@ -5,6 +5,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 const NAV = [
   { href: "/admin/dashboard", label: "Dashboard" },
   { href: "/admin/members", label: "Members" },
+  { href: "/admin/ledger", label: "Ledger" },
 ];
 
 // proxy.ts independently re-verifies role === 'admin' on every /admin/* request — this
