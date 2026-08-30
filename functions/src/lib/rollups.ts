@@ -129,6 +129,15 @@ export async function recomputeAllRollupsAndCheckInvariants(): Promise<{ warning
         await upsertRollupCache(client, rollup);
       }
     }
+  });
+
+  // Deliberately a second, separate transaction: computePortfolioRollup reads through the
+  // standalone `query()` connection (a different connection from `client` above), which per
+  // Postgres isolation can't see rows written by a still-open transaction on another
+  // connection — computing it inside the same transaction as the per-company upserts summed
+  // over nothing every time, landing the portfolio row on 0/0/0 (confirmed empirically after
+  // the production migration). Committing the per-company rows first makes them visible here.
+  await withTransaction(async (client) => {
     for (const scenario of SCENARIOS) {
       const portfolioRollup = await computePortfolioRollup(scenario);
       await upsertRollupCache(client, portfolioRollup);
