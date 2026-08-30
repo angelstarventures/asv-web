@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# functions/.env has no secrets (just the Cloud SQL instance connection name / IAM user) and
+# must be committed — Firebase Functions v2 loads it automatically at deploy time.
+!functions/.env
 
 # vercel
 .vercel
