@@ -1,6 +1,11 @@
 import { initializeApp } from "firebase-admin/app";
+import { setGlobalOptions } from "firebase-functions/v2";
 
 initializeApp();
+
+// Same region as the Data Connect Cloud SQL instance (dataconnect/dataconnect.yaml) — every
+// function-to-Postgres call would otherwise cross regions on every request.
+setGlobalOptions({ region: "us-east1" });
 
 export { provisionMember, adminTriggerPasswordReset, setMemberStatus } from "./functions/users-onCreateProvision";
 export { documentsGetAccessUrl } from "./functions/documents-getAccessUrl";
