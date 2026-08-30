@@ -13,8 +13,12 @@ query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) l
   }
 }
 
+# Excludes "00000" (System Migration) — a synthetic, role=ADMIN account that only exists as
+# the created_by/audit-trail author for migrated ledger rows (plan §5), never a real board
+# member. It must stay role=ADMIN for that audit purpose, so the exclusion belongs here
+# (public display) rather than on the member row itself.
 query ListMemberProfiles @auth(level: PUBLIC, insecureReason: "Board & Member profiles tab on the public landing page — display name and role only, no email/PII (plan §4, wireframe 1).") {
-  members: members {
+  members: members(where: { id: { ne: "00000" } }) {
     id
     displayName
     role
