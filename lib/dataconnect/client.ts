@@ -15,6 +15,9 @@ import {
   listAllMembersRef,
   getMemberByIdRef,
   listCustomEventTypesRef,
+  listMemberAllocationsAllScenariosRef,
+  listMemberValuationsAllScenariosRef,
+  listAllDocumentsRef,
   type ListCompaniesData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
@@ -35,6 +38,11 @@ import {
   type GetMemberByIdData,
   type GetMemberByIdVariables,
   type ListCustomEventTypesData,
+  type ListMemberAllocationsAllScenariosData,
+  type ListMemberAllocationsAllScenariosVariables,
+  type ListMemberValuationsAllScenariosData,
+  type ListMemberValuationsAllScenariosVariables,
+  type ListAllDocumentsData,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -153,5 +161,30 @@ export async function getMemberById(vars: GetMemberByIdVariables): Promise<GetMe
 
 export async function listCustomEventTypes(): Promise<ListCustomEventTypesData> {
   const res = await dc().executeQuery<ListCustomEventTypesData>(listCustomEventTypesRef.operationName);
+  return res.data;
+}
+
+export async function listMemberAllocationsAllScenarios(
+  vars: ListMemberAllocationsAllScenariosVariables
+): Promise<ListMemberAllocationsAllScenariosData> {
+  const res = await dc().executeQuery<
+    ListMemberAllocationsAllScenariosData,
+    ListMemberAllocationsAllScenariosVariables
+  >(listMemberAllocationsAllScenariosRef.operationName, vars);
+  return res.data;
+}
+
+export async function listMemberValuationsAllScenarios(
+  vars: ListMemberValuationsAllScenariosVariables
+): Promise<ListMemberValuationsAllScenariosData> {
+  const res = await dc().executeQuery<
+    ListMemberValuationsAllScenariosData,
+    ListMemberValuationsAllScenariosVariables
+  >(listMemberValuationsAllScenariosRef.operationName, vars);
+  return res.data;
+}
+
+export async function listAllDocuments(): Promise<ListAllDocumentsData> {
+  const res = await dc().executeQuery<ListAllDocumentsData>(listAllDocumentsRef.operationName);
   return res.data;
 }

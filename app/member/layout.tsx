@@ -6,6 +6,10 @@ const NAV = [
   { href: "/member/overview", label: "Overview" },
   { href: "/member/dashboard", label: "Dashboard" },
   { href: "/member/detail", label: "Detail" },
+  { href: "/member/documents", label: "Documents" },
+  { href: "/member/ai", label: "AI" },
+  { href: "/member/watchlist", label: "Watchlist" },
+  { href: "/member/settings", label: "Settings" },
 ];
 
 // proxy.ts is the real enforcement point for everything under /member/* — this layout is

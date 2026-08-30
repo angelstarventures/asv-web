@@ -109,6 +109,49 @@ query ListMemberValuations($memberId: String!, $scenario: Scenario!) @auth(level
   }
 }
 
+# No scenario filter — backs FR-6's ledger download (the whole point is every scenario in one
+# file) and the documents page's "has this member ever held an allocation/valuation in this
+# company, in any scenario" check, which hasHeldAllocation (plan §3) is deliberately
+# scenario-agnostic about too.
+query ListMemberAllocationsAllScenarios($memberId: String!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations (plan §3).") {
+  allocations(where: { member: { id: { eq: $memberId } } }) {
+    amount
+    ledgerEntry {
+      eventDate
+      scenario
+      company {
+        id
+        name
+      }
+    }
+  }
+}
+
+query ListMemberValuationsAllScenarios($memberId: String!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations (plan §3).") {
+  memberValuations(where: { member: { id: { eq: $memberId } } }) {
+    value
+    ledgerEntry {
+      eventDate
+      scenario
+      company {
+        id
+        name
+      }
+    }
+  }
+}
+
+query ListAllDocuments @auth(level: USER, insecureReason: "The role+allocation visibility check happens in application code (canViewDocument, plan §3/§4), not here — every caller of this query re-derives that decision, never trusting a client-supplied one.") {
+  documents {
+    id
+    docType
+    company {
+      id
+      name
+    }
+  }
+}
+
 query GetMemberByAuthUid($authUid: String!) @auth(level: USER, insecureReason: "authUid comes from the server-verified session token, never a client parameter — this is exactly how the server derives memberId in the first place (plan §3).") {
   members(where: { authUid: { eq: $authUid } }) {
     id

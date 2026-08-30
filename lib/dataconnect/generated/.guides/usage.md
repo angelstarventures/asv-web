@@ -14,7 +14,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { insertCompany, listCompanies, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listLedgerEntriesForScenario, listMemberAllocations, listMemberValuations, getMemberByAuthUid } from '@asv/dataconnect-generated';
+import { insertCompany, listCompanies, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listLedgerEntriesForScenario, listMemberAllocations, listMemberValuations, listMemberAllocationsAllScenarios } from '@asv/dataconnect-generated';
 
 
 // Operation InsertCompany:  For variables, look at type InsertCompanyVars in ../index.d.ts
@@ -44,8 +44,8 @@ const { data } = await ListMemberAllocations(dataConnect, listMemberAllocationsV
 // Operation ListMemberValuations:  For variables, look at type ListMemberValuationsVars in ../index.d.ts
 const { data } = await ListMemberValuations(dataConnect, listMemberValuationsVars);
 
-// Operation GetMemberByAuthUid:  For variables, look at type GetMemberByAuthUidVars in ../index.d.ts
-const { data } = await GetMemberByAuthUid(dataConnect, getMemberByAuthUidVars);
+// Operation ListMemberAllocationsAllScenarios:  For variables, look at type ListMemberAllocationsAllScenariosVars in ../index.d.ts
+const { data } = await ListMemberAllocationsAllScenarios(dataConnect, listMemberAllocationsAllScenariosVars);
 
 
 ```

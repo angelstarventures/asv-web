@@ -11,6 +11,7 @@ import { SCENARIOS, SCOPES, type Scenario as ScenarioParam, type Scope } from "@
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
 import { ScenarioScopeToggle } from "@/components/ScenarioScopeToggle";
 import { CompanyRollupTable } from "@/components/CompanyRollupTable";
+import { DownloadLedgerButton } from "@/components/DownloadLedgerButton";
 
 // Reads searchParams and the session cookie, so this is already dynamic — explicit for
 // clarity (plan §4).
@@ -93,6 +94,8 @@ async function MineView({ memberId, scenario }: { memberId: string; scenario: Sc
         rows={[...byCompany.values()].sort((a, b) => b.value - a.value)}
         valueLabel="Current value"
       />
+
+      <DownloadLedgerButton />
     </>
   );
 }

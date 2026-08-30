@@ -20,6 +20,15 @@ export enum CompanyTrajectory {
   DECLINING = "DECLINING",
 };
 
+export enum DocumentType {
+  PITCH_DECK = "PITCH_DECK",
+  DD_REPORT = "DD_REPORT",
+  DATA_ROOM = "DATA_ROOM",
+  COMPANY_UPDATE_DOC = "COMPANY_UPDATE_DOC",
+  SPA = "SPA",
+  ALLOCATION_SCHEDULE = "ALLOCATION_SCHEDULE",
+};
+
 export enum LedgerEntryType {
   PARTICIPATING_PRICED_ROUND = "PARTICIPATING_PRICED_ROUND",
   PARTICIPATING_SAFE_ROUND = "PARTICIPATING_SAFE_ROUND",
@@ -161,6 +170,17 @@ export interface LedgerEntry_Key {
   __typename?: 'LedgerEntry_Key';
 }
 
+export interface ListAllDocumentsData {
+  documents: ({
+    id: UUIDString;
+    docType: DocumentType;
+    company: {
+      id: UUIDString;
+      name: string;
+    } & Company_Key;
+  } & Document_Key)[];
+}
+
 export interface ListAllMembersData {
   members: ({
     id: string;
@@ -246,6 +266,24 @@ export interface ListLedgerEntriesForScenarioVariables {
   scenario: Scenario;
 }
 
+export interface ListMemberAllocationsAllScenariosData {
+  allocations: ({
+    amount: number;
+    ledgerEntry: {
+      eventDate: DateString;
+      scenario: Scenario;
+      company: {
+        id: UUIDString;
+        name: string;
+      } & Company_Key;
+    };
+  })[];
+}
+
+export interface ListMemberAllocationsAllScenariosVariables {
+  memberId: string;
+}
+
 export interface ListMemberAllocationsData {
   allocations: ({
     amount: number;
@@ -270,6 +308,24 @@ export interface ListMemberProfilesData {
     displayName: string;
     role: Role;
   } & Member_Key)[];
+}
+
+export interface ListMemberValuationsAllScenariosData {
+  memberValuations: ({
+    value: number;
+    ledgerEntry: {
+      eventDate: DateString;
+      scenario: Scenario;
+      company: {
+        id: UUIDString;
+        name: string;
+      } & Company_Key;
+    };
+  })[];
+}
+
+export interface ListMemberValuationsAllScenariosVariables {
+  memberId: string;
 }
 
 export interface ListMemberValuationsData {
@@ -443,6 +499,42 @@ export const listMemberValuationsRef: ListMemberValuationsRef;
 
 export function listMemberValuations(vars: ListMemberValuationsVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsData, ListMemberValuationsVariables>;
 export function listMemberValuations(dc: DataConnect, vars: ListMemberValuationsVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsData, ListMemberValuationsVariables>;
+
+interface ListMemberAllocationsAllScenariosRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  operationName: string;
+}
+export const listMemberAllocationsAllScenariosRef: ListMemberAllocationsAllScenariosRef;
+
+export function listMemberAllocationsAllScenarios(vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+export function listMemberAllocationsAllScenarios(dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+
+interface ListMemberValuationsAllScenariosRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  operationName: string;
+}
+export const listMemberValuationsAllScenariosRef: ListMemberValuationsAllScenariosRef;
+
+export function listMemberValuationsAllScenarios(vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+export function listMemberValuationsAllScenarios(dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+
+interface ListAllDocumentsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAllDocumentsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAllDocumentsData, undefined>;
+  operationName: string;
+}
+export const listAllDocumentsRef: ListAllDocumentsRef;
+
+export function listAllDocuments(options?: ExecuteQueryOptions): QueryPromise<ListAllDocumentsData, undefined>;
+export function listAllDocuments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAllDocumentsData, undefined>;
 
 interface GetMemberByAuthUidRef {
   /* Allow users to create refs without passing in DataConnect */
