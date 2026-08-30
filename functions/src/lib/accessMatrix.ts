@@ -14,13 +14,13 @@ export type DocumentType =
 export async function hasHeldAllocation(memberId: string, companyId: string): Promise<boolean> {
   const rows = await query<{ exists: boolean }>(
     `SELECT EXISTS (
-       SELECT 1 FROM "Allocation" a
-       JOIN "LedgerEntry" le ON le.id = a."ledgerEntryId"
-       WHERE a."memberId" = $1 AND le."companyId" = $2
+       SELECT 1 FROM "allocation" a
+       JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
+       WHERE a."member_id" = $1 AND le."company_id" = $2
      ) OR EXISTS (
-       SELECT 1 FROM "MemberValuation" mv
-       JOIN "LedgerEntry" le ON le.id = mv."ledgerEntryId"
-       WHERE mv."memberId" = $1 AND le."companyId" = $2
+       SELECT 1 FROM "member_valuation" mv
+       JOIN "ledger_entry" le ON le.id = mv."ledger_entry_id"
+       WHERE mv."member_id" = $1 AND le."company_id" = $2
      ) AS exists`,
     [memberId, companyId]
   );

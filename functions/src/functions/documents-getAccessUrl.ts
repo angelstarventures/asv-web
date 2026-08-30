@@ -32,7 +32,8 @@ export const documentsGetAccessUrl = onCall<GetAccessUrlInput, Promise<GetAccess
     }
 
     const docs = await query<DocumentRow>(
-      `SELECT id, "driveFileId", "docType", "companyId" FROM "Document" WHERE id = $1`,
+      `SELECT id, "drive_file_id" AS "driveFileId", "doc_type" AS "docType", "company_id" AS "companyId"
+       FROM "document" WHERE id = $1`,
       [documentId]
     );
     if (docs.length === 0) {
@@ -44,7 +45,7 @@ export const documentsGetAccessUrl = onCall<GetAccessUrlInput, Promise<GetAccess
 
     await withTransaction(async (client) => {
       await client.query(
-        `INSERT INTO "DocumentAccessLog" (document_id, "accessedById", decision, reason)
+        `INSERT INTO "document_access_log" ("document_id", "accessed_by_id", decision, reason)
          VALUES ($1, $2, $3, $4)`,
         [doc.id, caller.memberId, access.granted ? "GRANTED" : "DENIED", access.reason]
       );

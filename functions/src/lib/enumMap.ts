@@ -13,11 +13,14 @@ export const LEDGER_TYPE_TO_ENUM = {
 } as const;
 
 export type LegacyLedgerType = keyof typeof LEDGER_TYPE_TO_ENUM;
-export type LedgerEntryTypeEnum = (typeof LEDGER_TYPE_TO_ENUM)[LegacyLedgerType];
+// "CUSTOM" has no legacy string counterpart — it's only ever written by
+// ledger-customEventWrite for admin-defined EventTypeDefinitions (plan §2/§3).
+export type LedgerEntryTypeEnum = (typeof LEDGER_TYPE_TO_ENUM)[LegacyLedgerType] | "CUSTOM";
 
+// Partial: "CUSTOM" has no legacy string counterpart (see LedgerEntryTypeEnum above).
 export const ENUM_TO_LEDGER_TYPE = Object.fromEntries(
   Object.entries(LEDGER_TYPE_TO_ENUM).map(([legacy, enumVal]) => [enumVal, legacy])
-) as Record<LedgerEntryTypeEnum, LegacyLedgerType>;
+) as Partial<Record<LedgerEntryTypeEnum, LegacyLedgerType>>;
 
 export const SCENARIO_TO_ENUM = {
   optimistic: "OPTIMISTIC",

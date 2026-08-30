@@ -3,10 +3,11 @@ import type { LedgerEntryTypeEnum, ScenarioEnum } from "./enumMap";
 
 // Shared by every live ledger write path (ledger-create*.ts) AND
 // functions/scripts/migrate-legacy-data.ts, so migrated rows are structurally identical to
-// admin-UI-entered ones (plan §5). All identifiers here (table/column names) mirror
-// dataconnect/schema/schema.gql field names verbatim — reconfirm against the actual generated
-// SQL after the first `firebase dataconnect:sql:migrate` run, since Data Connect's exact
-// column-naming convention for relation fields is not yet exercised in this repo.
+// admin-UI-entered ones (plan §5). Table/column names here are Data Connect's generated
+// Postgres identifiers, NOT the GraphQL field names from schema.gql — Data Connect converts
+// PascalCase types to snake_case singular tables (LedgerEntry -> ledger_entry) and camelCase
+// fields to snake_case columns (companyId -> company_id, ledgerEntry -> ledger_entry_id),
+// confirmed against the actual `firebase dataconnect:sql:migrate` generated DDL.
 
 export interface LedgerEntryInput {
   companyId: string;
@@ -20,8 +21,8 @@ export interface LedgerEntryInput {
 
 export async function insertLedgerEntry(client: PoolClient, input: LedgerEntryInput): Promise<string> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO "LedgerEntry"
-       ("companyId", scenario, type, "eventDate", "sourceDocument", "createdById", "needsReview")
+    `INSERT INTO "ledger_entry"
+       ("company_id", scenario, type, "event_date", "source_document", "created_by_id", "needs_review")
      VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING id`,
     [
@@ -44,7 +45,7 @@ export async function insertAllocations(
 ): Promise<void> {
   for (const [memberId, amount] of Object.entries(allocations)) {
     await client.query(
-      `INSERT INTO "Allocation" ("ledgerEntryId", "memberId", amount) VALUES ($1, $2, $3)`,
+      `INSERT INTO "allocation" ("ledger_entry_id", "member_id", amount) VALUES ($1, $2, $3)`,
       [ledgerEntryId, memberId, amount]
     );
   }
@@ -57,7 +58,7 @@ export async function insertMemberValuations(
 ): Promise<void> {
   for (const [memberId, value] of Object.entries(valuations)) {
     await client.query(
-      `INSERT INTO "MemberValuation" ("ledgerEntryId", "memberId", value) VALUES ($1, $2, $3)`,
+      `INSERT INTO "member_valuation" ("ledger_entry_id", "member_id", value) VALUES ($1, $2, $3)`,
       [ledgerEntryId, memberId, value]
     );
   }
@@ -78,8 +79,8 @@ export async function insertPricedRoundDetail(
   d: PricedRoundDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "PricedRoundDetail"
-       ("ledgerEntryId", "companyUrl", "docLink", "asvTotal", "roundName", "pricePerShare", "postMoneyValuation")
+    `INSERT INTO "priced_round_detail"
+       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "round_name", "price_per_share", "post_money_valuation")
      VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [ledgerEntryId, d.companyUrl ?? null, d.docLink ?? null, d.asvTotal, d.roundName, d.pricePerShare, d.postMoneyValuation]
   );
@@ -105,9 +106,9 @@ export async function insertSafeRoundDetail(
   d: SafeRoundDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "SafeRoundDetail"
-       ("ledgerEntryId", "companyUrl", "docLink", "asvTotal", "postMoneyValCap", discount,
-        "warrantShares", "warrantShareClass", "warrantExercisePrice", "warrantExpirationYears", "warrantVestingTerms", notes)
+    `INSERT INTO "safe_round_detail"
+       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "post_money_val_cap", discount,
+        "warrant_shares", "warrant_share_class", "warrant_exercise_price", "warrant_expiration_years", "warrant_vesting_terms", notes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       ledgerEntryId,
@@ -140,8 +141,8 @@ export async function insertNonParticipatingRoundDetail(
   d: NonParticipatingRoundDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "NonParticipatingRoundDetail"
-       ("ledgerEntryId", "roundName", "newPricePerShare", "newPostMoneyValuation", "docLink", notes)
+    `INSERT INTO "non_participating_round_detail"
+       ("ledger_entry_id", "round_name", "new_price_per_share", "new_post_money_valuation", "doc_link", notes)
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [ledgerEntryId, d.roundName, d.newPricePerShare, d.newPostMoneyValuation, d.docLink, d.notes ?? null]
   );
@@ -160,7 +161,7 @@ export async function insertExitEventDetail(
   d: ExitEventDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "ExitEventDetail" ("ledgerEntryId", "exitType", "totalExitValue", "asvTotalPayout", "docLink")
+    `INSERT INTO "exit_event_detail" ("ledger_entry_id", "exit_type", "total_exit_value", "asv_total_payout", "doc_link")
      VALUES ($1, $2, $3, $4, $5)`,
     [ledgerEntryId, d.exitType, d.totalExitValue, d.asvTotalPayout, d.docLink]
   );
@@ -179,8 +180,8 @@ export async function insertValuationAssessmentDetail(
   d: ValuationAssessmentDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "ValuationAssessmentDetail"
-       ("ledgerEntryId", "drivingEventDate", "asvTotalFairMarketValue", "impliedEnterpriseValue", "assessmentRationale")
+    `INSERT INTO "valuation_assessment_detail"
+       ("ledger_entry_id", "driving_event_date", "asv_total_fair_market_value", "implied_enterprise_value", "assessment_rationale")
      VALUES ($1, $2, $3, $4, $5)`,
     [ledgerEntryId, d.drivingEventDate, d.asvTotalFairMarketValue, d.impliedEnterpriseValue ?? null, d.assessmentRationale ?? null]
   );
@@ -199,7 +200,7 @@ export async function insertComplianceFlagDetail(
   d: ComplianceFlagDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "ComplianceFlagDetail" ("ledgerEntryId", status, "flaggedDate", reason, "auditType", "complianceOfficerNotes")
+    `INSERT INTO "compliance_flag_detail" ("ledger_entry_id", status, "flagged_date", reason, "audit_type", "compliance_officer_notes")
      VALUES ($1, 'NON_HALAL', $2, $3, $4, $5)`,
     [ledgerEntryId, d.flaggedDate, d.reason, d.auditType, d.complianceOfficerNotes]
   );
@@ -219,7 +220,7 @@ export async function insertCompanyUpdateDetail(
   d: CompanyUpdateDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "CompanyUpdateDetail" ("ledgerEntryId", health, trajectory, highlights, lowlights, "upcomingPlans")
+    `INSERT INTO "company_update_detail" ("ledger_entry_id", health, trajectory, highlights, lowlights, "upcoming_plans")
      VALUES ($1, $2, $3, $4, $5, $6)`,
     [ledgerEntryId, d.health, d.trajectory, d.highlights, d.lowlights, d.upcomingPlans]
   );
@@ -231,11 +232,11 @@ export async function findOrCreateCompanyId(
   name: string,
   sector?: string
 ): Promise<string> {
-  const existing = await client.query<{ id: string }>(`SELECT id FROM "Company" WHERE name = $1`, [name]);
+  const existing = await client.query<{ id: string }>(`SELECT id FROM "company" WHERE name = $1`, [name]);
   if (existing.rows.length > 0) return existing.rows[0].id;
 
   const inserted = await client.query<{ id: string }>(
-    `INSERT INTO "Company" (name, sector, status) VALUES ($1, $2, 'ACTIVE') RETURNING id`,
+    `INSERT INTO "company" (name, sector, status) VALUES ($1, $2, 'ACTIVE') RETURNING id`,
     [name, sector ?? null]
   );
   return inserted.rows[0].id;

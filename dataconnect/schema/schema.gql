@@ -269,6 +269,16 @@ type CustomEventDetail @table {
   data: String!                 # JSON-as-text; converted to jsonb by post_migrations/002 — see the jsonb spike (plan §2)
 }
 
+# One row per ledger entry written by mass-import or migrate-legacy-data, recording the
+# content hash used at write time — the natural-key + hash lookup that makes
+# ledger-massImportDiff's NEW/UNCHANGED/NEW_CORRECTION classification and the migration
+# script's idempotent re-run both possible (plan §3/§5).
+type ImportedRecordHash @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  contentHash: String!      @index
+}
+
 # --- Precomputed rollups (read path for every dashboard) ---
 
 # @table key fields must be non-null, but `company` must be nullable to represent the single

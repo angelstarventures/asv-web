@@ -82,7 +82,7 @@ export const ledgerCreateCompanyUpdate = onCall<CreateCompanyUpdateInput, Promis
       }
 
       await client.query(
-        `UPDATE "Company" SET "currentHealth" = $1, "currentTrajectory" = $2 WHERE id = $3`,
+        `UPDATE "company" SET "current_health" = $1, "current_trajectory" = $2 WHERE id = $3`,
         [input.health, input.trajectory, input.companyId]
       );
     });

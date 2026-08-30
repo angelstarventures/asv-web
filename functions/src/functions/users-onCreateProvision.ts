@@ -29,7 +29,7 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
     }
 
     const members = await query<{ id: string; authUid: string | null }>(
-      `SELECT id, "authUid" FROM "Member" WHERE id = $1`,
+      `SELECT id, "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
       [memberId]
     );
     if (members.length === 0) {
@@ -52,7 +52,7 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
 
     await withTransaction(async (client) => {
       await client.query(
-        `UPDATE "Member" SET "authUid" = $1, role = $2, status = 'ACTIVE', email = $3 WHERE id = $4`,
+        `UPDATE "member" SET "auth_uid" = $1, role = $2, status = 'ACTIVE', email = $3 WHERE id = $4`,
         [userRecord.uid, role.toUpperCase(), email, memberId]
       );
     });
@@ -70,7 +70,7 @@ export const adminTriggerPasswordReset = onCall<AdminTriggerPasswordResetInput, 
     await requireAdmin(request);
 
     const { memberId } = request.data;
-    const members = await query<{ email: string }>(`SELECT email FROM "Member" WHERE id = $1`, [memberId]);
+    const members = await query<{ email: string }>(`SELECT email FROM "member" WHERE id = $1`, [memberId]);
     if (members.length === 0) {
       throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
     }
@@ -92,7 +92,7 @@ export const setMemberStatus = onCall<SetMemberStatusInput, Promise<{ ok: true }
 
   const { memberId, status } = request.data;
   const members = await query<{ authUid: string | null }>(
-    `SELECT "authUid" FROM "Member" WHERE id = $1`,
+    `SELECT "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
     [memberId]
   );
   if (members.length === 0) {
@@ -100,7 +100,7 @@ export const setMemberStatus = onCall<SetMemberStatusInput, Promise<{ ok: true }
   }
 
   await withTransaction(async (client) => {
-    await client.query(`UPDATE "Member" SET status = $1 WHERE id = $2`, [status.toUpperCase(), memberId]);
+    await client.query(`UPDATE "member" SET status = $1 WHERE id = $2`, [status.toUpperCase(), memberId]);
   });
 
   const authUid = members[0].authUid;

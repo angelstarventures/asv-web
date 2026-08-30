@@ -4,6 +4,9 @@ import type { PoolClient } from "pg";
 // MOIC/unrealized/realized/health-mix/sector-breakdown math lives in exactly one place —
 // never in a Data Connect resolver, never duplicated client-side (plan §3). Dashboards read
 // RollupCache, a plain queryable table, with a 30s revalidate — they never compute this live.
+//
+// Table/column names below are Data Connect's generated Postgres identifiers (snake_case),
+// not the GraphQL field names from schema.gql — see the note in ledgerWriteBuilders.ts.
 
 interface LedgerEntryRow {
   id: string;
@@ -23,35 +26,35 @@ export interface CompanyRollup {
 // entries may diverge — this function computes one scenario's numbers from that scenario's rows.
 export async function computeCompanyRollup(companyId: string, scenario: string): Promise<CompanyRollup> {
   const entries = await query<LedgerEntryRow>(
-    `SELECT id, type, "eventDate" FROM "LedgerEntry" WHERE "companyId" = $1 AND scenario = $2`,
+    `SELECT id, type, "event_date" AS "eventDate" FROM "ledger_entry" WHERE "company_id" = $1 AND scenario = $2`,
     [companyId, scenario]
   );
 
   const investedTotals = await query<{ total: string }>(
     `SELECT COALESCE(SUM(a.amount), 0) AS total
-     FROM "Allocation" a
-     JOIN "LedgerEntry" le ON le.id = a."ledgerEntryId"
-     WHERE le."companyId" = $1 AND le.scenario = $2
+     FROM "allocation" a
+     JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
+     WHERE le."company_id" = $1 AND le.scenario = $2
        AND le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')`,
     [companyId, scenario]
   );
   const invested = Number(investedTotals[0]?.total ?? 0);
 
   const realizedTotals = await query<{ total: string }>(
-    `SELECT COALESCE(SUM(ex."asvTotalPayout"), 0) AS total
-     FROM "ExitEventDetail" ex
-     JOIN "LedgerEntry" le ON le.id = ex."ledgerEntryId"
-     WHERE le."companyId" = $1 AND le.scenario = $2`,
+    `SELECT COALESCE(SUM(ex."asv_total_payout"), 0) AS total
+     FROM "exit_event_detail" ex
+     JOIN "ledger_entry" le ON le.id = ex."ledger_entry_id"
+     WHERE le."company_id" = $1 AND le.scenario = $2`,
     [companyId, scenario]
   );
   const realizedValue = Number(realizedTotals[0]?.total ?? 0);
 
   const latestValuation = await query<{ total: string }>(
-    `SELECT va."asvTotalFairMarketValue" AS total
-     FROM "ValuationAssessmentDetail" va
-     JOIN "LedgerEntry" le ON le.id = va."ledgerEntryId"
-     WHERE le."companyId" = $1 AND le.scenario = $2
-     ORDER BY le."eventDate" DESC
+    `SELECT va."asv_total_fair_market_value" AS total
+     FROM "valuation_assessment_detail" va
+     JOIN "ledger_entry" le ON le.id = va."ledger_entry_id"
+     WHERE le."company_id" = $1 AND le.scenario = $2
+     ORDER BY le."event_date" DESC
      LIMIT 1`,
     [companyId, scenario]
   );
@@ -63,16 +66,16 @@ export async function computeCompanyRollup(companyId: string, scenario: string):
   return { companyId, scenario, moic, unrealizedValue, realizedValue };
 }
 
-// RollupCache's real key is the non-null `companyKey` (Company.id as text, or the literal
-// "PORTFOLIO") because @table key fields can't be nullable, but `company` itself must stay
+// RollupCache's real key is the non-null `company_key` (Company.id as text, or the literal
+// "PORTFOLIO") because @table key fields can't be nullable, but `company_id` itself must stay
 // nullable to represent the single portfolio-level row per scenario (plan §2/schema.gql).
 async function upsertRollupCache(client: PoolClient, rollup: CompanyRollup): Promise<void> {
   const companyKey = rollup.companyId ?? "PORTFOLIO";
   await client.query(
-    `INSERT INTO "RollupCache" ("companyKey", "companyId", scenario, moic, "unrealizedValue", "realizedValue", "computedAt")
+    `INSERT INTO "rollup_cache" ("company_key", "company_id", scenario, moic, "unrealized_value", "realized_value", "computed_at")
      VALUES ($1, $2, $3, $4, $5, $6, now())
-     ON CONFLICT ("companyKey", scenario)
-     DO UPDATE SET moic = $4, "unrealizedValue" = $5, "realizedValue" = $6, "computedAt" = now()`,
+     ON CONFLICT ("company_key", scenario)
+     DO UPDATE SET moic = $4, "unrealized_value" = $5, "realized_value" = $6, "computed_at" = now()`,
     [companyKey, rollup.companyId, rollup.scenario, rollup.moic, rollup.unrealizedValue, rollup.realizedValue]
   );
 }
@@ -92,15 +95,15 @@ export async function recomputeRollups(companyId: string): Promise<void> {
 // The single portfolio-level row per scenario — sums every company's numbers rather than
 // re-deriving from raw ledger rows, so it always agrees with what the per-company tiles show.
 export async function computePortfolioRollup(scenario: string): Promise<CompanyRollup> {
-  const totals = await query<{ moic: string; unrealizedValue: string; realizedValue: string; invested: string }>(
+  const totals = await query<{ unrealizedValue: string; realizedValue: string; invested: string }>(
     `SELECT
-       COALESCE(SUM(rc."unrealizedValue"), 0) AS "unrealizedValue",
-       COALESCE(SUM(rc."realizedValue"), 0) AS "realizedValue",
+       COALESCE(SUM(rc."unrealized_value"), 0) AS "unrealizedValue",
+       COALESCE(SUM(rc."realized_value"), 0) AS "realizedValue",
        COALESCE(SUM(
-         CASE WHEN rc.moic > 0 THEN (rc."unrealizedValue" + rc."realizedValue") / rc.moic ELSE 0 END
+         CASE WHEN rc.moic > 0 THEN (rc."unrealized_value" + rc."realized_value") / rc.moic ELSE 0 END
        ), 0) AS invested
-     FROM "RollupCache" rc
-     WHERE rc.scenario = $1 AND rc."companyId" IS NOT NULL`,
+     FROM "rollup_cache" rc
+     WHERE rc.scenario = $1 AND rc."company_id" IS NOT NULL`,
     [scenario]
   );
   const row = totals[0];
@@ -117,7 +120,7 @@ export async function computePortfolioRollup(scenario: string): Promise<CompanyR
 // warning on divergence rather than enforcing it as a DB trigger (plan §2).
 export async function recomputeAllRollupsAndCheckInvariants(): Promise<{ warnings: string[] }> {
   const warnings: string[] = [];
-  const companies = await query<{ id: string }>(`SELECT id FROM "Company"`);
+  const companies = await query<{ id: string }>(`SELECT id FROM "company"`);
 
   await withTransaction(async (client) => {
     for (const { id: companyId } of companies) {
@@ -133,11 +136,11 @@ export async function recomputeAllRollupsAndCheckInvariants(): Promise<{ warning
   });
 
   const divergent = await query<{ eventDate: string; companyId: string; distinctAmounts: string }>(
-    `SELECT le."eventDate", le."companyId", COUNT(DISTINCT a.amount) AS "distinctAmounts"
-     FROM "LedgerEntry" le
-     JOIN "Allocation" a ON a."ledgerEntryId" = le.id
+    `SELECT le."event_date" AS "eventDate", le."company_id" AS "companyId", COUNT(DISTINCT a.amount) AS "distinctAmounts"
+     FROM "ledger_entry" le
+     JOIN "allocation" a ON a."ledger_entry_id" = le.id
      WHERE le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')
-     GROUP BY le."eventDate", le."companyId", a."memberId"
+     GROUP BY le."event_date", le."company_id", a."member_id"
      HAVING COUNT(DISTINCT a.amount) > 1`
   );
   for (const row of divergent) {
