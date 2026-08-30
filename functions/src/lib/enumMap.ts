@@ -50,6 +50,20 @@ export const AUDIT_TYPE_TO_ENUM = {
   Strategic_Pivot_Audit: "STRATEGIC_PIVOT_AUDIT",
 } as const;
 
+// Reverse maps — used by ledger-massExport.ts to reshape DB enum values (GREEN, ACQUISITION,
+// MANUAL_OVERRIDE, ...) back into the legacy JSON schema's title-case strings (Green,
+// Acquisition, Manual_Override, ...), the same way ENUM_TO_LEDGER_TYPE/ENUM_TO_SCENARIO
+// already do for type/scenario — every enum round-tripped through mass-export must come back
+// in the shape asv_master_portfolio_schema.json (and AJV) actually expects, or every
+// re-imported record with an enum field fails validation.
+function reverse<T extends Record<string, string>>(map: T): Record<T[keyof T], keyof T> {
+  return Object.fromEntries(Object.entries(map).map(([k, v]) => [v, k])) as Record<T[keyof T], keyof T>;
+}
+export const ENUM_TO_HEALTH = reverse(HEALTH_TO_ENUM);
+export const ENUM_TO_TRAJECTORY = reverse(TRAJECTORY_TO_ENUM);
+export const ENUM_TO_EXIT_TYPE = reverse(EXIT_TYPE_TO_ENUM);
+export const ENUM_TO_AUDIT_TYPE = reverse(AUDIT_TYPE_TO_ENUM);
+
 export function legacyTypeToEnum(type: string): LedgerEntryTypeEnum {
   const mapped = LEDGER_TYPE_TO_ENUM[type as LegacyLedgerType];
   if (!mapped) throw new Error(`Unknown legacy ledger type: "${type}"`);

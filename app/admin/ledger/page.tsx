@@ -65,6 +65,22 @@ export default async function LedgerIndexPage() {
           Define a new event type
         </Link>
       </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Mass export / import</h2>
+        <ul className="flex flex-col gap-1">
+          <li>
+            <Link href="/admin/ledger/export" className="text-sm underline underline-offset-2">
+              Export ledger to JSON
+            </Link>
+          </li>
+          <li>
+            <Link href="/admin/ledger/import" className="text-sm underline underline-offset-2">
+              Import ledger from JSON
+            </Link>
+          </li>
+        </ul>
+      </section>
     </div>
   );
 }
