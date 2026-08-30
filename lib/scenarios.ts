@@ -2,12 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo } from "react";
-
-export const SCENARIOS = ["optimistic", "balanced", "conservative"] as const;
-export type Scenario = (typeof SCENARIOS)[number];
-
-export const SCOPES = ["mine", "asv"] as const;
-export type Scope = (typeof SCOPES)[number];
+import { SCENARIOS, SCOPES, type Scenario, type Scope } from "./scenarioTypes";
 
 // State lives in the URL (?scope=&scenario=) so the toggle is shareable/bookmarkable and
 // survives the back button without a client store (plan §4, dashboard page).

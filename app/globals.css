@@ -12,10 +12,26 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Chart tokens (dataviz skill's reference palette) — status colors are fixed across modes;
+   ink/surface/sequential steps swap for dark per prefers-color-scheme, same as --background
+   above (no theme toggle in this app, so OS preference is the only mode switch). */
+:root {
+  --viz-status-good: #0ca30c;
+  --viz-status-warning: #fab219;
+  --viz-status-critical: #d03b3b;
+  --viz-sequential: #2a78d6;
+  --viz-text-secondary: #52514e;
+  --viz-muted: #898781;
+  --viz-gridline: #e1e0d9;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
+    --viz-sequential: #3987e5;
+    --viz-text-secondary: #c3c2b7;
+    --viz-gridline: #2c2c2a;
   }
 }
 

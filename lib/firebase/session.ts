@@ -14,6 +14,7 @@ export async function createSessionCookie(idToken: string): Promise<string> {
 export type SessionClaims = DecodedIdToken & {
   role?: "admin" | "member";
   status?: "active" | "disabled";
+  memberId?: string;
 };
 
 // checkRevoked=true is the whole point of a session cookie over a bare ID token here: it

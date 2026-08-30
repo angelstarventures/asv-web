@@ -1,7 +1,9 @@
-# Milestone 0 smoke-test query — proves SDK codegen end to end against a seeded dev DB.
-# Real per-page queries (myAllocations, company detail, dashboard rollups, etc.) are added
-# incrementally in Milestones 2-4, always scoped to a server-derived memberId, never a raw
-# unfiltered "all allocations" shape (see plan §3, Data isolation).
+# Real per-page queries for Milestones 2-4. All are executed server-side via
+# firebase-admin/data-connect (lib/dataconnect/client.ts), which runs with admin trust and
+# ignores these @auth directives entirely — they're declared anyway as defense-in-depth /
+# documentation of intent, since authorization is actually enforced in each server
+# component's own code (deriving memberId from the verified session, checking role), the
+# same pattern the Cloud Functions already use for raw `pg` (plan §3, Data isolation).
 
 query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) landing page's name+sector-only company list — the query itself never selects financial fields, so public access is intentional (plan §4).") {
   companies: companies {
@@ -11,14 +13,107 @@ query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) l
   }
 }
 
-# Placeholder only — real dashboard reads must be gated by hasHeldAllocation/admin role, which
-# @auth can't express declaratively. Replaced in Milestone 2-4 by a query a Cloud Function (or
-# a route that independently re-derives memberId server-side) fronts, per plan §3 Data isolation.
-query GetRollupCache($companyId: UUID, $scenario: Scenario!) @auth(level: USER, insecureReason: "Milestone 0 smoke-test placeholder only; not wired into any page yet.") {
-  rollupCaches(where: { company: { id: { eq: $companyId } }, scenario: { eq: $scenario } }) {
+query ListMemberProfiles @auth(level: PUBLIC, insecureReason: "Board & Member profiles tab on the public landing page — display name and role only, no email/PII (plan §4, wireframe 1).") {
+  members: members {
+    id
+    displayName
+    role
+  }
+}
+
+# The single portfolio-level row per scenario (RollupCache.company is null there) — see
+# schema.gql's companyKey note for why "PORTFOLIO" is the real key.
+query GetPortfolioRollup($scenario: Scenario!) @auth(level: USER, insecureReason: "Portfolio-wide totals are the same for every active member — not memberId-scoped by design (plan §4, wireframe 2).") {
+  rollupCaches(where: { companyKey: { eq: "PORTFOLIO" }, scenario: { eq: $scenario } }) {
     moic
     unrealizedValue
     realizedValue
     computedAt
+  }
+}
+
+# Includes the "PORTFOLIO" row (company: null) alongside per-company rows — the caller
+# filters it out; simpler than fighting the exact relation-null filter syntax for one row.
+query ListCompanyRollups($scenario: Scenario!) @auth(level: USER, insecureReason: "Per-company rollups are portfolio-wide reporting data, not member-specific — the member-facing dashboard's `asv` scope (plan §4, wireframe 3).") {
+  rollupCaches(where: { scenario: { eq: $scenario } }) {
+    companyKey
+    moic
+    unrealizedValue
+    realizedValue
+    company {
+      id
+      name
+      sector
+    }
+  }
+}
+
+# Latest CompanyUpdate per company for a given scenario — computed here rather than trusting
+# Company.currentHealth/currentTrajectory, which is a single scenario-agnostic cache column
+# that can't correctly represent scenarios that legitimately disagree (seen in the dev-seed
+# mock data); "latest per company" reduction happens in the server component (V1 scale is a
+# handful of companies, no performance concern querying all rows and reducing in JS).
+query ListCompanyUpdatesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Company health/trajectory is portfolio-wide reporting data (plan §4, wireframe 2 health-mix chart).") {
+  companyUpdateDetails: companyUpdateDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }) {
+    health
+    trajectory
+    ledgerEntry {
+      eventDate
+      company {
+        id
+        name
+        sector
+      }
+    }
+  }
+}
+
+query ListLedgerEntriesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Ledger detail table — sort/filter/document-link visibility happen in the server component (plan §4, wireframe 4); access to financial detail fields is still gated per-type by the app, this just lists the base rows.") {
+  ledgerEntries(where: { scenario: { eq: $scenario } }, orderBy: { eventDate: DESC }) {
+    id
+    eventDate
+    type
+    needsReview
+    sourceDocument
+    company {
+      id
+      name
+      sector
+    }
+  }
+}
+
+query ListMemberAllocations($memberId: String!, $scenario: Scenario!) @auth(level: USER, insecureReason: "memberId is always server-derived from the verified session, never taken from a client-supplied parameter (plan §3, Data isolation) — the dashboard's `mine` scope (wireframe 3).") {
+  allocations(where: { member: { id: { eq: $memberId } }, ledgerEntry: { scenario: { eq: $scenario } } }) {
+    amount
+    ledgerEntry {
+      eventDate
+      company {
+        id
+        name
+      }
+    }
+  }
+}
+
+query ListMemberValuations($memberId: String!, $scenario: Scenario!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations — the dashboard's `mine` scope (wireframe 3).") {
+  memberValuations(where: { member: { id: { eq: $memberId } }, ledgerEntry: { scenario: { eq: $scenario } } }) {
+    value
+    ledgerEntry {
+      eventDate
+      company {
+        id
+        name
+      }
+    }
+  }
+}
+
+query GetMemberByAuthUid($authUid: String!) @auth(level: USER, insecureReason: "authUid comes from the server-verified session token, never a client parameter — this is exactly how the server derives memberId in the first place (plan §3).") {
+  members(where: { authUid: { eq: $authUid } }) {
+    id
+    displayName
+    role
+    status
   }
 }

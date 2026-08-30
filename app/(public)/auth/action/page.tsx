@@ -13,7 +13,13 @@ function AuthActionForm() {
   const mode = params.get("mode");
   const oobCode = params.get("oobCode");
 
-  const [status, setStatus] = useState<"verifying" | "ready" | "invalid" | "done">("verifying");
+  // Derivable straight from the URL params at render time — no effect needed for this branch,
+  // only for the async verification below.
+  const invalidParams = mode !== "resetPassword" || !oobCode;
+
+  const [status, setStatus] = useState<"verifying" | "ready" | "invalid" | "done">(
+    invalidParams ? "invalid" : "verifying"
+  );
   const [email, setEmail] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,17 +27,14 @@ function AuthActionForm() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (mode !== "resetPassword" || !oobCode) {
-      setStatus("invalid");
-      return;
-    }
+    if (invalidParams || !oobCode) return;
     verifyPasswordResetCode(auth, oobCode)
       .then((verifiedEmail) => {
         setEmail(verifiedEmail);
         setStatus("ready");
       })
       .catch(() => setStatus("invalid"));
-  }, [mode, oobCode]);
+  }, [invalidParams, oobCode]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
