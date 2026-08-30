@@ -10,9 +10,13 @@ function getAdminApp(): App {
 
   const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   return initializeApp(
-    serviceAccountJson
-      ? { credential: cert(JSON.parse(serviceAccountJson)) }
-      : {},
+    {
+      // Explicit projectId so verifyIdToken/verifySessionCookie can check the token audience
+      // even without ADC available (e.g. plain `next dev` on a workstation) — without it,
+      // the Admin SDK can't determine which project's public keys/audience to check against.
+      projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+      ...(serviceAccountJson ? { credential: cert(JSON.parse(serviceAccountJson)) } : {}),
+    },
     "admin"
   );
 }
