@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ASV_Portfolio_Master_Schema_v5_Final",
+  "type": "object",
+  "required": ["date", "type", "company"],
+  "properties": {
+    "date": { 
+      "type": "string", 
+      "format": "date", 
+      "description": "The effective calendar date of the transactional, compliance, or operational event entry." 
+    },
+    "company": { 
+      "type": "string", 
+      "description": "The legal name of the target portfolio company entity." 
+    },
+    "type": { 
+      "type": "string", 
+      "enum": [
+        "Participating_PricedRound",
+        "Participating_SAFERound",
+        "NonParticipating_Round",
+        "Exit_Event",
+        "Transaction_ValuationChange",
+        "Internal_ValuationAssessment",
+        "Compliance_FlagChange",
+        "CompanyUpdate"
+      ],
+      "description": "The precise transaction mechanism, tracking event, compliance pivot, or operational update type."
+    },
+    "compliance_status": {
+      "type": "object",
+      "required": ["status", "flagged_date", "reason"],
+      "properties": {
+        "status": { "type": "string", "enum": ["Non-Halal"] },
+        "flagged_date": { "type": "string", "format": "date", "description": "The date the restriction was internally or legally applied." },
+        "reason": { "type": "string", "description": "Mandatory audit notes detailing the investment criteria violation." }
+      },
+      "description": "Optional field. Strictly required only when a portfolio asset is flagged as Non-Halal."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "Compliance_FlagChange" } } },
+      "then": { 
+        "required": ["audit_type", "compliance_officer_notes", "compliance_status"],
+        "properties": {
+          "audit_type": { "type": "string", "enum": ["Manual_Override", "Scheduled_Shariah_Review", "Strategic_Pivot_Audit"] },
+          "compliance_officer_notes": { "type": "string", "description": "Explicit evidence triggering the classification change." }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Participating_PricedRound" } } },
+      "then": {
+        "required": ["company_url", "sector", "doc_link", "asv_total", "round_name", "price_per_share", "post_money_valuation", "allocations"],
+        "properties": {
+          "company_url": { "type": "string", "format": "uri" },
+          "sector": { "type": "string" },
+          "doc_link": { "type": "string", "format": "uri" },
+          "asv_total": { "type": "number", "minimum": 0 },
+          "round_name": { "type": "string", "placeholder": "Series Seed, Series A, Series B" },
+          "price_per_share": { "type": "number", "minimum": 0 },
+          "post_money_valuation": { "type": "number", "minimum": 0 },
+          "allocations": { 
+            "type": "object", 
+            "additionalProperties": { "type": "number", "minimum": 0 },
+            "description": "Dictionary mapping unique 5-digit Member IDs to their exact cash commitment." 
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Participating_SAFERound" } } },
+      "then": {
+        "required": ["company_url", "sector", "doc_link", "asv_total", "post_money_val_cap", "discount", "allocations"],
+        "properties": {
+          "company_url": { "type": "string", "format": "uri" },
+          "sector": { "type": "string" },
+          "doc_link": { "type": "string", "format": "uri" },
+          "asv_total": { "type": "number", "minimum": 0 },
+          "post_money_val_cap": { "type": "number", "minimum": 0 },
+          "discount": { "type": "number", "minimum": 0, "maximum": 100 },
+          "allocations": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
+          "warrants": {
+            "type": "object",
+            "properties": {
+              "shares": { "type": "number" },
+              "share_class": { "type": "string" },
+              "exercise_price": { "type": "number" },
+              "expiration_years": { "type": "number" },
+              "vesting_terms": { "type": "string" }
+            }
+          },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "NonParticipating_Round" } } },
+      "then": {
+        "required": ["round_name", "new_price_per_share", "new_post_money_valuation", "doc_link"],
+        "properties": {
+          "round_name": { "type": "string" },
+          "new_price_per_share": { "type": "number", "minimum": 0 },
+          "new_post_money_valuation": { "type": "number", "minimum": 0 },
+          "doc_link": { "type": "string", "format": "uri" },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Exit_Event" } } },
+      "then": {
+        "required": ["exit_type", "total_exit_value", "asv_total_payout", "doc_link", "member_payouts"],
+        "properties": {
+          "exit_type": { "type": "string", "enum": ["Acquisition", "IPO", "Merger", "Shutdown", "Dissolution"] },
+          "total_exit_value": { "type": "number", "minimum": 0 },
+          "asv_total_payout": { "type": "number", "minimum": 0 },
+          "doc_link": { "type": "string", "format": "uri" },
+          "member_payouts": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "type": { "enum": ["Transaction_ValuationChange", "Internal_ValuationAssessment"] } } },
+      "then": {
+        "required": ["driving_event_date", "asv_total_fair_market_value", "member_valuations"],
+        "properties": {
+          "driving_event_date": { "type": "string", "format": "date", "description": "The date of the underlying priced round or valuation change event." },
+          "asv_total_fair_market_value": { "type": "number", "minimum": 0 },
+          "implied_enterprise_value": { "type": "number", "minimum": 0 },
+          "assessment_rationale": { "type": "string" },
+          "member_valuations": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "CompanyUpdate" } } },
+      "then": {
+        "required": ["health", "trajectory", "summary"],
+        "properties": {
+          "health": { "type": "string", "enum": ["Green", "Yellow", "Red"] },
+          "trajectory": { "type": "string", "enum": ["Improving", "Stable", "Declining"] },
+          "summary": {
+            "type": "object",
+            "required": ["highlights", "lowlights", "upcoming_plans"],
+            "properties": {
+              "highlights": { "type": "array", "items": { "type": "string" } },
+              "lowlights": { "type": "array", "items": { "type": "string" } },
+              "upcoming_plans": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -4,8 +4,6 @@
 # generated SDK cannot give. This mutation exists solely to prove codegen produces a working
 # client during Milestone 0 and should not be called from application code.
 
-mutation UpsertCompany($name: String!, $sector: String) @auth(level: NO_ACCESS) {
-  company_upsert(data: { name: $name, sector: $sector }) {
-    id
-  }
+mutation InsertCompany($name: String!, $sector: String) @auth(level: NO_ACCESS) {
+  company_insert(data: { name: $name, sector: $sector })
 }

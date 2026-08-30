@@ -1,0 +1,33 @@
+{
+  "name": "asv-tracker-functions",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": "20"
+  },
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log",
+    "migrate": "npm run build && node lib/scripts/migrate-legacy-data.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.0.0",
+    "firebase-functions": "^6.0.0",
+    "pg": "^8.13.0",
+    "@google-cloud/cloud-sql-connector": "^1.4.0",
+    "ajv": "^8.17.0",
+    "ajv-formats": "^3.0.1",
+    "googleapis": "^144.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8.11.0",
+    "typescript": "^5.5.0"
+  }
+}

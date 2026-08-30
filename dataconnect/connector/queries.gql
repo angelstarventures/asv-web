@@ -3,7 +3,7 @@
 # incrementally in Milestones 2-4, always scoped to a server-derived memberId, never a raw
 # unfiltered "all allocations" shape (see plan §3, Data isolation).
 
-query ListCompanies @auth(level: PUBLIC) {
+query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) landing page's name+sector-only company list — the query itself never selects financial fields, so public access is intentional (plan §4).") {
   companies: companies {
     id
     name
@@ -11,7 +11,10 @@ query ListCompanies @auth(level: PUBLIC) {
   }
 }
 
-query GetRollupCache($companyId: UUID, $scenario: Scenario!) @auth(level: USER) {
+# Placeholder only — real dashboard reads must be gated by hasHeldAllocation/admin role, which
+# @auth can't express declaratively. Replaced in Milestone 2-4 by a query a Cloud Function (or
+# a route that independently re-derives memberId server-side) fronts, per plan §3 Data isolation.
+query GetRollupCache($companyId: UUID, $scenario: Scenario!) @auth(level: USER, insecureReason: "Milestone 0 smoke-test placeholder only; not wired into any page yet.") {
   rollupCaches(where: { company: { id: { eq: $companyId } }, scenario: { eq: $scenario } }) {
     moic
     unrealizedValue

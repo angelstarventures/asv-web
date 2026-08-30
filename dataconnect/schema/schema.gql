@@ -115,16 +115,16 @@ type Company @table {
 }
 
 # Base ledger row — append-only, never updated in place. One row per (event, scenario).
-type LedgerEntry @table(
-  indexes: [
-    { fields: ["company", "scenario", "eventDate"], order: [ASC, ASC, DESC] }
-    { fields: ["type", "eventDate"] }
-  ]
-) {
+# Composite index covers the dashboard's (company, scenario, eventDate DESC) read path;
+# `type` also gets a single-column index for the mass-export/rollup-scan path (plan §2).
+type LedgerEntry
+  @table
+  @index(fields: ["companyId", "scenario", "eventDate"], order: [ASC, ASC, DESC])
+{
   id: UUID!                @default(expr: "uuidV4()")
   company: Company!
   scenario: Scenario!
-  type: LedgerEntryType!
+  type: LedgerEntryType!   @index
   eventDate: Date!
   sourceDocument: String            # doc_link from the legacy schema; superseded by Document rows going forward
   createdBy: Member!
@@ -214,21 +214,17 @@ type CompanyUpdateDetail @table {
 
 # --- Per-member breakdowns ---
 
-type Allocation @table(
-  indexes: [{ fields: ["member"] }]
-) {
+type Allocation @table {
   id: UUID!                 @default(expr: "uuidV4()")
   ledgerEntry: LedgerEntry!
-  member: Member!
+  member: Member!            @index
   amount: Float!             # CHECK amount >= 0
 }
 
-type MemberValuation @table(
-  indexes: [{ fields: ["member"] }]
-) {
+type MemberValuation @table {
   id: UUID!                 @default(expr: "uuidV4()")
   ledgerEntry: LedgerEntry!
-  member: Member!
+  member: Member!            @index
   value: Float!               # CHECK value >= 0
 }
 
@@ -275,9 +271,13 @@ type CustomEventDetail @table {
 
 # --- Precomputed rollups (read path for every dashboard) ---
 
+# @table key fields must be non-null, but `company` must be nullable to represent the single
+# portfolio-level row per scenario — so the real key is a non-null sentinel string
+# ("PORTFOLIO" or Company.id) kept in lockstep with the nullable FK by application code.
 type RollupCache @table(
-  key: ["company", "scenario"]
+  key: ["companyKey", "scenario"]
 ) {
+  companyKey: String!          # Company.id as text, or the literal "PORTFOLIO"
   company: Company             # null for the single portfolio-level row per scenario
   scenario: Scenario!
   moic: Float!
