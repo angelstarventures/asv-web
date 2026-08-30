@@ -1,0 +1,21 @@
+# Milestone 0 smoke-test query — proves SDK codegen end to end against a seeded dev DB.
+# Real per-page queries (myAllocations, company detail, dashboard rollups, etc.) are added
+# incrementally in Milestones 2-4, always scoped to a server-derived memberId, never a raw
+# unfiltered "all allocations" shape (see plan §3, Data isolation).
+
+query ListCompanies @auth(level: PUBLIC) {
+  companies: companies {
+    id
+    name
+    sector
+  }
+}
+
+query GetRollupCache($companyId: UUID, $scenario: Scenario!) @auth(level: USER) {
+  rollupCaches(where: { company: { id: { eq: $companyId } }, scenario: { eq: $scenario } }) {
+    moic
+    unrealizedValue
+    realizedValue
+    computedAt
+  }
+}

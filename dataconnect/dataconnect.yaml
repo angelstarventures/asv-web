@@ -1,0 +1,11 @@
+specVersion: "v1"
+serviceId: "asv-tracker"
+location: "us-east1"
+schema:
+  source: "schema"
+  datasource:
+    postgresql:
+      database: "asvtrackerdb"
+      cloudSql:
+        instanceId: "asv-tracker-sql"
+connectorDirs: ["connector"]

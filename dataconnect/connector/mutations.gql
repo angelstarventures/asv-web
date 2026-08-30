@@ -1,0 +1,11 @@
+# Milestone 0 smoke-test mutation only. All real ledger writes go through Cloud Functions
+# (ledger-createInvestmentRound, etc.) using raw `pg` transactions, per plan §3 — atomicity
+# across ledger_entry x 3 + detail x 3 + allocations x N needs a real transaction the
+# generated SDK cannot give. This mutation exists solely to prove codegen produces a working
+# client during Milestone 0 and should not be called from application code.
+
+mutation UpsertCompany($name: String!, $sector: String) @auth(level: NO_ACCESS) {
+  company_upsert(data: { name: $name, sector: $sector }) {
+    id
+  }
+}

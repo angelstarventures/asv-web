@@ -1,0 +1,315 @@
+# ASV Investment Tracker — Data Connect schema (source of truth for the Postgres/GraphQL data model).
+# Enum values and required-field shapes are pulled from mock-data/asv_master_portfolio_schema.json (draft 2020-12 JSON Schema).
+# NOTE: Data Connect's directive surface (@table/@col/@default/@ref/@index) is still evolving — verify each
+# directive against the installed firebase-tools version with `firebase emulators:start --only dataconnect`
+# before relying on generated SQL. CHECK constraints and jsonb columns are NOT expressible here — see
+# schema/post_migrations/*.sql, applied by scripts/apply-post-migrations.ts after every `dataconnect:sql:migrate`.
+
+# ---------------------------------------------------------------------------
+# Enums (mirrors asv_master_portfolio_schema.json's `enum` arrays exactly)
+# ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum Scenario {
+  OPTIMISTIC
+  BALANCED
+  CONSERVATIVE
+}
+
+enum LedgerEntryType {
+  PARTICIPATING_PRICED_ROUND      # Participating_PricedRound
+  PARTICIPATING_SAFE_ROUND        # Participating_SAFERound
+  NON_PARTICIPATING_ROUND         # NonParticipating_Round
+  EXIT_EVENT                      # Exit_Event
+  TRANSACTION_VALUATION_CHANGE    # Transaction_ValuationChange
+  INTERNAL_VALUATION_ASSESSMENT   # Internal_ValuationAssessment
+  COMPLIANCE_FLAG_CHANGE          # Compliance_FlagChange
+  COMPANY_UPDATE                  # CompanyUpdate
+  CUSTOM                          # any admin-defined EventTypeDefinition
+}
+
+enum CompanyHealth {
+  GREEN
+  YELLOW
+  RED
+}
+
+enum CompanyTrajectory {
+  IMPROVING
+  STABLE
+  DECLINING
+}
+
+enum CompanyStatus {
+  ACTIVE
+  EXITED
+  WRITTEN_OFF
+  ARCHIVED
+}
+
+enum ComplianceStatus {
+  NON_HALAL
+}
+
+enum ComplianceAuditType {
+  MANUAL_OVERRIDE            # Manual_Override
+  SCHEDULED_SHARIAH_REVIEW   # Scheduled_Shariah_Review
+  STRATEGIC_PIVOT_AUDIT      # Strategic_Pivot_Audit
+}
+
+enum ExitType {
+  ACQUISITION
+  IPO
+  MERGER
+  SHUTDOWN
+  DISSOLUTION
+}
+
+enum DocumentType {
+  PITCH_DECK
+  DD_REPORT
+  DATA_ROOM
+  COMPANY_UPDATE_DOC
+  SPA
+  ALLOCATION_SCHEDULE
+}
+
+enum DocumentAccessDecision {
+  GRANTED
+  DENIED
+}
+
+# ---------------------------------------------------------------------------
+# Core entities
+# ---------------------------------------------------------------------------
+
+# id stays a zero-padded 5-digit string PK (not a UUID) — legacy IDs migrate verbatim,
+# and every legacy `{"00001": amount}` allocation dict key maps straight to this FK.
+type Member @table(key: "id") {
+  id: String!            @col(name: "id", dataType: "varchar(5)")
+  displayName: String!
+  email: String!         @unique
+  authUid: String                      # nullable until the member's account is linked
+  role: Role!             @default(value: MEMBER)
+  status: MemberStatus!   @default(value: ACTIVE)
+  createdAt: Timestamp!   @default(expr: "request.time")
+}
+
+type Company @table {
+  id: UUID!                       @default(expr: "uuidV4()")
+  name: String!                    @unique
+  sector: String
+  website: String
+  currentHealth: CompanyHealth
+  currentTrajectory: CompanyTrajectory
+  status: CompanyStatus!          @default(value: ACTIVE)
+}
+
+# Base ledger row — append-only, never updated in place. One row per (event, scenario).
+type LedgerEntry @table(
+  indexes: [
+    { fields: ["company", "scenario", "eventDate"], order: [ASC, ASC, DESC] }
+    { fields: ["type", "eventDate"] }
+  ]
+) {
+  id: UUID!                @default(expr: "uuidV4()")
+  company: Company!
+  scenario: Scenario!
+  type: LedgerEntryType!
+  eventDate: Date!
+  sourceDocument: String            # doc_link from the legacy schema; superseded by Document rows going forward
+  createdBy: Member!
+  createdAt: Timestamp!    @default(expr: "request.time")
+  needsReview: Boolean!    @default(value: false)
+}
+
+# --- Per-type detail tables, 1:1 with LedgerEntry (LedgerEntry.type is the discriminator) ---
+
+type PricedRoundDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  companyUrl: String
+  docLink: String
+  asvTotal: Float!
+  roundName: String!
+  pricePerShare: Float!
+  postMoneyValuation: Float!
+}
+
+type SafeRoundDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  companyUrl: String
+  docLink: String
+  asvTotal: Float!
+  postMoneyValCap: Float!
+  discount: Float!                   # CHECK 0..100 — see post_migrations/001
+  warrantShares: Float
+  warrantShareClass: String
+  warrantExercisePrice: Float
+  warrantExpirationYears: Float
+  warrantVestingTerms: String
+  notes: String
+}
+
+type NonParticipatingRoundDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  roundName: String!
+  newPricePerShare: Float!
+  newPostMoneyValuation: Float!
+  docLink: String!
+  notes: String
+}
+
+type ExitEventDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  exitType: ExitType!
+  totalExitValue: Float!
+  asvTotalPayout: Float!
+  docLink: String!
+}
+
+# Shared by Transaction_ValuationChange and Internal_ValuationAssessment — identical field
+# shape in the source schema; LedgerEntry.type is what distinguishes them.
+type ValuationAssessmentDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  drivingEventDate: Date!
+  asvTotalFairMarketValue: Float!
+  impliedEnterpriseValue: Float
+  assessmentRationale: String
+}
+
+# Halal/Shariah screening only — status is always NON_HALAL when this row exists.
+type ComplianceFlagDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  status: ComplianceStatus! @default(value: NON_HALAL)
+  flaggedDate: Date!
+  reason: String!
+  auditType: ComplianceAuditType!
+  complianceOfficerNotes: String!
+}
+
+type CompanyUpdateDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  health: CompanyHealth!
+  trajectory: CompanyTrajectory!
+  highlights: [String!]!
+  lowlights: [String!]!
+  upcomingPlans: [String!]!
+}
+
+# --- Per-member breakdowns ---
+
+type Allocation @table(
+  indexes: [{ fields: ["member"] }]
+) {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry!
+  member: Member!
+  amount: Float!             # CHECK amount >= 0
+}
+
+type MemberValuation @table(
+  indexes: [{ fields: ["member"] }]
+) {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry!
+  member: Member!
+  value: Float!               # CHECK value >= 0
+}
+
+# --- Documents & access audit trail ---
+
+type Document @table {
+  id: UUID!            @default(expr: "uuidV4()")
+  driveFileId: String! @unique
+  driveUrl: String!
+  docType: DocumentType!
+  company: Company!
+  uploadedBy: Member!
+  uploadedAt: Timestamp! @default(expr: "request.time")
+}
+
+type DocumentAccessLog @table {
+  id: UUID!               @default(expr: "uuidV4()")
+  document: Document!
+  accessedBy: Member!
+  accessedAt: Timestamp!  @default(expr: "request.time")
+  decision: DocumentAccessDecision!
+  reason: String!
+}
+
+# --- Event-type registry (FR-10a) ---
+
+type EventTypeDefinition @table {
+  id: UUID!          @default(expr: "uuidV4()")
+  key: String!        @unique
+  label: String!
+  description: String
+  isBuiltin: Boolean! @default(value: false)
+  fieldSchema: String! # JSON-as-text; converted to jsonb by post_migrations/002
+  createdBy: Member!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type CustomEventDetail @table {
+  id: UUID!                     @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry!     @unique
+  eventTypeDefinition: EventTypeDefinition!
+  data: String!                 # JSON-as-text; converted to jsonb by post_migrations/002 — see the jsonb spike (plan §2)
+}
+
+# --- Precomputed rollups (read path for every dashboard) ---
+
+type RollupCache @table(
+  key: ["company", "scenario"]
+) {
+  company: Company             # null for the single portfolio-level row per scenario
+  scenario: Scenario!
+  moic: Float!
+  unrealizedValue: Float!
+  realizedValue: Float!
+  computedAt: Timestamp! @default(expr: "request.time")
+}
+
+# ---------------------------------------------------------------------------
+# Phase 2/3 tables — created now so the schema doesn't need a breaking migration later,
+# unused by any V1 write/read path.
+# ---------------------------------------------------------------------------
+
+type AiProcessingJob @table {
+  id: UUID!         @default(expr: "uuidV4()")
+  company: Company!
+  status: String!
+  requestedBy: Member!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type PitchSubmission @table {
+  id: UUID!            @default(expr: "uuidV4()")
+  companyName: String!
+  submittedBy: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+type WatchlistRating @table {
+  id: UUID!         @default(expr: "uuidV4()")
+  company: Company!
+  member: Member!
+  rating: Int!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
