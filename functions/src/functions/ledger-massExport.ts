@@ -20,9 +20,14 @@ export const ledgerMassExport = onCall<Record<string, never>, Promise<{ records:
   async (request) => {
     await requireAdmin(request);
 
+    // ::text on the date column — `pg` returns Postgres `date` as a JS Date, and Cloud
+    // Functions v2's onCall response marshalling does not preserve it as an ISO string
+    // (confirmed empirically: raw HTTP callers see `{}` where the date should be). Casting to
+    // text in SQL sidesteps that entirely rather than relying on any particular JS Date
+    // serialization behavior downstream.
     const entries = await query<LedgerEntryRow>(
       `SELECT le.id, c.name AS "companyName", le.scenario, le.type,
-              le."event_date" AS "eventDate", le."source_document" AS "sourceDocument"
+              le."event_date"::text AS "eventDate", le."source_document" AS "sourceDocument"
        FROM "ledger_entry" le
        JOIN "company" c ON c.id = le."company_id"
        ORDER BY le."event_date" ASC`
@@ -93,7 +98,7 @@ async function fetchDetailForEntry(
     case "TRANSACTION_VALUATION_CHANGE":
     case "INTERNAL_VALUATION_ASSESSMENT": {
       const rows = await query<Record<string, unknown>>(
-        `SELECT "driving_event_date", "asv_total_fair_market_value",
+        `SELECT "driving_event_date"::text AS "driving_event_date", "asv_total_fair_market_value",
                 "implied_enterprise_value", "assessment_rationale"
          FROM "valuation_assessment_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
@@ -103,7 +108,7 @@ async function fetchDetailForEntry(
     }
     case "COMPLIANCE_FLAG_CHANGE": {
       const rows = await query<Record<string, unknown>>(
-        `SELECT "flagged_date", reason, "audit_type", "compliance_officer_notes"
+        `SELECT "flagged_date"::text AS "flagged_date", reason, "audit_type", "compliance_officer_notes"
          FROM "compliance_flag_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
       );
