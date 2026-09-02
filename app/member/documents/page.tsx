@@ -28,8 +28,8 @@ export default async function MemberDocumentsPage() {
 
   const [{ documents }, { allocations }, { memberValuations }] = await Promise.all([
     listAllDocuments(),
-    listMemberAllocationsAllScenarios({ memberId: member.memberId }),
-    listMemberValuationsAllScenarios({ memberId: member.memberId }),
+    listMemberAllocationsAllScenarios(member.authUid),
+    listMemberValuationsAllScenarios(member.authUid),
   ]);
 
   const heldCompanyIds = new Set([
@@ -39,7 +39,7 @@ export default async function MemberDocumentsPage() {
 
   const byCompany = new Map<string, { name: string; docs: typeof documents }>();
   for (const doc of documents) {
-    const entry = byCompany.get(doc.company.id) ?? { name: doc.company.name, docs: [] };
+    const entry = byCompany.get(doc.company.id) ?? { name: doc.company.tradeName ?? doc.company.name, docs: [] };
     entry.docs.push(doc);
     byCompany.set(doc.company.id, entry);
   }

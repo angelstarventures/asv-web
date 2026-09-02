@@ -7,19 +7,21 @@ initializeApp();
 // function-to-Postgres call would otherwise cross regions on every request.
 setGlobalOptions({ region: "us-east1" });
 
-export { provisionMember, adminTriggerPasswordReset, setMemberStatus } from "./functions/users-onCreateProvision";
+export { createMember, updateMember, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminTriggerPasswordReset, setMemberStatus } from "./functions/users-onCreateProvision";
+export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
+export { updateAppSetting } from "./functions/app-updateSetting";
+export { aiPortfolioQuery } from "./functions/ai-portfolioQuery";
+export { documentsAnalyze } from "./functions/documents-analyze";
 export { documentsGetAccessUrl } from "./functions/documents-getAccessUrl";
 export { documentsOnDriveUpload } from "./functions/documents-onDriveUpload";
-export { ledgerCreateInvestmentRound } from "./functions/ledger-createInvestmentRound";
-export { ledgerCreateValuationEvent } from "./functions/ledger-createValuationEvent";
-export { ledgerCreateComplianceFlag } from "./functions/ledger-createComplianceFlag";
-export { ledgerCreateCompanyUpdate } from "./functions/ledger-createCompanyUpdate";
-export { ledgerCreateExitEvent } from "./functions/ledger-createExitEvent";
 export { ledgerCustomEventWrite } from "./functions/ledger-customEventWrite";
 export { ledgerCustomEventRead } from "./functions/ledger-customEventRead";
 export { eventTypesDefine } from "./functions/eventTypes-define";
 export { eventTypesGetByKey } from "./functions/eventTypes-getByKey";
 export { ledgerMassExport } from "./functions/ledger-massExport";
+export { ledgerGetSchema } from "./functions/ledger-getSchema";
 export { ledgerMassImportDiff } from "./functions/ledger-massImportDiff";
 export { ledgerMassImportCommit } from "./functions/ledger-massImportCommit";
+export { ledgerDeleteRecord } from "./functions/ledger-deleteRecord";
+export { ledgerUpdateRecord } from "./functions/ledger-updateRecord";
 export { rollupsRecompute } from "./functions/rollups-recompute";

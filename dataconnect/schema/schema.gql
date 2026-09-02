@@ -19,6 +19,15 @@ enum MemberStatus {
   DISABLED
 }
 
+# Organizational classification, distinct from Role (which is purely an app-permission level —
+# admin vs member). Admin-settable only, same posture as Role/MemberStatus.
+enum MembershipType {
+  BOARD_MEMBER
+  MEMBER
+  ASSOCIATE
+  EMERITUS
+}
+
 enum Scenario {
   OPTIMISTIC
   BALANCED
@@ -97,8 +106,12 @@ enum DocumentAccessDecision {
 type Member @table(key: "id") {
   id: String!            @col(name: "id", dataType: "varchar(5)")
   displayName: String!
+  investingEntityName: String!  # backfilled to match displayName for every existing row; independently editable going forward
   email: String!         @unique
   authUid: String                      # nullable until the member's account is linked
+  photoUrl: String        # data: URL (base64), self-uploaded via /member/settings; nullable
+  profileText: String     # short bio, self-editable via /member/settings; nullable
+  membershipType: MembershipType! @default(value: MEMBER)
   role: Role!             @default(value: MEMBER)
   status: MemberStatus!   @default(value: ACTIVE)
   createdAt: Timestamp!   @default(expr: "request.time")
@@ -106,9 +119,12 @@ type Member @table(key: "id") {
 
 type Company @table {
   id: UUID!                       @default(expr: "uuidV4()")
-  name: String!                    @unique
+  name: String!                    @unique       # legal/incorporated name — the natural key ledger records match on
+  tradeName: String                              # the public-facing "doing business as" name, when different from name
+  tagline: String                                # short public-facing description, shown on hover in the portfolio logo grid
   sector: String
-  website: String
+  website: String                                # set from the first investment-round record (company_url), same pattern as sector
+  logoUrl: String                 # set from the first investment-round record (logo_url), same pattern as sector
   currentHealth: CompanyHealth
   currentTrajectory: CompanyTrajectory
   status: CompanyStatus!          @default(value: ACTIVE)
@@ -167,7 +183,7 @@ type NonParticipatingRoundDetail @table {
   roundName: String!
   newPricePerShare: Float!
   newPostMoneyValuation: Float!
-  docLink: String!
+  docLink: String
   notes: String
 }
 
@@ -177,7 +193,7 @@ type ExitEventDetail @table {
   exitType: ExitType!
   totalExitValue: Float!
   asvTotalPayout: Float!
-  docLink: String!
+  docLink: String
 }
 
 # Shared by Transaction_ValuationChange and Internal_ValuationAssessment — identical field
@@ -294,6 +310,29 @@ type RollupCache @table(
   unrealizedValue: Float!
   realizedValue: Float!
   computedAt: Timestamp! @default(expr: "request.time")
+}
+
+# --- AI settings (Phase 2) ---
+
+# Fixed, small set of keys ("document_analysis", "portfolio_chat") — a plain key/value config
+# table rather than one row per feature, since there are only ever two of these and no other
+# generic settings table exists yet.
+type AiPromptSetting @table(key: "key") {
+  key: String!
+  prompt: String!
+  updatedAt: Timestamp! @default(expr: "request.time")
+  updatedBy: Member!
+}
+
+# Generic app-wide feature toggles, admin-controlled (plan: simplified member view). Fixed set
+# of keys ("member_ai_chat_enabled", "member_locked_scenario") — same key/value shape as
+# AiPromptSetting, kept as its own table rather than merged into it since the value semantics
+# differ (a flag/enum string here, a full prompt there).
+type AppSetting @table(key: "key") {
+  key: String!
+  value: String!
+  updatedAt: Timestamp! @default(expr: "request.time")
+  updatedBy: Member!
 }
 
 # ---------------------------------------------------------------------------

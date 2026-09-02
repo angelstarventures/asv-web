@@ -1,10 +1,5 @@
 import { CompanyHealth } from "@/lib/dataconnect/generated";
-
-const STATUS: Record<CompanyHealth, { color: string; label: string }> = {
-  [CompanyHealth.GREEN]: { color: "var(--viz-status-good)", label: "Healthy" },
-  [CompanyHealth.YELLOW]: { color: "var(--viz-status-warning)", label: "Watch" },
-  [CompanyHealth.RED]: { color: "var(--viz-status-critical)", label: "Critical" },
-};
+import { HEALTH_STATUS as STATUS } from "@/lib/health";
 
 const ORDER: CompanyHealth[] = [CompanyHealth.GREEN, CompanyHealth.YELLOW, CompanyHealth.RED];
 
@@ -55,11 +50,8 @@ export function HealthMixDonut({ counts }: { counts: Record<CompanyHealth, numbe
             stroke={STATUS[seg.key].color}
             strokeWidth={STROKE}
             strokeLinecap="round"
-          >
-            <title>
-              {STATUS[seg.key].label}: {counts[seg.key]} ({seg.pct}%)
-            </title>
-          </path>
+            aria-label={`${STATUS[seg.key].label}: ${counts[seg.key]} (${seg.pct}%)`}
+          />
         ))}
         <text
           x={SIZE / 2}
@@ -72,15 +64,15 @@ export function HealthMixDonut({ counts }: { counts: Record<CompanyHealth, numbe
         </text>
       </svg>
       <ul className="flex flex-col gap-2 text-sm">
-        {ORDER.filter((k) => counts[k] > 0).map((k) => (
-          <li key={k} className="flex items-center gap-2">
+        {segments.map((seg) => (
+          <li key={seg.key} className="flex items-center gap-2">
             <span
               aria-hidden
               className="inline-block h-3 w-3 rounded-sm"
-              style={{ backgroundColor: STATUS[k].color }}
+              style={{ backgroundColor: STATUS[seg.key].color }}
             />
             <span className="text-zinc-700 dark:text-zinc-300">
-              {STATUS[k].label} ({counts[k]})
+              {STATUS[seg.key].label} ({counts[seg.key]}, {seg.pct}%)
             </span>
           </li>
         ))}

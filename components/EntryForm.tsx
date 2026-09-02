@@ -5,16 +5,7 @@ import { useRouter } from "next/navigation";
 import { DynamicEntryForm } from "./DynamicEntryForm";
 import type { EventTypeDef } from "@/lib/eventTypes/schema";
 import { validateSharedValues, validatePerScenarioValues } from "@/lib/eventTypes/schema";
-import {
-  ledgerCreateExitEvent,
-  ledgerCreateComplianceFlag,
-  ledgerCreateValuationEvent,
-  ledgerCustomEventWrite,
-  buildPerScenarioValuationInput,
-  type CreateExitEventInput,
-  type CreateComplianceFlagInput,
-  type Scenario,
-} from "@/lib/functions/ledgerWrites";
+import { ledgerCustomEventWrite, type Scenario } from "@/lib/functions/ledgerWrites";
 
 const EMPTY_PER_SCENARIO = { OPTIMISTIC: {}, BALANCED: {}, CONSERVATIVE: {} } as Record<
   Scenario,
@@ -24,13 +15,14 @@ const EMPTY_PER_SCENARIO = { OPTIMISTIC: {}, BALANCED: {}, CONSERVATIVE: {} } as
 interface Company {
   id: string;
   name: string;
+  tradeName?: string | null;
   sector?: string | null;
 }
 
-// Submits through whichever Cloud Function actually owns this event type's write path —
-// dedicated functions for the 4 generic built-ins this page serves, ledgerCustomEventWrite
-// for everything else. DynamicEntryForm only renders fields; this adapter maps its
-// shared/perScenario buckets into each function's real input shape (plan §3/§4).
+// Only ever rendered for admin-defined custom event types (CustomEntryLoader) — the built-in
+// legacy-schema types are recorded via the JSON flow at /admin/ledger/record instead.
+// DynamicEntryForm only renders fields; this adapter maps its shared/perScenario buckets into
+// ledgerCustomEventWrite's input shape.
 async function submitForEventType(
   eventType: EventTypeDef,
   companyId: string,
@@ -39,49 +31,14 @@ async function submitForEventType(
   shared: Record<string, unknown>,
   perScenario: Record<Scenario, Record<string, unknown>>
 ): Promise<void> {
-  switch (eventType.key) {
-    case "EXIT_EVENT":
-      await ledgerCreateExitEvent({
-        companyId,
-        eventDate,
-        sourceDocument: sourceDocument || undefined,
-        exitType: shared.exitType as CreateExitEventInput["exitType"],
-        totalExitValue: shared.totalExitValue as number,
-        asvTotalPayout: shared.asvTotalPayout as number,
-        docLink: shared.docLink as string,
-      });
-      return;
-    case "COMPLIANCE_FLAG_CHANGE":
-      await ledgerCreateComplianceFlag({
-        companyId,
-        eventDate,
-        sourceDocument: sourceDocument || undefined,
-        flaggedDate: shared.flaggedDate as string,
-        reason: shared.reason as string,
-        auditType: shared.auditType as CreateComplianceFlagInput["auditType"],
-        complianceOfficerNotes: shared.complianceOfficerNotes as string,
-      });
-      return;
-    case "TRANSACTION_VALUATION_CHANGE":
-    case "INTERNAL_VALUATION_ASSESSMENT":
-      await ledgerCreateValuationEvent({
-        companyId,
-        eventDate,
-        sourceDocument: sourceDocument || undefined,
-        entryType: eventType.key,
-        perScenario: buildPerScenarioValuationInput(shared.drivingEventDate as string, perScenario),
-      });
-      return;
-    default:
-      await ledgerCustomEventWrite({
-        eventTypeKey: eventType.key,
-        companyId,
-        eventDate,
-        sourceDocument: sourceDocument || undefined,
-        shared,
-        perScenario,
-      });
-  }
+  await ledgerCustomEventWrite({
+    eventTypeKey: eventType.key,
+    companyId,
+    eventDate,
+    sourceDocument: sourceDocument || undefined,
+    shared,
+    perScenario,
+  });
 }
 
 export function EntryForm({ eventType, companies }: { eventType: EventTypeDef; companies: Company[] }) {
@@ -133,7 +90,7 @@ export function EntryForm({ eventType, companies }: { eventType: EventTypeDef; c
         >
           {companies.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {c.tradeName ?? c.name}
             </option>
           ))}
         </select>

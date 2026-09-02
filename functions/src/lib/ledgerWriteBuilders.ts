@@ -135,7 +135,7 @@ export interface NonParticipatingRoundDetailInput {
   roundName: string;
   newPricePerShare: number;
   newPostMoneyValuation: number;
-  docLink: string;
+  docLink?: string;
   notes?: string;
 }
 
@@ -148,7 +148,7 @@ export async function insertNonParticipatingRoundDetail(
     `INSERT INTO "non_participating_round_detail"
        ("ledger_entry_id", "round_name", "new_price_per_share", "new_post_money_valuation", "doc_link", notes)
      VALUES ($1, $2, $3, $4, $5, $6)`,
-    [ledgerEntryId, d.roundName, d.newPricePerShare, d.newPostMoneyValuation, d.docLink, d.notes ?? null]
+    [ledgerEntryId, d.roundName, d.newPricePerShare, d.newPostMoneyValuation, d.docLink ?? null, d.notes ?? null]
   );
 }
 
@@ -156,7 +156,7 @@ export interface ExitEventDetailInput {
   exitType: string;
   totalExitValue: number;
   asvTotalPayout: number;
-  docLink: string;
+  docLink?: string;
 }
 
 export async function insertExitEventDetail(
@@ -167,7 +167,7 @@ export async function insertExitEventDetail(
   await client.query(
     `INSERT INTO "exit_event_detail" ("ledger_entry_id", "exit_type", "total_exit_value", "asv_total_payout", "doc_link")
      VALUES ($1, $2, $3, $4, $5)`,
-    [ledgerEntryId, d.exitType, d.totalExitValue, d.asvTotalPayout, d.docLink]
+    [ledgerEntryId, d.exitType, d.totalExitValue, d.asvTotalPayout, d.docLink ?? null]
   );
 }
 
@@ -234,14 +234,27 @@ export async function insertCompanyUpdateDetail(
 export async function findOrCreateCompanyId(
   client: PoolClient,
   name: string,
-  sector?: string
+  sector?: string,
+  logoUrl?: string,
+  website?: string
 ): Promise<string> {
   const existing = await client.query<{ id: string }>(`SELECT id FROM "company" WHERE name = $1`, [name]);
   if (existing.rows.length > 0) return existing.rows[0].id;
 
+  // sector/logoUrl/website are set once, from whichever record first creates the company row
+  // (the "first investment record" per the ledger-record schema) — never backfilled on a later
+  // record for the same already-existing company, same as sector's existing behavior.
   const inserted = await client.query<{ id: string }>(
-    `INSERT INTO "company" (name, sector, status) VALUES ($1, $2, 'ACTIVE') RETURNING id`,
-    [name, sector ?? null]
+    `INSERT INTO "company" (name, sector, logo_url, website, status) VALUES ($1, $2, $3, $4, 'ACTIVE') RETURNING id`,
+    [name, sector ?? null, logoUrl ?? null, website ?? null]
   );
   return inserted.rows[0].id;
+}
+
+// SHUTDOWN/DISSOLUTION means the company folded — hide it from the (public) portfolio grid
+// via status, same signal the real exit_event_detail row already carries. ACQUISITION/IPO/
+// MERGER are successful exits, distinct from a folded company, so they get EXITED instead.
+export async function updateCompanyStatusForExit(client: PoolClient, companyId: string, exitType: string): Promise<void> {
+  const status = exitType === "SHUTDOWN" || exitType === "DISSOLUTION" ? "WRITTEN_OFF" : "EXITED";
+  await client.query(`UPDATE "company" SET status = $1 WHERE id = $2`, [status, companyId]);
 }

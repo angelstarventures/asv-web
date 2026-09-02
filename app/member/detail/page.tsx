@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import {
+  listAppSettings,
   listLedgerEntriesForScenario,
   listMemberAllocations,
   listMemberValuations,
@@ -31,7 +32,9 @@ function sortRows(rows: Row[], sort: SortKey): Row[] {
   const copy = [...rows];
   switch (sort) {
     case "company":
-      return copy.sort((a, b) => a.company.name.localeCompare(b.company.name));
+      return copy.sort((a, b) =>
+        (a.company.tradeName ?? a.company.name).localeCompare(b.company.tradeName ?? b.company.name)
+      );
     case "type":
       return copy.sort((a, b) => a.type.localeCompare(b.type));
     case "eventDate":
@@ -40,12 +43,13 @@ function sortRows(rows: Row[], sort: SortKey): Row[] {
   }
 }
 
-// Wireframe 4: ?sort=&q=&scope= in the URL (plan §4). Fixed to the `balanced` scenario, same
-// as the overview page — no scenario toggle called for by this wireframe. Sort/filter apply
-// within the server component rather than as separate per-sort Data Connect queries: at V1's
-// scale (a handful of companies, a few hundred entries) this is the same "query once, reduce
-// in JS" tradeoff already made for ListCompanyUpdatesForScenario (plan §4), not a client-side
-// fetch — the browser never sees unfiltered data.
+// Wireframe 4: ?sort=&q=&scope= in the URL (plan §4). No scenario toggle called for by this
+// wireframe — defaults to `balanced`, or the admin-configured locked scenario
+// (app/admin/settings's "simplified member view") when one is set. Sort/filter apply within
+// the server component rather than as separate per-sort Data Connect queries: at V1's scale (a
+// handful of companies, a few hundred entries) this is the same "query once, reduce in JS"
+// tradeoff already made for ListCompanyUpdatesForScenario (plan §4), not a client-side fetch —
+// the browser never sees unfiltered data.
 export default async function MemberDetailPage({
   searchParams,
 }: {
@@ -59,14 +63,20 @@ export default async function MemberDetailPage({
   const member = await getCurrentMember();
   if (!member) redirect("/login");
 
-  const { ledgerEntries } = await listLedgerEntriesForScenario({ scenario: Scenario.BALANCED });
+  const { appSettings } = await listAppSettings();
+  const lockedScenario = appSettings.find((s) => s.key === "member_locked_scenario")?.value ?? "";
+  const scenario = lockedScenario
+    ? Scenario[lockedScenario.toUpperCase() as keyof typeof Scenario]
+    : Scenario.BALANCED;
+
+  const { ledgerEntries } = await listLedgerEntriesForScenario({ scenario });
 
   let rows = ledgerEntries;
 
   if (scope === "mine") {
     const [{ allocations }, { memberValuations }] = await Promise.all([
-      listMemberAllocations({ memberId: member.memberId, scenario: Scenario.BALANCED }),
-      listMemberValuations({ memberId: member.memberId, scenario: Scenario.BALANCED }),
+      listMemberAllocations(member.authUid, { scenario: Scenario.BALANCED }),
+      listMemberValuations(member.authUid, { scenario: Scenario.BALANCED }),
     ]);
     const myCompanyIds = new Set([
       ...allocations.map((a) => a.ledgerEntry.company.id),
@@ -76,7 +86,7 @@ export default async function MemberDetailPage({
   }
 
   if (q) {
-    rows = rows.filter((r) => r.company.name.toLowerCase().includes(q));
+    rows = rows.filter((r) => (r.company.tradeName ?? r.company.name).toLowerCase().includes(q));
   }
 
   rows = sortRows(rows, sort);
@@ -146,7 +156,7 @@ export default async function MemberDetailPage({
           {rows.map((r) => (
             <tr key={r.id} className="border-b border-zinc-100 dark:border-zinc-900">
               <td className="py-2 tabular-nums">{r.eventDate}</td>
-              <td className="py-2">{r.company.name}</td>
+              <td className="py-2">{r.company.tradeName ?? r.company.name}</td>
               <td className="py-2 text-zinc-500 dark:text-zinc-500">{r.company.sector ?? "—"}</td>
               <td className="py-2">{r.type.replaceAll("_", " ")}</td>
               <td className="py-2">

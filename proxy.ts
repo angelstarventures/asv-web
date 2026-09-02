@@ -26,7 +26,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (request.nextUrl.pathname.startsWith("/admin") && claims.role !== "admin") {
-    return NextResponse.redirect(new URL("/member/overview", request.url));
+    return NextResponse.redirect(new URL("/member/dashboard", request.url));
   }
 
   return NextResponse.next();

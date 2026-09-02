@@ -58,6 +58,104 @@ interface ExistingEntryRow {
   contentHash: string;
 }
 
+// The 3 types that represent ASV actually putting (or explicitly not putting) money into a
+// company — the same set rollups.ts already treats as "investment round types" for MOIC
+// purposes. Every other type describes something happening *to* an existing investment, so it
+// requires one of these to already exist for the company (in the DB or earlier in this same
+// batch) — see checkConsistency below.
+const ROUND_TYPES = new Set(["PARTICIPATING_PRICED_ROUND", "PARTICIPATING_SAFE_ROUND", "NON_PARTICIPATING_ROUND"]);
+
+// Record types whose per-member dict must line up with the members who actually hold an
+// allocation in that company (not just any member) — a valuation or payout naming someone who
+// never invested, or omitting someone who did, is a real data-entry mistake, not a stylistic one.
+const MEMBER_DICT_FIELD_BY_TYPE: Partial<Record<string, "member_valuations" | "member_payouts">> = {
+  TRANSACTION_VALUATION_CHANGE: "member_valuations",
+  INTERNAL_VALUATION_ASSESSMENT: "member_valuations",
+  EXIT_EVENT: "member_payouts",
+};
+
+interface CompanyHistoryRow {
+  companyName: string;
+  type: string;
+}
+interface CompanyAllocationRow {
+  companyName: string;
+  memberId: string;
+}
+
+// Cross-record/cross-table checks AJV can never do on its own (it only ever sees one record's
+// shape in isolation) — e.g. "does not allow a company update for a company ASV hasn't
+// invested in" or "an internal valuation assessment's members must match the company's actual
+// investors." Batch-internal round records count too, so a brand-new company's round + its own
+// first update, pasted together in one JSON paste, isn't rejected for lacking "existing"
+// history this very batch is establishing.
+export async function checkConsistency(records: Record<string, unknown>[]): Promise<string[][]> {
+  const historyRows = await query<CompanyHistoryRow>(
+    `SELECT c.name AS "companyName", le.type AS "type"
+     FROM "ledger_entry" le JOIN "company" c ON c.id = le."company_id"
+     WHERE le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')`
+  );
+  const companiesWithRound = new Set(historyRows.map((r) => r.companyName));
+
+  const allocationRows = await query<CompanyAllocationRow>(
+    `SELECT c.name AS "companyName", a."member_id" AS "memberId"
+     FROM "allocation" a
+     JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
+     JOIN "company" c ON c.id = le."company_id"`
+  );
+  const allocationMembersByCompany = new Map<string, Set<string>>();
+  for (const row of allocationRows) {
+    if (!allocationMembersByCompany.has(row.companyName)) allocationMembersByCompany.set(row.companyName, new Set());
+    allocationMembersByCompany.get(row.companyName)!.add(row.memberId);
+  }
+
+  for (const record of records) {
+    const type = normalizeTypeToEnum(String(record.type));
+    const companyName = String(record.company ?? "");
+    if (ROUND_TYPES.has(type)) {
+      companiesWithRound.add(companyName);
+      const allocations = (record.allocations as Record<string, number> | undefined) ?? {};
+      if (!allocationMembersByCompany.has(companyName)) allocationMembersByCompany.set(companyName, new Set());
+      for (const memberId of Object.keys(allocations)) {
+        allocationMembersByCompany.get(companyName)!.add(memberId);
+      }
+    }
+  }
+
+  return records.map((record) => {
+    const errors: string[] = [];
+    const type = normalizeTypeToEnum(String(record.type));
+    const companyName = String(record.company ?? "");
+
+    if (!ROUND_TYPES.has(type) && !companiesWithRound.has(companyName)) {
+      errors.push(
+        `"${companyName}" has no existing investment round on record — a ${type} entry cannot be added for a company ASV has not invested in.`
+      );
+    }
+
+    const memberDictField = MEMBER_DICT_FIELD_BY_TYPE[type];
+    if (memberDictField) {
+      const dict = (record[memberDictField] as Record<string, number> | undefined) ?? {};
+      const dictMembers = new Set(Object.keys(dict));
+      const allocationMembers = allocationMembersByCompany.get(companyName) ?? new Set();
+      const missing = [...allocationMembers].filter((m) => !dictMembers.has(m));
+      const extra = [...dictMembers].filter((m) => !allocationMembers.has(m));
+      if (missing.length > 0) {
+        errors.push(
+          `${memberDictField} for "${companyName}" is missing member(s) who hold an allocation there: ${missing.join(", ")}.`
+        );
+      }
+      if (extra.length > 0) {
+        errors.push(
+          `${memberDictField} for "${companyName}" includes member(s) with no allocation there: ${extra.join(", ")}.`
+        );
+      }
+    }
+
+    return errors;
+  });
+}
+
 // scenarioOverride: for source data with no per-record `scenario` field (the migration
 // script's dev-seed run reads 3 separate files, one per scenario, with no such field on the
 // records themselves) — pass the scenario the whole batch belongs to. Mass-import records
@@ -79,8 +177,11 @@ export async function diffRecords(
     existingByKey.get(row.naturalKey)!.add(row.contentHash);
   }
 
+  const consistencyErrors = await checkConsistency(records);
+
   const results: DiffResult[] = [];
-  for (const record of records) {
+  for (let i = 0; i < records.length; i++) {
+    const record = records[i];
     const validation = validateLedgerRecord(record);
     const key = naturalKey(record, scenarioOverride);
     const hash = contentHashOf(record);
@@ -95,7 +196,13 @@ export async function diffRecords(
       classification = "NEW_CORRECTION";
     }
 
-    results.push({ record, classification, contentHash: hash, validationErrors: validation.errors });
+    // Only surface consistency errors for records that would actually be written — an
+    // UNCHANGED record is already in the ledger and re-flagging it on every re-check would
+    // just be noise (and could never be "fixed" by editing a record nobody is submitting).
+    const validationErrors =
+      classification === "UNCHANGED" ? validation.errors : [...validation.errors, ...consistencyErrors[i]];
+
+    results.push({ record, classification, contentHash: hash, validationErrors });
   }
   return results;
 }

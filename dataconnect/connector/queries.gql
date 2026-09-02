@@ -4,12 +4,24 @@
 # documentation of intent, since authorization is actually enforced in each server
 # component's own code (deriving memberId from the verified session, checking role), the
 # same pattern the Cloud Functions already use for raw `pg` (plan §3, Data isolation).
+#
+# `limit: 1000` on every list query below, even ones that look comfortably small today —
+# Data Connect defaults to a silent 100-row cap with no error when exceeded. Found the hard
+# way: ListLedgerEntriesForScenario (217-226 rows/scenario) and ListCompanyUpdatesForScenario
+# (156-157 rows/scenario) were both silently truncating in production, and
+# ListMemberAllocationsAllScenarios was already within ~10 rows of the same cliff for the
+# largest investor. 1000 is headroom, not a real expected count, at V1's scale.
 
-query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) landing page's name+sector-only company list — the query itself never selects financial fields, so public access is intentional (plan §4).") {
-  companies: companies {
+query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) landing page's name+sector+logo company list — the query itself never selects financial fields, so public access is intentional (plan §4).") {
+  companies: companies(limit: 1000) {
     id
     name
+    tradeName
+    tagline
     sector
+    website
+    logoUrl
+    status
   }
 }
 
@@ -17,11 +29,14 @@ query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) l
 # the created_by/audit-trail author for migrated ledger rows (plan §5), never a real board
 # member. It must stay role=ADMIN for that audit purpose, so the exclusion belongs here
 # (public display) rather than on the member row itself.
-query ListMemberProfiles @auth(level: PUBLIC, insecureReason: "Board & Member profiles tab on the public landing page — display name and role only, no email/PII (plan §4, wireframe 1).") {
-  members: members(where: { id: { ne: "00000" } }) {
+query ListMemberProfiles @auth(level: PUBLIC, insecureReason: "Board & Member profiles tab on the public landing page — display name, membership tier, photo, and bio only (the same public-facing info already shown on the real angelstarventures.com/our-team page), never email/investing-entity/financial PII (plan §4, wireframe 1).") {
+  members: members(where: { id: { ne: "00000" } }, limit: 1000) {
     id
     displayName
     role
+    membershipType
+    photoUrl
+    profileText
   }
 }
 
@@ -39,7 +54,7 @@ query GetPortfolioRollup($scenario: Scenario!) @auth(level: USER, insecureReason
 # Includes the "PORTFOLIO" row (company: null) alongside per-company rows — the caller
 # filters it out; simpler than fighting the exact relation-null filter syntax for one row.
 query ListCompanyRollups($scenario: Scenario!) @auth(level: USER, insecureReason: "Per-company rollups are portfolio-wide reporting data, not member-specific — the member-facing dashboard's `asv` scope (plan §4, wireframe 3).") {
-  rollupCaches(where: { scenario: { eq: $scenario } }) {
+  rollupCaches(where: { scenario: { eq: $scenario } }, limit: 1000) {
     companyKey
     moic
     unrealizedValue
@@ -47,6 +62,7 @@ query ListCompanyRollups($scenario: Scenario!) @auth(level: USER, insecureReason
     company {
       id
       name
+      tradeName
       sector
     }
   }
@@ -57,23 +73,44 @@ query ListCompanyRollups($scenario: Scenario!) @auth(level: USER, insecureReason
 # that can't correctly represent scenarios that legitimately disagree (seen in the dev-seed
 # mock data); "latest per company" reduction happens in the server component (V1 scale is a
 # handful of companies, no performance concern querying all rows and reducing in JS).
-query ListCompanyUpdatesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Company health/trajectory is portfolio-wide reporting data (plan §4, wireframe 2 health-mix chart).") {
-  companyUpdateDetails: companyUpdateDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }) {
+query ListCompanyUpdatesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Company health/trajectory is portfolio-wide reporting data (plan §4, wireframe 2 health-mix chart). highlights/lowlights/upcomingPlans and ledgerEntry.id feed the dashboard's per-event details popup.") {
+  companyUpdateDetails: companyUpdateDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
     health
     trajectory
+    highlights
+    lowlights
+    upcomingPlans
     ledgerEntry {
+      id
       eventDate
       company {
         id
         name
+        tradeName
         sector
       }
     }
   }
 }
 
+# Portfolio-wide (every member), used to sum real invested-per-company totals for the "All of
+# ASV" table — RollupCache doesn't store invested capital, and reverse-deriving it from moic
+# (unrealized+realized)/moic breaks for any company with moic legitimately at 0 (a total-loss
+# write-off with real money invested, not just an un-invested company — found via SafKan,
+# Inc., which exited for $0 after a real $130K round).
+query ListAllocationsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Portfolio-wide invested totals are the same reporting data as ListCompanyRollups, not member-specific.") {
+  allocations(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    amount
+    ledgerEntry {
+      company {
+        id
+      }
+    }
+  }
+}
+
 query ListLedgerEntriesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Ledger detail table — sort/filter/document-link visibility happen in the server component (plan §4, wireframe 4); access to financial detail fields is still gated per-type by the app, this just lists the base rows.") {
-  ledgerEntries(where: { scenario: { eq: $scenario } }, orderBy: { eventDate: DESC }) {
+  ledgerEntries(where: { scenario: { eq: $scenario } }, orderBy: { eventDate: DESC }, limit: 1000) {
     id
     eventDate
     type
@@ -82,32 +119,139 @@ query ListLedgerEntriesForScenario($scenario: Scenario!) @auth(level: USER, inse
     company {
       id
       name
+      tradeName
       sector
     }
   }
 }
 
-query ListMemberAllocations($memberId: String!, $scenario: Scenario!) @auth(level: USER, insecureReason: "memberId is always server-derived from the verified session, never taken from a client-supplied parameter (plan §3, Data isolation) — the dashboard's `mine` scope (wireframe 3).") {
-  allocations(where: { member: { id: { eq: $memberId } }, ledgerEntry: { scenario: { eq: $scenario } } }) {
+# --- Per-type detail, portfolio-wide by scenario — feeds the "All of ASV" table's per-event
+# details popup (plan §4). One query per LedgerEntry.type's detail table (see
+# functions/src/functions/ledger-massExport.ts's switch for the same type/table mapping);
+# CUSTOM has no query here since its data column is jsonb, which Data Connect's GraphQL layer
+# can't coerce to a scalar (the jsonb spike, plan §2) — same reason eventTypesGetByKey exists
+# as a Cloud Function instead.
+
+query ListPricedRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup.") {
+  pricedRoundDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    companyUrl
+    docLink
+    asvTotal
+    roundName
+    pricePerShare
+    postMoneyValuation
+  }
+}
+
+query ListSafeRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup.") {
+  safeRoundDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    companyUrl
+    docLink
+    asvTotal
+    postMoneyValCap
+    discount
+    warrantShares
+    warrantShareClass
+    warrantExercisePrice
+    warrantExpirationYears
+    warrantVestingTerms
+    notes
+  }
+}
+
+query ListNonParticipatingRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup.") {
+  nonParticipatingRoundDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    roundName
+    newPricePerShare
+    newPostMoneyValuation
+    docLink
+    notes
+  }
+}
+
+query ListExitEventDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup.") {
+  exitEventDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    exitType
+    totalExitValue
+    asvTotalPayout
+    docLink
+  }
+}
+
+query ListValuationAssessmentDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup. Backs both Transaction_ValuationChange and Internal_ValuationAssessment, which share this one detail table.") {
+  valuationAssessmentDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    drivingEventDate
+    asvTotalFairMarketValue
+    impliedEnterpriseValue
+    assessmentRationale
+  }
+}
+
+query ListComplianceFlagDetailsForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Same posture as ListLedgerEntriesForScenario — portfolio-wide reporting detail for the events popup.") {
+  complianceFlagDetails(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
+    ledgerEntry {
+      id
+    }
+    status
+    flaggedDate
+    reason
+    auditType
+    complianceOfficerNotes
+  }
+}
+
+query ListMemberAllocations($scenario: Scenario!) @auth(level: USER, insecureReason: "Self-scoped via auth.uid, not a client-suppliable memberId — see the eq_expr note below. The dashboard's `mine` scope (wireframe 3). `sector` feeds the mine-scope company table so it's populated even for a company with an allocation but no valuation event yet.") {
+  # `member: { authUid: { eq_expr: "auth.uid" } }` — NOT `member: { id: { eq: $memberId } }`.
+  # memberId used to be a plain client-suppliable variable, gated only by @auth(level: USER)
+  # (any signed-in user, no ownership check) — confirmed exploitable: any member could call
+  # this connector directly with the real client SDK and pass a different memberId to get
+  # another member's real allocations back. This binds the filter to the caller's own
+  # Firebase Auth uid at the database layer itself, so no caller (this app or a direct
+  # connector call) can ever request anyone else's rows. The Admin SDK path
+  # (lib/dataconnect/client.ts) supplies auth.uid via `impersonate: { authClaims: { sub } }`
+  # using the session-verified uid, never a client-supplied one.
+  allocations(where: { member: { authUid: { eq_expr: "auth.uid" } }, ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
     amount
     ledgerEntry {
+      id
       eventDate
       company {
         id
         name
+        tradeName
+        sector
       }
     }
   }
 }
 
-query ListMemberValuations($memberId: String!, $scenario: Scenario!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations — the dashboard's `mine` scope (wireframe 3).") {
-  memberValuations(where: { member: { id: { eq: $memberId } }, ledgerEntry: { scenario: { eq: $scenario } } }) {
+query ListMemberValuations($scenario: Scenario!) @auth(level: USER, insecureReason: "Same auth.uid self-scoping note as ListMemberAllocations — the dashboard's `mine` scope (wireframe 3). `type` distinguishes realized (EXIT_EVENT) rows from unrealized ones; `sector` feeds the mine-scope sector-value chart. `id` lets the full-ledger-export route attach this member's own value to the right ledger entry.") {
+  memberValuations(where: { member: { authUid: { eq_expr: "auth.uid" } }, ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
     value
     ledgerEntry {
+      id
       eventDate
+      type
       company {
         id
         name
+        tradeName
+        sector
       }
     }
   }
@@ -117,8 +261,8 @@ query ListMemberValuations($memberId: String!, $scenario: Scenario!) @auth(level
 # file) and the documents page's "has this member ever held an allocation/valuation in this
 # company, in any scenario" check, which hasHeldAllocation (plan §3) is deliberately
 # scenario-agnostic about too.
-query ListMemberAllocationsAllScenarios($memberId: String!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations (plan §3).") {
-  allocations(where: { member: { id: { eq: $memberId } } }) {
+query ListMemberAllocationsAllScenarios @auth(level: USER, insecureReason: "Same auth.uid self-scoping note as ListMemberAllocations (plan §3).") {
+  allocations(where: { member: { authUid: { eq_expr: "auth.uid" } } }, limit: 1000) {
     amount
     ledgerEntry {
       eventDate
@@ -126,13 +270,14 @@ query ListMemberAllocationsAllScenarios($memberId: String!) @auth(level: USER, i
       company {
         id
         name
+        tradeName
       }
     }
   }
 }
 
-query ListMemberValuationsAllScenarios($memberId: String!) @auth(level: USER, insecureReason: "Same memberId-server-derivation note as ListMemberAllocations (plan §3).") {
-  memberValuations(where: { member: { id: { eq: $memberId } } }) {
+query ListMemberValuationsAllScenarios @auth(level: USER, insecureReason: "Same auth.uid self-scoping note as ListMemberAllocations (plan §3).") {
+  memberValuations(where: { member: { authUid: { eq_expr: "auth.uid" } } }, limit: 1000) {
     value
     ledgerEntry {
       eventDate
@@ -140,18 +285,20 @@ query ListMemberValuationsAllScenarios($memberId: String!) @auth(level: USER, in
       company {
         id
         name
+        tradeName
       }
     }
   }
 }
 
 query ListAllDocuments @auth(level: USER, insecureReason: "The role+allocation visibility check happens in application code (canViewDocument, plan §3/§4), not here — every caller of this query re-derives that decision, never trusting a client-supplied one.") {
-  documents {
+  documents(limit: 1000) {
     id
     docType
     company {
       id
       name
+      tradeName
     }
   }
 }
@@ -169,25 +316,31 @@ query GetMemberByAuthUid($authUid: String!) @auth(level: USER, insecureReason: "
 # role=admin before this page (app/admin/members) ever renders; executed here with admin
 # trust regardless, same as every other query in this file (plan §3/§4).
 query ListAllMembers @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route, not by this directive — see the file header.") {
-  members(orderBy: { id: ASC }) {
+  members(orderBy: { id: ASC }, limit: 1000) {
     id
     displayName
+    investingEntityName
     email
     role
     status
     authUid
+    membershipType
     createdAt
   }
 }
 
-query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Same as ListAllMembers — gated by proxy.ts's role=admin check, not this directive.") {
+query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Used from two contexts: /admin/members/[memberId] (gated by proxy.ts's role=admin check) and /member/settings (any member reading their OWN record — id is always the server-derived caller's own memberId from getCurrentMember(), never a client-supplied one, same as every other memberId-scoped read in this app).") {
   member(key: { id: $id }) {
     id
     displayName
+    investingEntityName
     email
     role
     status
     authUid
+    photoUrl
+    profileText
+    membershipType
     createdAt
   }
 }
@@ -202,10 +355,32 @@ query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Same as Li
 # entry/[eventType] page's client half since it's a Cloud Functions callable, not a
 # Data Connect query.
 query ListCustomEventTypes @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route.") {
-  eventTypeDefinitions(where: { isBuiltin: { eq: false } }, orderBy: { createdAt: DESC }) {
+  eventTypeDefinitions(where: { isBuiltin: { eq: false } }, orderBy: { createdAt: DESC }, limit: 1000) {
     id
     key
     label
     description
+  }
+}
+
+# Admin-only in practice — gated by proxy.ts's role=admin check on /admin/settings, not this
+# directive (plan §4, Phase 2 AI). Only two rows ever exist (key = "document_analysis" or
+# "portfolio_chat"); updateAiPromptSetting is the only write path.
+query ListAiPromptSettings @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route.") {
+  aiPromptSettings(orderBy: { key: ASC }, limit: 10) {
+    key
+    prompt
+    updatedAt
+  }
+}
+
+# Admin-only in practice (plan: simplified member view). Also read from the member dashboard
+# server component (lib/dataconnect/client.ts's admin-trusted path) to decide whether to show
+# the AI chat and whether the scenario picker is locked — that's a read, not a write, so no
+# extra gate is needed there beyond the existing admin-trust posture every query in this file has.
+query ListAppSettings @auth(level: USER, insecureReason: "Read from both /admin/settings (gated by proxy.ts's role=admin check) and the member dashboard (read-only feature-flag lookup, no sensitive data).") {
+  appSettings(orderBy: { key: ASC }, limit: 10) {
+    key
+    value
   }
 }

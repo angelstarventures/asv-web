@@ -1,16 +1,16 @@
 import Link from "next/link";
 import { listCustomEventTypes } from "@/lib/dataconnect/client";
 
-const GENERIC_ENTRY_TYPES = [
-  { key: "EXIT_EVENT", label: "Exit Event" },
-  { key: "TRANSACTION_VALUATION_CHANGE", label: "Valuation Change (Transaction)" },
-  { key: "INTERNAL_VALUATION_ASSESSMENT", label: "Valuation Assessment (Internal)" },
-  { key: "COMPLIANCE_FLAG_CHANGE", label: "Compliance Flag" },
+const PRIMARY_ACTIONS = [
+  { href: "/admin/ledger/record", label: "Record a JSON Entry" },
+  { href: "/admin/ledger/manage", label: "Manage Ledger" },
+  { href: "/admin/ledger/export", label: "Export Ledger" },
+  { href: "/admin/ledger/import", label: "Import Ledger" },
 ];
 
 // Landing hub for the ledger write flows — not itself a wireframe, just somewhere to link to
-// new-investment (wireframe 6), company-update, the 4 generic built-in entry types, any
-// already-defined custom type, and the type builder (plan §4).
+// recording an entry (JSON), managing the full ledger, mass export/import, and any
+// already-defined custom type + the type builder.
 export const dynamic = "force-dynamic";
 
 export default async function LedgerIndexPage() {
@@ -20,28 +20,17 @@ export default async function LedgerIndexPage() {
     <div className="flex flex-col gap-8 px-6 py-10">
       <h1 className="text-xl font-semibold tracking-tight">Ledger</h1>
 
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Record an entry</h2>
-        <ul className="flex flex-col gap-1">
-          <li>
-            <Link href="/admin/ledger/new-investment" className="text-sm underline underline-offset-2">
-              New investment (Priced / SAFE / Non-Participating round)
-            </Link>
-          </li>
-          <li>
-            <Link href="/admin/ledger/company-update" className="text-sm underline underline-offset-2">
-              Company update
-            </Link>
-          </li>
-          {GENERIC_ENTRY_TYPES.map((t) => (
-            <li key={t.key}>
-              <Link href={`/admin/ledger/entry/${t.key}`} className="text-sm underline underline-offset-2">
-                {t.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </section>
+      <div className="flex flex-wrap gap-3">
+        {PRIMARY_ACTIONS.map((action) => (
+          <Link
+            key={action.href}
+            href={action.href}
+            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
+          >
+            {action.label}
+          </Link>
+        ))}
+      </div>
 
       <section>
         <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Custom event types</h2>
@@ -64,22 +53,6 @@ export default async function LedgerIndexPage() {
         >
           Define a new event type
         </Link>
-      </section>
-
-      <section>
-        <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Mass export / import</h2>
-        <ul className="flex flex-col gap-1">
-          <li>
-            <Link href="/admin/ledger/export" className="text-sm underline underline-offset-2">
-              Export ledger to JSON
-            </Link>
-          </li>
-          <li>
-            <Link href="/admin/ledger/import" className="text-sm underline underline-offset-2">
-              Import ledger from JSON
-            </Link>
-          </li>
-        </ul>
       </section>
     </div>
   );

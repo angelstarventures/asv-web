@@ -92,16 +92,20 @@ export async function recomputeRollups(companyId: string): Promise<void> {
   });
 }
 
-// The single portfolio-level row per scenario — sums every company's numbers rather than
-// re-deriving from raw ledger rows, so it always agrees with what the per-company tiles show.
+// The single portfolio-level row per scenario — sums every company's unrealized/realized
+// values rather than re-deriving from raw ledger rows, so those two agree with what the
+// per-company tiles show. `invested`, though, is summed directly from allocation rows (same
+// query shape as computeCompanyRollup's own, just without the company filter) rather than
+// reverse-derived as (unrealized+realized)/moic — that reversal is undefined at moic=0, and a
+// total write-off (moic legitimately 0, e.g. SafKan's real $130K round that exited for $0) is
+// not an edge case to special-case away to $0 invested; it's real capital that must still
+// count in the denominator, or the portfolio MOIC comes out inflated (verified: was reading
+// 1.01x while the dashboard's own totals implied a loss — invested $4.8M > unrealized $4.6M).
 export async function computePortfolioRollup(scenario: string): Promise<CompanyRollup> {
-  const totals = await query<{ unrealizedValue: string; realizedValue: string; invested: string }>(
+  const totals = await query<{ unrealizedValue: string; realizedValue: string }>(
     `SELECT
        COALESCE(SUM(rc."unrealized_value"), 0) AS "unrealizedValue",
-       COALESCE(SUM(rc."realized_value"), 0) AS "realizedValue",
-       COALESCE(SUM(
-         CASE WHEN rc.moic > 0 THEN (rc."unrealized_value" + rc."realized_value") / rc.moic ELSE 0 END
-       ), 0) AS invested
+       COALESCE(SUM(rc."realized_value"), 0) AS "realizedValue"
      FROM "rollup_cache" rc
      WHERE rc.scenario = $1 AND rc."company_id" IS NOT NULL`,
     [scenario]
@@ -109,7 +113,16 @@ export async function computePortfolioRollup(scenario: string): Promise<CompanyR
   const row = totals[0];
   const unrealizedValue = Number(row?.unrealizedValue ?? 0);
   const realizedValue = Number(row?.realizedValue ?? 0);
-  const invested = Number(row?.invested ?? 0);
+
+  const investedTotals = await query<{ total: string }>(
+    `SELECT COALESCE(SUM(a.amount), 0) AS total
+     FROM "allocation" a
+     JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
+     WHERE le.scenario = $1
+       AND le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')`,
+    [scenario]
+  );
+  const invested = Number(investedTotals[0]?.total ?? 0);
   const moic = invested > 0 ? (realizedValue + unrealizedValue) / invested : 0;
 
   return { companyId: null, scenario, moic, unrealizedValue, realizedValue };

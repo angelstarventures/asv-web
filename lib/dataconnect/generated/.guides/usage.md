@@ -14,7 +14,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { insertCompany, listCompanies, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listLedgerEntriesForScenario, listMemberAllocations, listMemberValuations, listMemberAllocationsAllScenarios } from '@asv/dataconnect-generated';
+import { insertCompany, listCompanies, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listAllocationsForScenario, listLedgerEntriesForScenario, listPricedRoundDetailsForScenario, listSafeRoundDetailsForScenario } from '@asv/dataconnect-generated';
 
 
 // Operation InsertCompany:  For variables, look at type InsertCompanyVars in ../index.d.ts
@@ -35,17 +35,17 @@ const { data } = await ListCompanyRollups(dataConnect, listCompanyRollupsVars);
 // Operation ListCompanyUpdatesForScenario:  For variables, look at type ListCompanyUpdatesForScenarioVars in ../index.d.ts
 const { data } = await ListCompanyUpdatesForScenario(dataConnect, listCompanyUpdatesForScenarioVars);
 
+// Operation ListAllocationsForScenario:  For variables, look at type ListAllocationsForScenarioVars in ../index.d.ts
+const { data } = await ListAllocationsForScenario(dataConnect, listAllocationsForScenarioVars);
+
 // Operation ListLedgerEntriesForScenario:  For variables, look at type ListLedgerEntriesForScenarioVars in ../index.d.ts
 const { data } = await ListLedgerEntriesForScenario(dataConnect, listLedgerEntriesForScenarioVars);
 
-// Operation ListMemberAllocations:  For variables, look at type ListMemberAllocationsVars in ../index.d.ts
-const { data } = await ListMemberAllocations(dataConnect, listMemberAllocationsVars);
+// Operation ListPricedRoundDetailsForScenario:  For variables, look at type ListPricedRoundDetailsForScenarioVars in ../index.d.ts
+const { data } = await ListPricedRoundDetailsForScenario(dataConnect, listPricedRoundDetailsForScenarioVars);
 
-// Operation ListMemberValuations:  For variables, look at type ListMemberValuationsVars in ../index.d.ts
-const { data } = await ListMemberValuations(dataConnect, listMemberValuationsVars);
-
-// Operation ListMemberAllocationsAllScenarios:  For variables, look at type ListMemberAllocationsAllScenariosVars in ../index.d.ts
-const { data } = await ListMemberAllocationsAllScenarios(dataConnect, listMemberAllocationsAllScenariosVars);
+// Operation ListSafeRoundDetailsForScenario:  For variables, look at type ListSafeRoundDetailsForScenarioVars in ../index.d.ts
+const { data } = await ListSafeRoundDetailsForScenario(dataConnect, listSafeRoundDetailsForScenarioVars);
 
 
 ```

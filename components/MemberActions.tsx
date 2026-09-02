@@ -89,7 +89,7 @@ export function MemberActions({
       {notice && <p className="text-sm text-zinc-700 dark:text-zinc-300">{notice}</p>}
 
       {!isLinked ? (
-        <form onSubmit={handleProvision} className="flex flex-col gap-3 rounded-lg border border-zinc-200 p-5 dark:border-zinc-800">
+        <form onSubmit={handleProvision} className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
           <h2 className="text-sm font-medium">Provision account</h2>
           <label className="flex flex-col gap-1 text-sm">
             Email

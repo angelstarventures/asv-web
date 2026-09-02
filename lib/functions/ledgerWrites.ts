@@ -1,128 +1,15 @@
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase/client";
 
-// Mirrors each functions/src/functions/ledger-create*.ts input shape exactly — duplicated
-// rather than imported for the same reason as lib/functions/adminMembers.ts: the web app
-// never reaches into the Cloud Functions project's internals; this boundary IS the contract.
+// Mirrors each functions/src/functions/*.ts input shape exactly — duplicated rather than
+// imported for the same reason as lib/functions/adminMembers.ts: the web app never reaches
+// into the Cloud Functions project's internals; this boundary IS the contract.
+//
+// The built-in legacy-schema entry types (rounds, exit, valuation, compliance, company update)
+// are recorded via the JSON flow at /admin/ledger/record (lib/functions/massIO.ts) instead of
+// dedicated per-type callables — only custom event types still use this per-field write path.
 
 export type Scenario = "OPTIMISTIC" | "BALANCED" | "CONSERVATIVE";
-
-export interface CreateInvestmentRoundInput {
-  companyName: string;
-  sector?: string;
-  eventDate: string;
-  roundKind: "PARTICIPATING_PRICED_ROUND" | "PARTICIPATING_SAFE_ROUND" | "NON_PARTICIPATING_ROUND";
-  sourceDocument?: string;
-  allocations: Record<string, number>;
-  detail: {
-    companyUrl?: string;
-    docLink?: string;
-    asvTotal?: number;
-    roundName?: string;
-    pricePerShare?: number;
-    postMoneyValuation?: number;
-    postMoneyValCap?: number;
-    discount?: number;
-    newPricePerShare?: number;
-    newPostMoneyValuation?: number;
-    notes?: string;
-  };
-}
-export async function ledgerCreateInvestmentRound(
-  input: CreateInvestmentRoundInput
-): Promise<{ companyId: string }> {
-  const call = httpsCallable<CreateInvestmentRoundInput, { companyId: string }>(
-    functions,
-    "ledgerCreateInvestmentRound"
-  );
-  return (await call(input)).data;
-}
-
-export interface PerScenarioValuationInput {
-  drivingEventDate: string;
-  asvTotalFairMarketValue: number;
-  impliedEnterpriseValue?: number;
-  assessmentRationale?: string;
-  memberValuations?: Record<string, number>;
-}
-export interface CreateValuationEventInput {
-  companyId: string;
-  eventDate: string;
-  entryType: "TRANSACTION_VALUATION_CHANGE" | "INTERNAL_VALUATION_ASSESSMENT";
-  sourceDocument?: string;
-  perScenario: Record<Scenario, PerScenarioValuationInput>;
-}
-export async function ledgerCreateValuationEvent(input: CreateValuationEventInput): Promise<{ ok: true }> {
-  const call = httpsCallable<CreateValuationEventInput, { ok: true }>(functions, "ledgerCreateValuationEvent");
-  return (await call(input)).data;
-}
-
-const SCENARIOS: Scenario[] = ["OPTIMISTIC", "BALANCED", "CONSERVATIVE"];
-
-// Shared by EntryForm and CompanyUpdateForm: drivingEventDate is collected once (shared
-// bucket) and replicated into every scenario's slot, since DynamicEntryForm only tracks the
-// fields flagged variesByScenario in its `perScenario` state.
-export function buildPerScenarioValuationInput(
-  drivingEventDate: string,
-  perScenario: Record<Scenario, Record<string, unknown>>
-): Record<Scenario, PerScenarioValuationInput> {
-  return SCENARIOS.reduce(
-    (acc, scenario) => {
-      acc[scenario] = {
-        drivingEventDate,
-        asvTotalFairMarketValue: perScenario[scenario]?.asvTotalFairMarketValue as number,
-        impliedEnterpriseValue: perScenario[scenario]?.impliedEnterpriseValue as number | undefined,
-        assessmentRationale: perScenario[scenario]?.assessmentRationale as string | undefined,
-      };
-      return acc;
-    },
-    {} as Record<Scenario, PerScenarioValuationInput>
-  );
-}
-
-export interface CreateComplianceFlagInput {
-  companyId: string;
-  eventDate: string;
-  flaggedDate: string;
-  reason: string;
-  auditType: "MANUAL_OVERRIDE" | "SCHEDULED_SHARIAH_REVIEW" | "STRATEGIC_PIVOT_AUDIT";
-  complianceOfficerNotes: string;
-  sourceDocument?: string;
-}
-export async function ledgerCreateComplianceFlag(input: CreateComplianceFlagInput): Promise<{ ok: true }> {
-  const call = httpsCallable<CreateComplianceFlagInput, { ok: true }>(functions, "ledgerCreateComplianceFlag");
-  return (await call(input)).data;
-}
-
-export interface CreateExitEventInput {
-  companyId: string;
-  eventDate: string;
-  exitType: "ACQUISITION" | "IPO" | "MERGER" | "SHUTDOWN" | "DISSOLUTION";
-  totalExitValue: number;
-  asvTotalPayout: number;
-  docLink: string;
-  sourceDocument?: string;
-}
-export async function ledgerCreateExitEvent(input: CreateExitEventInput): Promise<{ ok: true }> {
-  const call = httpsCallable<CreateExitEventInput, { ok: true }>(functions, "ledgerCreateExitEvent");
-  return (await call(input)).data;
-}
-
-export interface CreateCompanyUpdateInput {
-  companyId: string;
-  eventDate: string;
-  health: "GREEN" | "YELLOW" | "RED";
-  trajectory: "IMPROVING" | "STABLE" | "DECLINING";
-  highlights: string[];
-  lowlights: string[];
-  upcomingPlans: string[];
-  sourceDocument?: string;
-  valuationAssessment?: Record<Scenario, PerScenarioValuationInput>;
-}
-export async function ledgerCreateCompanyUpdate(input: CreateCompanyUpdateInput): Promise<{ ok: true }> {
-  const call = httpsCallable<CreateCompanyUpdateInput, { ok: true }>(functions, "ledgerCreateCompanyUpdate");
-  return (await call(input)).data;
-}
 
 export interface CustomEventWriteInput {
   eventTypeKey: string;

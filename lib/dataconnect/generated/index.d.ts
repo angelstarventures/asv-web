@@ -14,10 +14,27 @@ export enum CompanyHealth {
   RED = "RED",
 };
 
+export enum CompanyStatus {
+  ACTIVE = "ACTIVE",
+  EXITED = "EXITED",
+  WRITTEN_OFF = "WRITTEN_OFF",
+  ARCHIVED = "ARCHIVED",
+};
+
 export enum CompanyTrajectory {
   IMPROVING = "IMPROVING",
   STABLE = "STABLE",
   DECLINING = "DECLINING",
+};
+
+export enum ComplianceAuditType {
+  MANUAL_OVERRIDE = "MANUAL_OVERRIDE",
+  SCHEDULED_SHARIAH_REVIEW = "SCHEDULED_SHARIAH_REVIEW",
+  STRATEGIC_PIVOT_AUDIT = "STRATEGIC_PIVOT_AUDIT",
+};
+
+export enum ComplianceStatus {
+  NON_HALAL = "NON_HALAL",
 };
 
 export enum DocumentType {
@@ -27,6 +44,14 @@ export enum DocumentType {
   COMPANY_UPDATE_DOC = "COMPANY_UPDATE_DOC",
   SPA = "SPA",
   ALLOCATION_SCHEDULE = "ALLOCATION_SCHEDULE",
+};
+
+export enum ExitType {
+  ACQUISITION = "ACQUISITION",
+  IPO = "IPO",
+  MERGER = "MERGER",
+  SHUTDOWN = "SHUTDOWN",
+  DISSOLUTION = "DISSOLUTION",
 };
 
 export enum LedgerEntryType {
@@ -44,6 +69,13 @@ export enum LedgerEntryType {
 export enum MemberStatus {
   ACTIVE = "ACTIVE",
   DISABLED = "DISABLED",
+};
+
+export enum MembershipType {
+  BOARD_MEMBER = "BOARD_MEMBER",
+  MEMBER = "MEMBER",
+  ASSOCIATE = "ASSOCIATE",
+  EMERITUS = "EMERITUS",
 };
 
 export enum Role {
@@ -64,9 +96,19 @@ export interface AiProcessingJob_Key {
   __typename?: 'AiProcessingJob_Key';
 }
 
+export interface AiPromptSetting_Key {
+  key: string;
+  __typename?: 'AiPromptSetting_Key';
+}
+
 export interface Allocation_Key {
   id: UUIDString;
   __typename?: 'Allocation_Key';
+}
+
+export interface AppSetting_Key {
+  key: string;
+  __typename?: 'AppSetting_Key';
 }
 
 export interface CompanyUpdateDetail_Key {
@@ -126,10 +168,14 @@ export interface GetMemberByIdData {
   member?: {
     id: string;
     displayName: string;
+    investingEntityName: string;
     email: string;
     role: Role;
     status: MemberStatus;
     authUid?: string | null;
+    photoUrl?: string | null;
+    profileText?: string | null;
+    membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key;
 }
@@ -170,6 +216,14 @@ export interface LedgerEntry_Key {
   __typename?: 'LedgerEntry_Key';
 }
 
+export interface ListAiPromptSettingsData {
+  aiPromptSettings: ({
+    key: string;
+    prompt: string;
+    updatedAt: TimestampString;
+  } & AiPromptSetting_Key)[];
+}
+
 export interface ListAllDocumentsData {
   documents: ({
     id: UUIDString;
@@ -177,6 +231,7 @@ export interface ListAllDocumentsData {
     company: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
     } & Company_Key;
   } & Document_Key)[];
 }
@@ -185,19 +240,48 @@ export interface ListAllMembersData {
   members: ({
     id: string;
     displayName: string;
+    investingEntityName: string;
     email: string;
     role: Role;
     status: MemberStatus;
     authUid?: string | null;
+    membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key)[];
+}
+
+export interface ListAllocationsForScenarioData {
+  allocations: ({
+    amount: number;
+    ledgerEntry: {
+      company: {
+        id: UUIDString;
+      } & Company_Key;
+    };
+  })[];
+}
+
+export interface ListAllocationsForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListAppSettingsData {
+  appSettings: ({
+    key: string;
+    value: string;
+  } & AppSetting_Key)[];
 }
 
 export interface ListCompaniesData {
   companies: ({
     id: UUIDString;
     name: string;
+    tradeName?: string | null;
+    tagline?: string | null;
     sector?: string | null;
+    website?: string | null;
+    logoUrl?: string | null;
+    status: CompanyStatus;
   } & Company_Key)[];
 }
 
@@ -210,6 +294,7 @@ export interface ListCompanyRollupsData {
     company?: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
       sector?: string | null;
     } & Company_Key;
   })[];
@@ -223,18 +308,40 @@ export interface ListCompanyUpdatesForScenarioData {
   companyUpdateDetails: ({
     health: CompanyHealth;
     trajectory: CompanyTrajectory;
+    highlights: string[];
+    lowlights: string[];
+    upcomingPlans: string[];
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
         sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 
 export interface ListCompanyUpdatesForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListComplianceFlagDetailsForScenarioData {
+  complianceFlagDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    status: ComplianceStatus;
+    flaggedDate: DateString;
+    reason: string;
+    auditType: ComplianceAuditType;
+    complianceOfficerNotes: string;
+  })[];
+}
+
+export interface ListComplianceFlagDetailsForScenarioVariables {
   scenario: Scenario;
 }
 
@@ -247,6 +354,22 @@ export interface ListCustomEventTypesData {
   } & EventTypeDefinition_Key)[];
 }
 
+export interface ListExitEventDetailsForScenarioData {
+  exitEventDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    exitType: ExitType;
+    totalExitValue: number;
+    asvTotalPayout: number;
+    docLink?: string | null;
+  })[];
+}
+
+export interface ListExitEventDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+
 export interface ListLedgerEntriesForScenarioData {
   ledgerEntries: ({
     id: UUIDString;
@@ -257,6 +380,7 @@ export interface ListLedgerEntriesForScenarioData {
     company: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
       sector?: string | null;
     } & Company_Key;
   } & LedgerEntry_Key)[];
@@ -275,30 +399,29 @@ export interface ListMemberAllocationsAllScenariosData {
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
       } & Company_Key;
     };
   })[];
-}
-
-export interface ListMemberAllocationsAllScenariosVariables {
-  memberId: string;
 }
 
 export interface ListMemberAllocationsData {
   allocations: ({
     amount: number;
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
+        sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 
 export interface ListMemberAllocationsVariables {
-  memberId: string;
   scenario: Scenario;
 }
 
@@ -307,6 +430,9 @@ export interface ListMemberProfilesData {
     id: string;
     displayName: string;
     role: Role;
+    membershipType: MembershipType;
+    photoUrl?: string | null;
+    profileText?: string | null;
   } & Member_Key)[];
 }
 
@@ -319,30 +445,104 @@ export interface ListMemberValuationsAllScenariosData {
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
       } & Company_Key;
     };
   })[];
-}
-
-export interface ListMemberValuationsAllScenariosVariables {
-  memberId: string;
 }
 
 export interface ListMemberValuationsData {
   memberValuations: ({
     value: number;
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
+      type: LedgerEntryType;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
+        sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 
 export interface ListMemberValuationsVariables {
-  memberId: string;
+  scenario: Scenario;
+}
+
+export interface ListNonParticipatingRoundDetailsForScenarioData {
+  nonParticipatingRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    roundName: string;
+    newPricePerShare: number;
+    newPostMoneyValuation: number;
+    docLink?: string | null;
+    notes?: string | null;
+  })[];
+}
+
+export interface ListNonParticipatingRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListPricedRoundDetailsForScenarioData {
+  pricedRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    companyUrl?: string | null;
+    docLink?: string | null;
+    asvTotal: number;
+    roundName: string;
+    pricePerShare: number;
+    postMoneyValuation: number;
+  })[];
+}
+
+export interface ListPricedRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListSafeRoundDetailsForScenarioData {
+  safeRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    companyUrl?: string | null;
+    docLink?: string | null;
+    asvTotal: number;
+    postMoneyValCap: number;
+    discount: number;
+    warrantShares?: number | null;
+    warrantShareClass?: string | null;
+    warrantExercisePrice?: number | null;
+    warrantExpirationYears?: number | null;
+    warrantVestingTerms?: string | null;
+    notes?: string | null;
+  })[];
+}
+
+export interface ListSafeRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListValuationAssessmentDetailsForScenarioData {
+  valuationAssessmentDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    drivingEventDate: DateString;
+    asvTotalFairMarketValue: number;
+    impliedEnterpriseValue?: number | null;
+    assessmentRationale?: string | null;
+  })[];
+}
+
+export interface ListValuationAssessmentDetailsForScenarioVariables {
   scenario: Scenario;
 }
 
@@ -464,6 +664,18 @@ export const listCompanyUpdatesForScenarioRef: ListCompanyUpdatesForScenarioRef;
 export function listCompanyUpdatesForScenario(vars: ListCompanyUpdatesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListCompanyUpdatesForScenarioData, ListCompanyUpdatesForScenarioVariables>;
 export function listCompanyUpdatesForScenario(dc: DataConnect, vars: ListCompanyUpdatesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListCompanyUpdatesForScenarioData, ListCompanyUpdatesForScenarioVariables>;
 
+interface ListAllocationsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListAllocationsForScenarioVariables): QueryRef<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListAllocationsForScenarioVariables): QueryRef<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+  operationName: string;
+}
+export const listAllocationsForScenarioRef: ListAllocationsForScenarioRef;
+
+export function listAllocationsForScenario(vars: ListAllocationsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+export function listAllocationsForScenario(dc: DataConnect, vars: ListAllocationsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+
 interface ListLedgerEntriesForScenarioRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: ListLedgerEntriesForScenarioVariables): QueryRef<ListLedgerEntriesForScenarioData, ListLedgerEntriesForScenarioVariables>;
@@ -475,6 +687,78 @@ export const listLedgerEntriesForScenarioRef: ListLedgerEntriesForScenarioRef;
 
 export function listLedgerEntriesForScenario(vars: ListLedgerEntriesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListLedgerEntriesForScenarioData, ListLedgerEntriesForScenarioVariables>;
 export function listLedgerEntriesForScenario(dc: DataConnect, vars: ListLedgerEntriesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListLedgerEntriesForScenarioData, ListLedgerEntriesForScenarioVariables>;
+
+interface ListPricedRoundDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListPricedRoundDetailsForScenarioVariables): QueryRef<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListPricedRoundDetailsForScenarioVariables): QueryRef<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listPricedRoundDetailsForScenarioRef: ListPricedRoundDetailsForScenarioRef;
+
+export function listPricedRoundDetailsForScenario(vars: ListPricedRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+export function listPricedRoundDetailsForScenario(dc: DataConnect, vars: ListPricedRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+
+interface ListSafeRoundDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListSafeRoundDetailsForScenarioVariables): QueryRef<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListSafeRoundDetailsForScenarioVariables): QueryRef<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listSafeRoundDetailsForScenarioRef: ListSafeRoundDetailsForScenarioRef;
+
+export function listSafeRoundDetailsForScenario(vars: ListSafeRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+export function listSafeRoundDetailsForScenario(dc: DataConnect, vars: ListSafeRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+
+interface ListNonParticipatingRoundDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListNonParticipatingRoundDetailsForScenarioVariables): QueryRef<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListNonParticipatingRoundDetailsForScenarioVariables): QueryRef<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listNonParticipatingRoundDetailsForScenarioRef: ListNonParticipatingRoundDetailsForScenarioRef;
+
+export function listNonParticipatingRoundDetailsForScenario(vars: ListNonParticipatingRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+export function listNonParticipatingRoundDetailsForScenario(dc: DataConnect, vars: ListNonParticipatingRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+
+interface ListExitEventDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListExitEventDetailsForScenarioVariables): QueryRef<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListExitEventDetailsForScenarioVariables): QueryRef<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listExitEventDetailsForScenarioRef: ListExitEventDetailsForScenarioRef;
+
+export function listExitEventDetailsForScenario(vars: ListExitEventDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+export function listExitEventDetailsForScenario(dc: DataConnect, vars: ListExitEventDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+
+interface ListValuationAssessmentDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListValuationAssessmentDetailsForScenarioVariables): QueryRef<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListValuationAssessmentDetailsForScenarioVariables): QueryRef<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listValuationAssessmentDetailsForScenarioRef: ListValuationAssessmentDetailsForScenarioRef;
+
+export function listValuationAssessmentDetailsForScenario(vars: ListValuationAssessmentDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+export function listValuationAssessmentDetailsForScenario(dc: DataConnect, vars: ListValuationAssessmentDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+
+interface ListComplianceFlagDetailsForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListComplianceFlagDetailsForScenarioVariables): QueryRef<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListComplianceFlagDetailsForScenarioVariables): QueryRef<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+  operationName: string;
+}
+export const listComplianceFlagDetailsForScenarioRef: ListComplianceFlagDetailsForScenarioRef;
+
+export function listComplianceFlagDetailsForScenario(vars: ListComplianceFlagDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+export function listComplianceFlagDetailsForScenario(dc: DataConnect, vars: ListComplianceFlagDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
 
 interface ListMemberAllocationsRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -502,27 +786,27 @@ export function listMemberValuations(dc: DataConnect, vars: ListMemberValuations
 
 interface ListMemberAllocationsAllScenariosRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  (): QueryRef<ListMemberAllocationsAllScenariosData, undefined>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  (dc: DataConnect): QueryRef<ListMemberAllocationsAllScenariosData, undefined>;
   operationName: string;
 }
 export const listMemberAllocationsAllScenariosRef: ListMemberAllocationsAllScenariosRef;
 
-export function listMemberAllocationsAllScenarios(vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
-export function listMemberAllocationsAllScenarios(dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+export function listMemberAllocationsAllScenarios(options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, undefined>;
+export function listMemberAllocationsAllScenarios(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, undefined>;
 
 interface ListMemberValuationsAllScenariosRef {
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  (): QueryRef<ListMemberValuationsAllScenariosData, undefined>;
   /* Allow users to pass in custom DataConnect instances */
-  (dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  (dc: DataConnect): QueryRef<ListMemberValuationsAllScenariosData, undefined>;
   operationName: string;
 }
 export const listMemberValuationsAllScenariosRef: ListMemberValuationsAllScenariosRef;
 
-export function listMemberValuationsAllScenarios(vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
-export function listMemberValuationsAllScenarios(dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+export function listMemberValuationsAllScenarios(options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, undefined>;
+export function listMemberValuationsAllScenarios(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, undefined>;
 
 interface ListAllDocumentsRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -583,4 +867,28 @@ export const listCustomEventTypesRef: ListCustomEventTypesRef;
 
 export function listCustomEventTypes(options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
 export function listCustomEventTypes(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListCustomEventTypesData, undefined>;
+
+interface ListAiPromptSettingsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAiPromptSettingsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAiPromptSettingsData, undefined>;
+  operationName: string;
+}
+export const listAiPromptSettingsRef: ListAiPromptSettingsRef;
+
+export function listAiPromptSettings(options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
+export function listAiPromptSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
+
+interface ListAppSettingsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAppSettingsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAppSettingsData, undefined>;
+  operationName: string;
+}
+export const listAppSettingsRef: ListAppSettingsRef;
+
+export function listAppSettings(options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
+export function listAppSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
 

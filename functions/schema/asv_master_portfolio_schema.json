@@ -25,7 +25,7 @@
         "Compliance_FlagChange",
         "CompanyUpdate"
       ],
-      "description": "The precise transaction mechanism, tracking event, compliance pivot, or operational update type."
+      "description": "The precise transaction mechanism, tracking event, compliance pivot, or operational update type. Note: a Participating_PricedRound, Participating_SAFERound, or NonParticipating_Round record for a company ASV already holds a position in should be followed by a companion Transaction_ValuationChange record (same date) marking ASV's existing position to the round's new post-money valuation — this applies even when ASV did not participate in the round (NonParticipating_Round), since the round itself is the priced event that sets the new mark. Transaction_ValuationChange is for marks driven by an actual priced transaction; Internal_ValuationAssessment is reserved for a subjective mark with no external pricing event (e.g. a health/market-conditions reassessment)."
     },
     "compliance_status": {
       "type": "object",
@@ -52,16 +52,17 @@
     {
       "if": { "properties": { "type": { "const": "Participating_PricedRound" } } },
       "then": {
-        "required": ["company_url", "sector", "doc_link", "asv_total", "round_name", "price_per_share", "post_money_valuation", "allocations"],
+        "required": ["company_url", "sector", "asv_total", "round_name", "price_per_share", "post_money_valuation", "allocations"],
         "properties": {
           "company_url": { "type": "string", "format": "uri" },
           "sector": { "type": "string" },
-          "doc_link": { "type": "string", "format": "uri" },
+          "logo_url": { "type": "string", "format": "uri", "description": "Company logo image URL — set on the company record, same as sector." },
+          "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "asv_total": { "type": "number", "minimum": 0 },
           "round_name": { "type": "string", "placeholder": "Series Seed, Series A, Series B" },
           "price_per_share": { "type": "number", "minimum": 0 },
           "post_money_valuation": { "type": "number", "minimum": 0 },
-          "allocations": { 
+          "allocations": {
             "type": "object", 
             "additionalProperties": { "type": "number", "minimum": 0 },
             "description": "Dictionary mapping unique 5-digit Member IDs to their exact cash commitment." 
@@ -72,11 +73,12 @@
     {
       "if": { "properties": { "type": { "const": "Participating_SAFERound" } } },
       "then": {
-        "required": ["company_url", "sector", "doc_link", "asv_total", "post_money_val_cap", "discount", "allocations"],
+        "required": ["company_url", "sector", "asv_total", "post_money_val_cap", "discount", "allocations"],
         "properties": {
           "company_url": { "type": "string", "format": "uri" },
           "sector": { "type": "string" },
-          "doc_link": { "type": "string", "format": "uri" },
+          "logo_url": { "type": "string", "format": "uri", "description": "Company logo image URL — set on the company record, same as sector." },
+          "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "asv_total": { "type": "number", "minimum": 0 },
           "post_money_val_cap": { "type": "number", "minimum": 0 },
           "discount": { "type": "number", "minimum": 0, "maximum": 100 },
@@ -98,12 +100,12 @@
     {
       "if": { "properties": { "type": { "const": "NonParticipating_Round" } } },
       "then": {
-        "required": ["round_name", "new_price_per_share", "new_post_money_valuation", "doc_link"],
+        "required": ["round_name", "new_price_per_share", "new_post_money_valuation"],
         "properties": {
           "round_name": { "type": "string" },
           "new_price_per_share": { "type": "number", "minimum": 0 },
           "new_post_money_valuation": { "type": "number", "minimum": 0 },
-          "doc_link": { "type": "string", "format": "uri" },
+          "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "notes": { "type": "string" }
         }
       }
@@ -111,26 +113,47 @@
     {
       "if": { "properties": { "type": { "const": "Exit_Event" } } },
       "then": {
-        "required": ["exit_type", "total_exit_value", "asv_total_payout", "doc_link", "member_payouts"],
+        "required": ["exit_type", "total_exit_value", "asv_total_payout", "member_payouts"],
         "properties": {
           "exit_type": { "type": "string", "enum": ["Acquisition", "IPO", "Merger", "Shutdown", "Dissolution"] },
           "total_exit_value": { "type": "number", "minimum": 0 },
           "asv_total_payout": { "type": "number", "minimum": 0 },
-          "doc_link": { "type": "string", "format": "uri" },
+          "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "member_payouts": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
         }
       }
     },
     {
-      "if": { "type": "object", "properties": { "type": { "enum": ["Transaction_ValuationChange", "Internal_ValuationAssessment"] } } },
+      "if": { "properties": { "type": { "const": "Transaction_ValuationChange" } } },
       "then": {
         "required": ["driving_event_date", "asv_total_fair_market_value", "member_valuations"],
         "properties": {
-          "driving_event_date": { "type": "string", "format": "date", "description": "The date of the underlying priced round or valuation change event." },
-          "asv_total_fair_market_value": { "type": "number", "minimum": 0 },
+          "driving_event_date": { "type": "string", "format": "date", "description": "The date of the actual priced transaction (e.g. a new financing round — including one ASV did not participate in) that justifies this mark. Use this type, not Internal_ValuationAssessment, whenever an external, arm's-length pricing event set the new value." },
+          "asv_total_fair_market_value": { "type": "number", "minimum": 0, "description": "ASV's existing position re-marked at the transaction's implied valuation (e.g. ASV's ownership percentage times the new post-money valuation)." },
           "implied_enterprise_value": { "type": "number", "minimum": 0 },
           "assessment_rationale": { "type": "string" },
-          "member_valuations": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+          "member_valuations": {
+            "type": "object",
+            "additionalProperties": { "type": "number", "minimum": 0 },
+            "description": "Dictionary mapping each member's 5-digit ID to their share of asv_total_fair_market_value, split in proportion to that member's cumulative cash allocation into this company relative to ASV's total cumulative allocation (the values must sum to asv_total_fair_market_value)."
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Internal_ValuationAssessment" } } },
+      "then": {
+        "required": ["driving_event_date", "asv_total_fair_market_value", "member_valuations"],
+        "properties": {
+          "driving_event_date": { "type": "string", "format": "date", "description": "The date of the internal review or subjective reassessment driving this mark — used only when there is no actual priced transaction (see Transaction_ValuationChange for that case, e.g. a new round)." },
+          "asv_total_fair_market_value": { "type": "number", "minimum": 0 },
+          "implied_enterprise_value": { "type": "number", "minimum": 0 },
+          "assessment_rationale": { "type": "string", "description": "Why the fund believes this is the fair value absent an external pricing event (e.g. company health/market-conditions analysis)." },
+          "member_valuations": {
+            "type": "object",
+            "additionalProperties": { "type": "number", "minimum": 0 },
+            "description": "Dictionary mapping each member's 5-digit ID to their share of asv_total_fair_market_value, split in proportion to that member's cumulative cash allocation into this company relative to ASV's total cumulative allocation (the values must sum to asv_total_fair_market_value)."
+          }
         }
       }
     },

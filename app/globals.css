@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
+/* Champagne Minimalist — a single warm light theme (no dark mode; a cream/espresso palette has
+   no coherent dark counterpart, and the brief specifies one aesthetic, not two). The `dark`
+   variant below is redefined to require an explicit `.dark` class that nothing in this app ever
+   applies, which quietly turns every existing `dark:*` utility class already in components into
+   a no-op — rather than editing the ~45 files that use them. */
+@custom-variant dark (&:where(.dash-mode-disabled, .dash-mode-disabled *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fdfbf7;
+  --foreground: #2c2520;
 }
 
 @theme inline {
@@ -10,33 +17,95 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Card surface + sand border, per the Champagne Minimalist spec. */
+  --color-card: #ffffff;
+  --color-card-border: #f3ead3;
+
+  /* Sage — reserved strictly for positive yield/ROI badges (MoicBadge). Never used as a
+     general accent elsewhere. */
+  --color-sage: #d1fae5;
+  --color-sage-foreground: #065f46;
+
+  /* Bento tile palette — colorful rounded KPI tiles (StatTile, WelcomeBanner CTA), warmed to
+     sit on the cream background rather than a stark white one. Cycled in a fixed order across
+     a tile row, never reassigned by value/rank (dataviz skill: color follows identity). */
+  --color-tile-green: #d7ecc4;
+  --color-tile-green-foreground: #2f5233;
+  --color-tile-amber: #f6d374;
+  --color-tile-amber-foreground: #5c4508;
+  --color-tile-violet: #8073e6;
+  --color-tile-violet-foreground: #ffffff;
+  --color-tile-cream: #fbf3e3;
+  --color-tile-cream-foreground: #4a3f32;
+
+  /* The app's existing markup consistently uses the zinc scale for borders and secondary/
+     muted text. Remapping the scale itself (rather than touching every className) turns all
+     of that into warm sand/espresso tones app-wide for free. */
+  --color-zinc-50: #fdfbf7;
+  --color-zinc-100: #fbf3e3;
+  --color-zinc-200: #f3ead3;
+  --color-zinc-300: #e8d9b8;
+  --color-zinc-400: #b3a084;
+  --color-zinc-500: #8a7860;
+  --color-zinc-600: #6b5d4a;
+  --color-zinc-700: #4a3f32;
+  --color-zinc-800: #35291f;
+  --color-zinc-900: #2c2520;
 }
 
-/* Chart tokens (dataviz skill's reference palette) — status colors are fixed across modes;
-   ink/surface/sequential steps swap for dark per prefers-color-scheme, same as --background
-   above (no theme toggle in this app, so OS preference is the only mode switch). */
+/* Chart tokens (dataviz skill's reference palette). Status colors (health mix: good/warning/
+   critical) stay semantically distinct (still never color-alone — always paired with a label)
+   but are tuned to the bento tile palette's hue families: good pulls from tile-green, warning
+   from tile-amber, critical is a warm rust rather than a stark red since the tile set has no
+   red — same reasoning gives the sequential (sector value bars) hue tile-violet's family. */
 :root {
-  --viz-status-good: #0ca30c;
-  --viz-status-warning: #fab219;
-  --viz-status-critical: #d03b3b;
-  --viz-sequential: #2a78d6;
-  --viz-text-secondary: #52514e;
-  --viz-muted: #898781;
-  --viz-gridline: #e1e0d9;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-    --viz-sequential: #3987e5;
-    --viz-text-secondary: #c3c2b7;
-    --viz-gridline: #2c2c2a;
-  }
+  --viz-status-good: #5b9a4a;
+  --viz-status-warning: #dba22c;
+  --viz-status-critical: #c85a4a;
+  --viz-sequential: #8073e6;
+  --viz-text-secondary: #6b5d4a;
+  --viz-muted: #8a7860;
+  --viz-gridline: #ecdfc2;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Seamless micro-interactions — every button, link, and form control gets the same subtle,
+   premium hover/focus treatment app-wide, rather than repeating hover utilities across every
+   component's hand-rolled className string. */
+a,
+button {
+  transition: opacity 150ms ease, box-shadow 150ms ease, transform 100ms ease;
+}
+a:hover {
+  opacity: 0.82;
+}
+button:not(:disabled):hover {
+  opacity: 0.88;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+select,
+input,
+textarea {
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+select:hover,
+input:hover,
+textarea:hover {
+  border-color: var(--foreground);
+}
+select:focus,
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--foreground);
+  box-shadow: 0 0 0 3px rgba(44, 37, 32, 0.08);
 }

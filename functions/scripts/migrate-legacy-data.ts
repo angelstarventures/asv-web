@@ -97,8 +97,8 @@ async function upsertMembers(memberList: Record<string, string>, memberAliases: 
     // "request.time") is an API-layer default only) — raw `pg` inserts must set it explicitly.
     // Synthetic member so the audit trail correctly shows these rows weren't hand-entered.
     await client.query(
-      `INSERT INTO "member" (id, "display_name", email, role, status, "created_at")
-       VALUES ($1, $2, 'system-migration@asv.internal', 'ADMIN', 'ACTIVE', now())
+      `INSERT INTO "member" (id, "display_name", "investing_entity_name", email, role, status, "created_at")
+       VALUES ($1, $2, $2, 'system-migration@asv.internal', 'ADMIN', 'ACTIVE', now())
        ON CONFLICT (id) DO NOTHING`,
       [SYSTEM_MIGRATION_MEMBER_ID, SYSTEM_MIGRATION_MEMBER_NAME]
     );
@@ -107,8 +107,8 @@ async function upsertMembers(memberList: Record<string, string>, memberAliases: 
       const name = memberAliases[rawName] ?? rawName;
       const email = `member-${id}@placeholder.asv.internal`; // real email set later via provisionMember
       await client.query(
-        `INSERT INTO "member" (id, "display_name", email, role, status, "created_at")
-         VALUES ($1, $2, $3, 'MEMBER', 'ACTIVE', now())
+        `INSERT INTO "member" (id, "display_name", "investing_entity_name", email, role, status, "created_at")
+         VALUES ($1, $2, $2, $3, 'MEMBER', 'ACTIVE', now())
          ON CONFLICT (id) DO UPDATE SET "display_name" = $2`,
         [id, name, email]
       );

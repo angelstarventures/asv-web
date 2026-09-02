@@ -48,13 +48,20 @@ function ToggleGroup<T extends string>({
 
 // URL-driven per lib/scenarios.ts — the toggle state lives in ?scope=&scenario=, so this
 // page is shareable/bookmarkable/back-button-safe without a client store (plan §4).
-export function ScenarioScopeToggle() {
+//
+// lockedScenario (admin-controlled, app/admin/settings's "simplified member view"): when set,
+// the scenario picker is hidden entirely — the page itself already ignores ?scenario= and
+// forces the locked value server-side, so hiding the control here is purely so members aren't
+// shown a picker that wouldn't do anything.
+export function ScenarioScopeToggle({ lockedScenario }: { lockedScenario?: (typeof SCENARIOS)[number] }) {
   const { scenario, scope, setScenario, setScope } = useScenario();
 
   return (
     <div className="flex flex-wrap items-center gap-3">
       <ToggleGroup options={SCOPES} labels={SCOPE_LABELS} active={scope} onSelect={setScope} />
-      <ToggleGroup options={SCENARIOS} labels={SCENARIO_LABELS} active={scenario} onSelect={setScenario} />
+      {!lockedScenario && (
+        <ToggleGroup options={SCENARIOS} labels={SCENARIO_LABELS} active={scenario} onSelect={setScenario} />
+      )}
     </div>
   );
 }

@@ -26,5 +26,5 @@ export async function clearSession(): Promise<void> {
 }
 
 export function redirectPathForRole(role: "admin" | "member"): string {
-  return role === "admin" ? "/admin/dashboard" : "/member/overview";
+  return role === "admin" ? "/admin/members" : "/member/dashboard";
 }

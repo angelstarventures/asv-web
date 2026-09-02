@@ -12,6 +12,7 @@ import {
   insertComplianceFlagDetail,
   insertCompanyUpdateDetail,
   findOrCreateCompanyId,
+  updateCompanyStatusForExit,
 } from "./ledgerWriteBuilders";
 import { contentHashOf } from "./importDiff";
 
@@ -35,7 +36,13 @@ export async function applyLedgerRecord(
   opts: ApplyRecordOptions
 ): Promise<string> {
   const companyName = normalizeCompanyName(String(record.company), opts.companyAliasMap);
-  const companyId = await findOrCreateCompanyId(client, companyName, record.sector as string | undefined);
+  const companyId = await findOrCreateCompanyId(
+    client,
+    companyName,
+    record.sector as string | undefined,
+    record.logo_url as string | undefined,
+    record.company_url as string | undefined
+  );
 
   const type = legacyTypeToEnum(String(record.type));
   const ledgerEntryId = await insertLedgerEntry(client, {
@@ -48,7 +55,7 @@ export async function applyLedgerRecord(
     needsReview: opts.needsReview ?? false,
   });
 
-  await insertDetailForType(client, ledgerEntryId, type, record);
+  await insertDetailForType(client, ledgerEntryId, type, record, companyId);
   await client.query(
     `INSERT INTO "imported_record_hash" ("ledger_entry_id", "content_hash") VALUES ($1, $2)`,
     [ledgerEntryId, contentHashOf(record)]
@@ -61,7 +68,8 @@ async function insertDetailForType(
   client: PoolClient,
   ledgerEntryId: string,
   type: ReturnType<typeof legacyTypeToEnum>,
-  record: Record<string, unknown>
+  record: Record<string, unknown>,
+  companyId: string
 ): Promise<void> {
   switch (type) {
     case "PARTICIPATING_PRICED_ROUND":
@@ -98,19 +106,22 @@ async function insertDetailForType(
         roundName: String(record.round_name),
         newPricePerShare: Number(record.new_price_per_share),
         newPostMoneyValuation: Number(record.new_post_money_valuation),
-        docLink: String(record.doc_link),
+        docLink: record.doc_link as string | undefined,
         notes: record.notes as string | undefined,
       });
       break;
-    case "EXIT_EVENT":
+    case "EXIT_EVENT": {
+      const exitType = String(record.exit_type).toUpperCase();
       await insertExitEventDetail(client, ledgerEntryId, {
-        exitType: String(record.exit_type).toUpperCase(),
+        exitType,
         totalExitValue: Number(record.total_exit_value),
         asvTotalPayout: Number(record.asv_total_payout),
-        docLink: String(record.doc_link),
+        docLink: record.doc_link as string | undefined,
       });
       await insertMemberValuations(client, ledgerEntryId, (record.member_payouts as Record<string, number>) ?? {});
+      await updateCompanyStatusForExit(client, companyId, exitType);
       break;
+    }
     case "TRANSACTION_VALUATION_CHANGE":
     case "INTERNAL_VALUATION_ASSESSMENT":
       await insertValuationAssessmentDetail(client, ledgerEntryId, {

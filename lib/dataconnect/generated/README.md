@@ -13,7 +13,14 @@ This README will guide you through the process of using the generated JavaScript
   - [*GetPortfolioRollup*](#getportfoliorollup)
   - [*ListCompanyRollups*](#listcompanyrollups)
   - [*ListCompanyUpdatesForScenario*](#listcompanyupdatesforscenario)
+  - [*ListAllocationsForScenario*](#listallocationsforscenario)
   - [*ListLedgerEntriesForScenario*](#listledgerentriesforscenario)
+  - [*ListPricedRoundDetailsForScenario*](#listpricedrounddetailsforscenario)
+  - [*ListSafeRoundDetailsForScenario*](#listsaferounddetailsforscenario)
+  - [*ListNonParticipatingRoundDetailsForScenario*](#listnonparticipatingrounddetailsforscenario)
+  - [*ListExitEventDetailsForScenario*](#listexiteventdetailsforscenario)
+  - [*ListValuationAssessmentDetailsForScenario*](#listvaluationassessmentdetailsforscenario)
+  - [*ListComplianceFlagDetailsForScenario*](#listcomplianceflagdetailsforscenario)
   - [*ListMemberAllocations*](#listmemberallocations)
   - [*ListMemberValuations*](#listmembervaluations)
   - [*ListMemberAllocationsAllScenarios*](#listmemberallocationsallscenarios)
@@ -23,6 +30,8 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListAllMembers*](#listallmembers)
   - [*GetMemberById*](#getmemberbyid)
   - [*ListCustomEventTypes*](#listcustomeventtypes)
+  - [*ListAiPromptSettings*](#listaipromptsettings)
+  - [*ListAppSettings*](#listappsettings)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -111,7 +120,12 @@ export interface ListCompaniesData {
   companies: ({
     id: UUIDString;
     name: string;
+    tradeName?: string | null;
+    tagline?: string | null;
     sector?: string | null;
+    website?: string | null;
+    logoUrl?: string | null;
+    status: CompanyStatus;
   } & Company_Key)[];
 }
 ```
@@ -207,6 +221,9 @@ export interface ListMemberProfilesData {
     id: string;
     displayName: string;
     role: Role;
+    membershipType: MembershipType;
+    photoUrl?: string | null;
+    profileText?: string | null;
   } & Member_Key)[];
 }
 ```
@@ -426,6 +443,7 @@ export interface ListCompanyRollupsData {
     company?: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
       sector?: string | null;
     } & Company_Key;
   })[];
@@ -540,14 +558,19 @@ export interface ListCompanyUpdatesForScenarioData {
   companyUpdateDetails: ({
     health: CompanyHealth;
     trajectory: CompanyTrajectory;
+    highlights: string[];
+    lowlights: string[];
+    upcomingPlans: string[];
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
         sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 ```
@@ -614,6 +637,122 @@ executeQuery(ref).then((response) => {
 });
 ```
 
+## ListAllocationsForScenario
+You can execute the `ListAllocationsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listAllocationsForScenario(vars: ListAllocationsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+
+interface ListAllocationsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListAllocationsForScenarioVariables): QueryRef<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+}
+export const listAllocationsForScenarioRef: ListAllocationsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listAllocationsForScenario(dc: DataConnect, vars: ListAllocationsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+
+interface ListAllocationsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListAllocationsForScenarioVariables): QueryRef<ListAllocationsForScenarioData, ListAllocationsForScenarioVariables>;
+}
+export const listAllocationsForScenarioRef: ListAllocationsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listAllocationsForScenarioRef:
+```typescript
+const name = listAllocationsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListAllocationsForScenario` query requires an argument of type `ListAllocationsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListAllocationsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListAllocationsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListAllocationsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListAllocationsForScenarioData {
+  allocations: ({
+    amount: number;
+    ledgerEntry: {
+      company: {
+        id: UUIDString;
+      } & Company_Key;
+    };
+  })[];
+}
+```
+### Using `ListAllocationsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listAllocationsForScenario, ListAllocationsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListAllocationsForScenario` query requires an argument of type `ListAllocationsForScenarioVariables`:
+const listAllocationsForScenarioVars: ListAllocationsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listAllocationsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listAllocationsForScenario(listAllocationsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listAllocationsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listAllocationsForScenario(dataConnect, listAllocationsForScenarioVars);
+
+console.log(data.allocations);
+
+// Or, you can use the `Promise` API.
+listAllocationsForScenario(listAllocationsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.allocations);
+});
+```
+
+### Using `ListAllocationsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listAllocationsForScenarioRef, ListAllocationsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListAllocationsForScenario` query requires an argument of type `ListAllocationsForScenarioVariables`:
+const listAllocationsForScenarioVars: ListAllocationsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listAllocationsForScenarioRef()` function to get a reference to the query.
+const ref = listAllocationsForScenarioRef(listAllocationsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listAllocationsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listAllocationsForScenarioRef(dataConnect, listAllocationsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.allocations);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.allocations);
+});
+```
+
 ## ListLedgerEntriesForScenario
 You can execute the `ListLedgerEntriesForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
@@ -666,6 +805,7 @@ export interface ListLedgerEntriesForScenarioData {
     company: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
       sector?: string | null;
     } & Company_Key;
   } & LedgerEntry_Key)[];
@@ -734,6 +874,719 @@ executeQuery(ref).then((response) => {
 });
 ```
 
+## ListPricedRoundDetailsForScenario
+You can execute the `ListPricedRoundDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listPricedRoundDetailsForScenario(vars: ListPricedRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+
+interface ListPricedRoundDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListPricedRoundDetailsForScenarioVariables): QueryRef<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+}
+export const listPricedRoundDetailsForScenarioRef: ListPricedRoundDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listPricedRoundDetailsForScenario(dc: DataConnect, vars: ListPricedRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+
+interface ListPricedRoundDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListPricedRoundDetailsForScenarioVariables): QueryRef<ListPricedRoundDetailsForScenarioData, ListPricedRoundDetailsForScenarioVariables>;
+}
+export const listPricedRoundDetailsForScenarioRef: ListPricedRoundDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listPricedRoundDetailsForScenarioRef:
+```typescript
+const name = listPricedRoundDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListPricedRoundDetailsForScenario` query requires an argument of type `ListPricedRoundDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListPricedRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListPricedRoundDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListPricedRoundDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListPricedRoundDetailsForScenarioData {
+  pricedRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    companyUrl?: string | null;
+    docLink?: string | null;
+    asvTotal: number;
+    roundName: string;
+    pricePerShare: number;
+    postMoneyValuation: number;
+  })[];
+}
+```
+### Using `ListPricedRoundDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listPricedRoundDetailsForScenario, ListPricedRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListPricedRoundDetailsForScenario` query requires an argument of type `ListPricedRoundDetailsForScenarioVariables`:
+const listPricedRoundDetailsForScenarioVars: ListPricedRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listPricedRoundDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listPricedRoundDetailsForScenario(listPricedRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listPricedRoundDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listPricedRoundDetailsForScenario(dataConnect, listPricedRoundDetailsForScenarioVars);
+
+console.log(data.pricedRoundDetails);
+
+// Or, you can use the `Promise` API.
+listPricedRoundDetailsForScenario(listPricedRoundDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.pricedRoundDetails);
+});
+```
+
+### Using `ListPricedRoundDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listPricedRoundDetailsForScenarioRef, ListPricedRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListPricedRoundDetailsForScenario` query requires an argument of type `ListPricedRoundDetailsForScenarioVariables`:
+const listPricedRoundDetailsForScenarioVars: ListPricedRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listPricedRoundDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listPricedRoundDetailsForScenarioRef(listPricedRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listPricedRoundDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listPricedRoundDetailsForScenarioRef(dataConnect, listPricedRoundDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.pricedRoundDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.pricedRoundDetails);
+});
+```
+
+## ListSafeRoundDetailsForScenario
+You can execute the `ListSafeRoundDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listSafeRoundDetailsForScenario(vars: ListSafeRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+
+interface ListSafeRoundDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListSafeRoundDetailsForScenarioVariables): QueryRef<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+}
+export const listSafeRoundDetailsForScenarioRef: ListSafeRoundDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listSafeRoundDetailsForScenario(dc: DataConnect, vars: ListSafeRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+
+interface ListSafeRoundDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListSafeRoundDetailsForScenarioVariables): QueryRef<ListSafeRoundDetailsForScenarioData, ListSafeRoundDetailsForScenarioVariables>;
+}
+export const listSafeRoundDetailsForScenarioRef: ListSafeRoundDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listSafeRoundDetailsForScenarioRef:
+```typescript
+const name = listSafeRoundDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListSafeRoundDetailsForScenario` query requires an argument of type `ListSafeRoundDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListSafeRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListSafeRoundDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListSafeRoundDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListSafeRoundDetailsForScenarioData {
+  safeRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    companyUrl?: string | null;
+    docLink?: string | null;
+    asvTotal: number;
+    postMoneyValCap: number;
+    discount: number;
+    warrantShares?: number | null;
+    warrantShareClass?: string | null;
+    warrantExercisePrice?: number | null;
+    warrantExpirationYears?: number | null;
+    warrantVestingTerms?: string | null;
+    notes?: string | null;
+  })[];
+}
+```
+### Using `ListSafeRoundDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listSafeRoundDetailsForScenario, ListSafeRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListSafeRoundDetailsForScenario` query requires an argument of type `ListSafeRoundDetailsForScenarioVariables`:
+const listSafeRoundDetailsForScenarioVars: ListSafeRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listSafeRoundDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listSafeRoundDetailsForScenario(listSafeRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listSafeRoundDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listSafeRoundDetailsForScenario(dataConnect, listSafeRoundDetailsForScenarioVars);
+
+console.log(data.safeRoundDetails);
+
+// Or, you can use the `Promise` API.
+listSafeRoundDetailsForScenario(listSafeRoundDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.safeRoundDetails);
+});
+```
+
+### Using `ListSafeRoundDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listSafeRoundDetailsForScenarioRef, ListSafeRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListSafeRoundDetailsForScenario` query requires an argument of type `ListSafeRoundDetailsForScenarioVariables`:
+const listSafeRoundDetailsForScenarioVars: ListSafeRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listSafeRoundDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listSafeRoundDetailsForScenarioRef(listSafeRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listSafeRoundDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listSafeRoundDetailsForScenarioRef(dataConnect, listSafeRoundDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.safeRoundDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.safeRoundDetails);
+});
+```
+
+## ListNonParticipatingRoundDetailsForScenario
+You can execute the `ListNonParticipatingRoundDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listNonParticipatingRoundDetailsForScenario(vars: ListNonParticipatingRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+
+interface ListNonParticipatingRoundDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListNonParticipatingRoundDetailsForScenarioVariables): QueryRef<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+}
+export const listNonParticipatingRoundDetailsForScenarioRef: ListNonParticipatingRoundDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listNonParticipatingRoundDetailsForScenario(dc: DataConnect, vars: ListNonParticipatingRoundDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+
+interface ListNonParticipatingRoundDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListNonParticipatingRoundDetailsForScenarioVariables): QueryRef<ListNonParticipatingRoundDetailsForScenarioData, ListNonParticipatingRoundDetailsForScenarioVariables>;
+}
+export const listNonParticipatingRoundDetailsForScenarioRef: ListNonParticipatingRoundDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listNonParticipatingRoundDetailsForScenarioRef:
+```typescript
+const name = listNonParticipatingRoundDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListNonParticipatingRoundDetailsForScenario` query requires an argument of type `ListNonParticipatingRoundDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListNonParticipatingRoundDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListNonParticipatingRoundDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListNonParticipatingRoundDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListNonParticipatingRoundDetailsForScenarioData {
+  nonParticipatingRoundDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    roundName: string;
+    newPricePerShare: number;
+    newPostMoneyValuation: number;
+    docLink?: string | null;
+    notes?: string | null;
+  })[];
+}
+```
+### Using `ListNonParticipatingRoundDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listNonParticipatingRoundDetailsForScenario, ListNonParticipatingRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListNonParticipatingRoundDetailsForScenario` query requires an argument of type `ListNonParticipatingRoundDetailsForScenarioVariables`:
+const listNonParticipatingRoundDetailsForScenarioVars: ListNonParticipatingRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listNonParticipatingRoundDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listNonParticipatingRoundDetailsForScenario(listNonParticipatingRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listNonParticipatingRoundDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listNonParticipatingRoundDetailsForScenario(dataConnect, listNonParticipatingRoundDetailsForScenarioVars);
+
+console.log(data.nonParticipatingRoundDetails);
+
+// Or, you can use the `Promise` API.
+listNonParticipatingRoundDetailsForScenario(listNonParticipatingRoundDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.nonParticipatingRoundDetails);
+});
+```
+
+### Using `ListNonParticipatingRoundDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listNonParticipatingRoundDetailsForScenarioRef, ListNonParticipatingRoundDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListNonParticipatingRoundDetailsForScenario` query requires an argument of type `ListNonParticipatingRoundDetailsForScenarioVariables`:
+const listNonParticipatingRoundDetailsForScenarioVars: ListNonParticipatingRoundDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listNonParticipatingRoundDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listNonParticipatingRoundDetailsForScenarioRef(listNonParticipatingRoundDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listNonParticipatingRoundDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listNonParticipatingRoundDetailsForScenarioRef(dataConnect, listNonParticipatingRoundDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.nonParticipatingRoundDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.nonParticipatingRoundDetails);
+});
+```
+
+## ListExitEventDetailsForScenario
+You can execute the `ListExitEventDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listExitEventDetailsForScenario(vars: ListExitEventDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+
+interface ListExitEventDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListExitEventDetailsForScenarioVariables): QueryRef<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+}
+export const listExitEventDetailsForScenarioRef: ListExitEventDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listExitEventDetailsForScenario(dc: DataConnect, vars: ListExitEventDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+
+interface ListExitEventDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListExitEventDetailsForScenarioVariables): QueryRef<ListExitEventDetailsForScenarioData, ListExitEventDetailsForScenarioVariables>;
+}
+export const listExitEventDetailsForScenarioRef: ListExitEventDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listExitEventDetailsForScenarioRef:
+```typescript
+const name = listExitEventDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListExitEventDetailsForScenario` query requires an argument of type `ListExitEventDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListExitEventDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListExitEventDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListExitEventDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListExitEventDetailsForScenarioData {
+  exitEventDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    exitType: ExitType;
+    totalExitValue: number;
+    asvTotalPayout: number;
+    docLink?: string | null;
+  })[];
+}
+```
+### Using `ListExitEventDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listExitEventDetailsForScenario, ListExitEventDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListExitEventDetailsForScenario` query requires an argument of type `ListExitEventDetailsForScenarioVariables`:
+const listExitEventDetailsForScenarioVars: ListExitEventDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listExitEventDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listExitEventDetailsForScenario(listExitEventDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listExitEventDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listExitEventDetailsForScenario(dataConnect, listExitEventDetailsForScenarioVars);
+
+console.log(data.exitEventDetails);
+
+// Or, you can use the `Promise` API.
+listExitEventDetailsForScenario(listExitEventDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.exitEventDetails);
+});
+```
+
+### Using `ListExitEventDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listExitEventDetailsForScenarioRef, ListExitEventDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListExitEventDetailsForScenario` query requires an argument of type `ListExitEventDetailsForScenarioVariables`:
+const listExitEventDetailsForScenarioVars: ListExitEventDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listExitEventDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listExitEventDetailsForScenarioRef(listExitEventDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listExitEventDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listExitEventDetailsForScenarioRef(dataConnect, listExitEventDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.exitEventDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.exitEventDetails);
+});
+```
+
+## ListValuationAssessmentDetailsForScenario
+You can execute the `ListValuationAssessmentDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listValuationAssessmentDetailsForScenario(vars: ListValuationAssessmentDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+
+interface ListValuationAssessmentDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListValuationAssessmentDetailsForScenarioVariables): QueryRef<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+}
+export const listValuationAssessmentDetailsForScenarioRef: ListValuationAssessmentDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listValuationAssessmentDetailsForScenario(dc: DataConnect, vars: ListValuationAssessmentDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+
+interface ListValuationAssessmentDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListValuationAssessmentDetailsForScenarioVariables): QueryRef<ListValuationAssessmentDetailsForScenarioData, ListValuationAssessmentDetailsForScenarioVariables>;
+}
+export const listValuationAssessmentDetailsForScenarioRef: ListValuationAssessmentDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listValuationAssessmentDetailsForScenarioRef:
+```typescript
+const name = listValuationAssessmentDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListValuationAssessmentDetailsForScenario` query requires an argument of type `ListValuationAssessmentDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListValuationAssessmentDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListValuationAssessmentDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListValuationAssessmentDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListValuationAssessmentDetailsForScenarioData {
+  valuationAssessmentDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    drivingEventDate: DateString;
+    asvTotalFairMarketValue: number;
+    impliedEnterpriseValue?: number | null;
+    assessmentRationale?: string | null;
+  })[];
+}
+```
+### Using `ListValuationAssessmentDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listValuationAssessmentDetailsForScenario, ListValuationAssessmentDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListValuationAssessmentDetailsForScenario` query requires an argument of type `ListValuationAssessmentDetailsForScenarioVariables`:
+const listValuationAssessmentDetailsForScenarioVars: ListValuationAssessmentDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listValuationAssessmentDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listValuationAssessmentDetailsForScenario(listValuationAssessmentDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listValuationAssessmentDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listValuationAssessmentDetailsForScenario(dataConnect, listValuationAssessmentDetailsForScenarioVars);
+
+console.log(data.valuationAssessmentDetails);
+
+// Or, you can use the `Promise` API.
+listValuationAssessmentDetailsForScenario(listValuationAssessmentDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.valuationAssessmentDetails);
+});
+```
+
+### Using `ListValuationAssessmentDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listValuationAssessmentDetailsForScenarioRef, ListValuationAssessmentDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListValuationAssessmentDetailsForScenario` query requires an argument of type `ListValuationAssessmentDetailsForScenarioVariables`:
+const listValuationAssessmentDetailsForScenarioVars: ListValuationAssessmentDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listValuationAssessmentDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listValuationAssessmentDetailsForScenarioRef(listValuationAssessmentDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listValuationAssessmentDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listValuationAssessmentDetailsForScenarioRef(dataConnect, listValuationAssessmentDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.valuationAssessmentDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.valuationAssessmentDetails);
+});
+```
+
+## ListComplianceFlagDetailsForScenario
+You can execute the `ListComplianceFlagDetailsForScenario` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listComplianceFlagDetailsForScenario(vars: ListComplianceFlagDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+
+interface ListComplianceFlagDetailsForScenarioRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListComplianceFlagDetailsForScenarioVariables): QueryRef<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+}
+export const listComplianceFlagDetailsForScenarioRef: ListComplianceFlagDetailsForScenarioRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listComplianceFlagDetailsForScenario(dc: DataConnect, vars: ListComplianceFlagDetailsForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+
+interface ListComplianceFlagDetailsForScenarioRef {
+  ...
+  (dc: DataConnect, vars: ListComplianceFlagDetailsForScenarioVariables): QueryRef<ListComplianceFlagDetailsForScenarioData, ListComplianceFlagDetailsForScenarioVariables>;
+}
+export const listComplianceFlagDetailsForScenarioRef: ListComplianceFlagDetailsForScenarioRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listComplianceFlagDetailsForScenarioRef:
+```typescript
+const name = listComplianceFlagDetailsForScenarioRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListComplianceFlagDetailsForScenario` query requires an argument of type `ListComplianceFlagDetailsForScenarioVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListComplianceFlagDetailsForScenarioVariables {
+  scenario: Scenario;
+}
+```
+### Return Type
+Recall that executing the `ListComplianceFlagDetailsForScenario` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListComplianceFlagDetailsForScenarioData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListComplianceFlagDetailsForScenarioData {
+  complianceFlagDetails: ({
+    ledgerEntry: {
+      id: UUIDString;
+    } & LedgerEntry_Key;
+    status: ComplianceStatus;
+    flaggedDate: DateString;
+    reason: string;
+    auditType: ComplianceAuditType;
+    complianceOfficerNotes: string;
+  })[];
+}
+```
+### Using `ListComplianceFlagDetailsForScenario`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listComplianceFlagDetailsForScenario, ListComplianceFlagDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListComplianceFlagDetailsForScenario` query requires an argument of type `ListComplianceFlagDetailsForScenarioVariables`:
+const listComplianceFlagDetailsForScenarioVars: ListComplianceFlagDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listComplianceFlagDetailsForScenario()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listComplianceFlagDetailsForScenario(listComplianceFlagDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const { data } = await listComplianceFlagDetailsForScenario({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listComplianceFlagDetailsForScenario(dataConnect, listComplianceFlagDetailsForScenarioVars);
+
+console.log(data.complianceFlagDetails);
+
+// Or, you can use the `Promise` API.
+listComplianceFlagDetailsForScenario(listComplianceFlagDetailsForScenarioVars).then((response) => {
+  const data = response.data;
+  console.log(data.complianceFlagDetails);
+});
+```
+
+### Using `ListComplianceFlagDetailsForScenario`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listComplianceFlagDetailsForScenarioRef, ListComplianceFlagDetailsForScenarioVariables } from '@asv/dataconnect-generated';
+
+// The `ListComplianceFlagDetailsForScenario` query requires an argument of type `ListComplianceFlagDetailsForScenarioVariables`:
+const listComplianceFlagDetailsForScenarioVars: ListComplianceFlagDetailsForScenarioVariables = {
+  scenario: ..., 
+};
+
+// Call the `listComplianceFlagDetailsForScenarioRef()` function to get a reference to the query.
+const ref = listComplianceFlagDetailsForScenarioRef(listComplianceFlagDetailsForScenarioVars);
+// Variables can be defined inline as well.
+const ref = listComplianceFlagDetailsForScenarioRef({ scenario: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listComplianceFlagDetailsForScenarioRef(dataConnect, listComplianceFlagDetailsForScenarioVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.complianceFlagDetails);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.complianceFlagDetails);
+});
+```
+
 ## ListMemberAllocations
 You can execute the `ListMemberAllocations` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
@@ -768,7 +1621,6 @@ The `ListMemberAllocations` query requires an argument of type `ListMemberAlloca
 
 ```typescript
 export interface ListMemberAllocationsVariables {
-  memberId: string;
   scenario: Scenario;
 }
 ```
@@ -781,12 +1633,15 @@ export interface ListMemberAllocationsData {
   allocations: ({
     amount: number;
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
+        sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 ```
@@ -798,7 +1653,6 @@ import { connectorConfig, listMemberAllocations, ListMemberAllocationsVariables 
 
 // The `ListMemberAllocations` query requires an argument of type `ListMemberAllocationsVariables`:
 const listMemberAllocationsVars: ListMemberAllocationsVariables = {
-  memberId: ..., 
   scenario: ..., 
 };
 
@@ -806,7 +1660,7 @@ const listMemberAllocationsVars: ListMemberAllocationsVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await listMemberAllocations(listMemberAllocationsVars);
 // Variables can be defined inline as well.
-const { data } = await listMemberAllocations({ memberId: ..., scenario: ..., });
+const { data } = await listMemberAllocations({ scenario: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -829,14 +1683,13 @@ import { connectorConfig, listMemberAllocationsRef, ListMemberAllocationsVariabl
 
 // The `ListMemberAllocations` query requires an argument of type `ListMemberAllocationsVariables`:
 const listMemberAllocationsVars: ListMemberAllocationsVariables = {
-  memberId: ..., 
   scenario: ..., 
 };
 
 // Call the `listMemberAllocationsRef()` function to get a reference to the query.
 const ref = listMemberAllocationsRef(listMemberAllocationsVars);
 // Variables can be defined inline as well.
-const ref = listMemberAllocationsRef({ memberId: ..., scenario: ..., });
+const ref = listMemberAllocationsRef({ scenario: ..., });
 
 // You can also pass in a `DataConnect` instance to the `QueryRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -889,7 +1742,6 @@ The `ListMemberValuations` query requires an argument of type `ListMemberValuati
 
 ```typescript
 export interface ListMemberValuationsVariables {
-  memberId: string;
   scenario: Scenario;
 }
 ```
@@ -902,12 +1754,16 @@ export interface ListMemberValuationsData {
   memberValuations: ({
     value: number;
     ledgerEntry: {
+      id: UUIDString;
       eventDate: DateString;
+      type: LedgerEntryType;
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
+        sector?: string | null;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 ```
@@ -919,7 +1775,6 @@ import { connectorConfig, listMemberValuations, ListMemberValuationsVariables } 
 
 // The `ListMemberValuations` query requires an argument of type `ListMemberValuationsVariables`:
 const listMemberValuationsVars: ListMemberValuationsVariables = {
-  memberId: ..., 
   scenario: ..., 
 };
 
@@ -927,7 +1782,7 @@ const listMemberValuationsVars: ListMemberValuationsVariables = {
 // You can use the `await` keyword to wait for the promise to resolve.
 const { data } = await listMemberValuations(listMemberValuationsVars);
 // Variables can be defined inline as well.
-const { data } = await listMemberValuations({ memberId: ..., scenario: ..., });
+const { data } = await listMemberValuations({ scenario: ..., });
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -950,14 +1805,13 @@ import { connectorConfig, listMemberValuationsRef, ListMemberValuationsVariables
 
 // The `ListMemberValuations` query requires an argument of type `ListMemberValuationsVariables`:
 const listMemberValuationsVars: ListMemberValuationsVariables = {
-  memberId: ..., 
   scenario: ..., 
 };
 
 // Call the `listMemberValuationsRef()` function to get a reference to the query.
 const ref = listMemberValuationsRef(listMemberValuationsVars);
 // Variables can be defined inline as well.
-const ref = listMemberValuationsRef({ memberId: ..., scenario: ..., });
+const ref = listMemberValuationsRef({ scenario: ..., });
 
 // You can also pass in a `DataConnect` instance to the `QueryRef` function.
 const dataConnect = getDataConnect(connectorConfig);
@@ -979,22 +1833,22 @@ executeQuery(ref).then((response) => {
 ## ListMemberAllocationsAllScenarios
 You can execute the `ListMemberAllocationsAllScenarios` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
-listMemberAllocationsAllScenarios(vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+listMemberAllocationsAllScenarios(options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, undefined>;
 
 interface ListMemberAllocationsAllScenariosRef {
   ...
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  (): QueryRef<ListMemberAllocationsAllScenariosData, undefined>;
 }
 export const listMemberAllocationsAllScenariosRef: ListMemberAllocationsAllScenariosRef;
 ```
 You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
 ```typescript
-listMemberAllocationsAllScenarios(dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+listMemberAllocationsAllScenarios(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMemberAllocationsAllScenariosData, undefined>;
 
 interface ListMemberAllocationsAllScenariosRef {
   ...
-  (dc: DataConnect, vars: ListMemberAllocationsAllScenariosVariables): QueryRef<ListMemberAllocationsAllScenariosData, ListMemberAllocationsAllScenariosVariables>;
+  (dc: DataConnect): QueryRef<ListMemberAllocationsAllScenariosData, undefined>;
 }
 export const listMemberAllocationsAllScenariosRef: ListMemberAllocationsAllScenariosRef;
 ```
@@ -1006,13 +1860,7 @@ console.log(name);
 ```
 
 ### Variables
-The `ListMemberAllocationsAllScenarios` query requires an argument of type `ListMemberAllocationsAllScenariosVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface ListMemberAllocationsAllScenariosVariables {
-  memberId: string;
-}
-```
+The `ListMemberAllocationsAllScenarios` query has no variables.
 ### Return Type
 Recall that executing the `ListMemberAllocationsAllScenarios` query returns a `QueryPromise` that resolves to an object with a `data` property.
 
@@ -1027,6 +1875,7 @@ export interface ListMemberAllocationsAllScenariosData {
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
       } & Company_Key;
     };
   })[];
@@ -1036,27 +1885,21 @@ export interface ListMemberAllocationsAllScenariosData {
 
 ```typescript
 import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, listMemberAllocationsAllScenarios, ListMemberAllocationsAllScenariosVariables } from '@asv/dataconnect-generated';
+import { connectorConfig, listMemberAllocationsAllScenarios } from '@asv/dataconnect-generated';
 
-// The `ListMemberAllocationsAllScenarios` query requires an argument of type `ListMemberAllocationsAllScenariosVariables`:
-const listMemberAllocationsAllScenariosVars: ListMemberAllocationsAllScenariosVariables = {
-  memberId: ..., 
-};
 
 // Call the `listMemberAllocationsAllScenarios()` function to execute the query.
 // You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await listMemberAllocationsAllScenarios(listMemberAllocationsAllScenariosVars);
-// Variables can be defined inline as well.
-const { data } = await listMemberAllocationsAllScenarios({ memberId: ..., });
+const { data } = await listMemberAllocationsAllScenarios();
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
-const { data } = await listMemberAllocationsAllScenarios(dataConnect, listMemberAllocationsAllScenariosVars);
+const { data } = await listMemberAllocationsAllScenarios(dataConnect);
 
 console.log(data.allocations);
 
 // Or, you can use the `Promise` API.
-listMemberAllocationsAllScenarios(listMemberAllocationsAllScenariosVars).then((response) => {
+listMemberAllocationsAllScenarios().then((response) => {
   const data = response.data;
   console.log(data.allocations);
 });
@@ -1066,21 +1909,15 @@ listMemberAllocationsAllScenarios(listMemberAllocationsAllScenariosVars).then((r
 
 ```typescript
 import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, listMemberAllocationsAllScenariosRef, ListMemberAllocationsAllScenariosVariables } from '@asv/dataconnect-generated';
+import { connectorConfig, listMemberAllocationsAllScenariosRef } from '@asv/dataconnect-generated';
 
-// The `ListMemberAllocationsAllScenarios` query requires an argument of type `ListMemberAllocationsAllScenariosVariables`:
-const listMemberAllocationsAllScenariosVars: ListMemberAllocationsAllScenariosVariables = {
-  memberId: ..., 
-};
 
 // Call the `listMemberAllocationsAllScenariosRef()` function to get a reference to the query.
-const ref = listMemberAllocationsAllScenariosRef(listMemberAllocationsAllScenariosVars);
-// Variables can be defined inline as well.
-const ref = listMemberAllocationsAllScenariosRef({ memberId: ..., });
+const ref = listMemberAllocationsAllScenariosRef();
 
 // You can also pass in a `DataConnect` instance to the `QueryRef` function.
 const dataConnect = getDataConnect(connectorConfig);
-const ref = listMemberAllocationsAllScenariosRef(dataConnect, listMemberAllocationsAllScenariosVars);
+const ref = listMemberAllocationsAllScenariosRef(dataConnect);
 
 // Call `executeQuery()` on the reference to execute the query.
 // You can use the `await` keyword to wait for the promise to resolve.
@@ -1098,22 +1935,22 @@ executeQuery(ref).then((response) => {
 ## ListMemberValuationsAllScenarios
 You can execute the `ListMemberValuationsAllScenarios` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
 ```typescript
-listMemberValuationsAllScenarios(vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+listMemberValuationsAllScenarios(options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, undefined>;
 
 interface ListMemberValuationsAllScenariosRef {
   ...
   /* Allow users to create refs without passing in DataConnect */
-  (vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  (): QueryRef<ListMemberValuationsAllScenariosData, undefined>;
 }
 export const listMemberValuationsAllScenariosRef: ListMemberValuationsAllScenariosRef;
 ```
 You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
 ```typescript
-listMemberValuationsAllScenarios(dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+listMemberValuationsAllScenarios(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsAllScenariosData, undefined>;
 
 interface ListMemberValuationsAllScenariosRef {
   ...
-  (dc: DataConnect, vars: ListMemberValuationsAllScenariosVariables): QueryRef<ListMemberValuationsAllScenariosData, ListMemberValuationsAllScenariosVariables>;
+  (dc: DataConnect): QueryRef<ListMemberValuationsAllScenariosData, undefined>;
 }
 export const listMemberValuationsAllScenariosRef: ListMemberValuationsAllScenariosRef;
 ```
@@ -1125,13 +1962,7 @@ console.log(name);
 ```
 
 ### Variables
-The `ListMemberValuationsAllScenarios` query requires an argument of type `ListMemberValuationsAllScenariosVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
-
-```typescript
-export interface ListMemberValuationsAllScenariosVariables {
-  memberId: string;
-}
-```
+The `ListMemberValuationsAllScenarios` query has no variables.
 ### Return Type
 Recall that executing the `ListMemberValuationsAllScenarios` query returns a `QueryPromise` that resolves to an object with a `data` property.
 
@@ -1146,6 +1977,7 @@ export interface ListMemberValuationsAllScenariosData {
       company: {
         id: UUIDString;
         name: string;
+        tradeName?: string | null;
       } & Company_Key;
     };
   })[];
@@ -1155,27 +1987,21 @@ export interface ListMemberValuationsAllScenariosData {
 
 ```typescript
 import { getDataConnect } from 'firebase/data-connect';
-import { connectorConfig, listMemberValuationsAllScenarios, ListMemberValuationsAllScenariosVariables } from '@asv/dataconnect-generated';
+import { connectorConfig, listMemberValuationsAllScenarios } from '@asv/dataconnect-generated';
 
-// The `ListMemberValuationsAllScenarios` query requires an argument of type `ListMemberValuationsAllScenariosVariables`:
-const listMemberValuationsAllScenariosVars: ListMemberValuationsAllScenariosVariables = {
-  memberId: ..., 
-};
 
 // Call the `listMemberValuationsAllScenarios()` function to execute the query.
 // You can use the `await` keyword to wait for the promise to resolve.
-const { data } = await listMemberValuationsAllScenarios(listMemberValuationsAllScenariosVars);
-// Variables can be defined inline as well.
-const { data } = await listMemberValuationsAllScenarios({ memberId: ..., });
+const { data } = await listMemberValuationsAllScenarios();
 
 // You can also pass in a `DataConnect` instance to the action shortcut function.
 const dataConnect = getDataConnect(connectorConfig);
-const { data } = await listMemberValuationsAllScenarios(dataConnect, listMemberValuationsAllScenariosVars);
+const { data } = await listMemberValuationsAllScenarios(dataConnect);
 
 console.log(data.memberValuations);
 
 // Or, you can use the `Promise` API.
-listMemberValuationsAllScenarios(listMemberValuationsAllScenariosVars).then((response) => {
+listMemberValuationsAllScenarios().then((response) => {
   const data = response.data;
   console.log(data.memberValuations);
 });
@@ -1185,21 +2011,15 @@ listMemberValuationsAllScenarios(listMemberValuationsAllScenariosVars).then((res
 
 ```typescript
 import { getDataConnect, executeQuery } from 'firebase/data-connect';
-import { connectorConfig, listMemberValuationsAllScenariosRef, ListMemberValuationsAllScenariosVariables } from '@asv/dataconnect-generated';
+import { connectorConfig, listMemberValuationsAllScenariosRef } from '@asv/dataconnect-generated';
 
-// The `ListMemberValuationsAllScenarios` query requires an argument of type `ListMemberValuationsAllScenariosVariables`:
-const listMemberValuationsAllScenariosVars: ListMemberValuationsAllScenariosVariables = {
-  memberId: ..., 
-};
 
 // Call the `listMemberValuationsAllScenariosRef()` function to get a reference to the query.
-const ref = listMemberValuationsAllScenariosRef(listMemberValuationsAllScenariosVars);
-// Variables can be defined inline as well.
-const ref = listMemberValuationsAllScenariosRef({ memberId: ..., });
+const ref = listMemberValuationsAllScenariosRef();
 
 // You can also pass in a `DataConnect` instance to the `QueryRef` function.
 const dataConnect = getDataConnect(connectorConfig);
-const ref = listMemberValuationsAllScenariosRef(dataConnect, listMemberValuationsAllScenariosVars);
+const ref = listMemberValuationsAllScenariosRef(dataConnect);
 
 // Call `executeQuery()` on the reference to execute the query.
 // You can use the `await` keyword to wait for the promise to resolve.
@@ -1257,6 +2077,7 @@ export interface ListAllDocumentsData {
     company: {
       id: UUIDString;
       name: string;
+      tradeName?: string | null;
     } & Company_Key;
   } & Document_Key)[];
 }
@@ -1466,10 +2287,12 @@ export interface ListAllMembersData {
   members: ({
     id: string;
     displayName: string;
+    investingEntityName: string;
     email: string;
     role: Role;
     status: MemberStatus;
     authUid?: string | null;
+    membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key)[];
 }
@@ -1571,10 +2394,14 @@ export interface GetMemberByIdData {
   member?: {
     id: string;
     displayName: string;
+    investingEntityName: string;
     email: string;
     role: Role;
     status: MemberStatus;
     authUid?: string | null;
+    photoUrl?: string | null;
+    profileText?: string | null;
+    membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key;
 }
@@ -1735,6 +2562,195 @@ console.log(data.eventTypeDefinitions);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.eventTypeDefinitions);
+});
+```
+
+## ListAiPromptSettings
+You can execute the `ListAiPromptSettings` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listAiPromptSettings(options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
+
+interface ListAiPromptSettingsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAiPromptSettingsData, undefined>;
+}
+export const listAiPromptSettingsRef: ListAiPromptSettingsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listAiPromptSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
+
+interface ListAiPromptSettingsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListAiPromptSettingsData, undefined>;
+}
+export const listAiPromptSettingsRef: ListAiPromptSettingsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listAiPromptSettingsRef:
+```typescript
+const name = listAiPromptSettingsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListAiPromptSettings` query has no variables.
+### Return Type
+Recall that executing the `ListAiPromptSettings` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListAiPromptSettingsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListAiPromptSettingsData {
+  aiPromptSettings: ({
+    key: string;
+    prompt: string;
+    updatedAt: TimestampString;
+  } & AiPromptSetting_Key)[];
+}
+```
+### Using `ListAiPromptSettings`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listAiPromptSettings } from '@asv/dataconnect-generated';
+
+
+// Call the `listAiPromptSettings()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listAiPromptSettings();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listAiPromptSettings(dataConnect);
+
+console.log(data.aiPromptSettings);
+
+// Or, you can use the `Promise` API.
+listAiPromptSettings().then((response) => {
+  const data = response.data;
+  console.log(data.aiPromptSettings);
+});
+```
+
+### Using `ListAiPromptSettings`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listAiPromptSettingsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listAiPromptSettingsRef()` function to get a reference to the query.
+const ref = listAiPromptSettingsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listAiPromptSettingsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.aiPromptSettings);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.aiPromptSettings);
+});
+```
+
+## ListAppSettings
+You can execute the `ListAppSettings` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listAppSettings(options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
+
+interface ListAppSettingsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAppSettingsData, undefined>;
+}
+export const listAppSettingsRef: ListAppSettingsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listAppSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
+
+interface ListAppSettingsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListAppSettingsData, undefined>;
+}
+export const listAppSettingsRef: ListAppSettingsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listAppSettingsRef:
+```typescript
+const name = listAppSettingsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListAppSettings` query has no variables.
+### Return Type
+Recall that executing the `ListAppSettings` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListAppSettingsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListAppSettingsData {
+  appSettings: ({
+    key: string;
+    value: string;
+  } & AppSetting_Key)[];
+}
+```
+### Using `ListAppSettings`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listAppSettings } from '@asv/dataconnect-generated';
+
+
+// Call the `listAppSettings()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listAppSettings();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listAppSettings(dataConnect);
+
+console.log(data.appSettings);
+
+// Or, you can use the `Promise` API.
+listAppSettings().then((response) => {
+  const data = response.data;
+  console.log(data.appSettings);
+});
+```
+
+### Using `ListAppSettings`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listAppSettingsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listAppSettingsRef()` function to get a reference to the query.
+const ref = listAppSettingsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listAppSettingsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.appSettings);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.appSettings);
 });
 ```
 

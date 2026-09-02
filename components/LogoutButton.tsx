@@ -13,13 +13,13 @@ export function LogoutButton() {
     // can't leave a stale authenticated cookie behind if the network call fails.
     await clearSession();
     await signOut(auth);
-    router.push("/login");
+    router.push("/");
   }
 
   return (
     <button
       onClick={handleLogout}
-      className="text-sm text-zinc-600 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
+      className="text-base font-medium text-zinc-600 underline underline-offset-2 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-50"
     >
       Sign out
     </button>
