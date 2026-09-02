@@ -70,6 +70,7 @@ export default async function AdminMemberDetailPage({
         email={member.email}
         isLinked={Boolean(member.authUid)}
         status={member.status === "ACTIVE" ? "active" : "disabled"}
+        role={member.role === "ADMIN" ? "admin" : "member"}
       />
     </div>
   );

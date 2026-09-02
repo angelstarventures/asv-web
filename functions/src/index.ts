@@ -7,7 +7,7 @@ initializeApp();
 // function-to-Postgres call would otherwise cross regions on every request.
 setGlobalOptions({ region: "us-east1" });
 
-export { createMember, updateMember, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminTriggerPasswordReset, setMemberStatus } from "./functions/users-onCreateProvision";
+export { createMember, updateMember, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminTriggerPasswordReset, setMemberStatus, setMemberRole } from "./functions/users-onCreateProvision";
 export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
 export { updateAppSetting } from "./functions/app-updateSetting";
 export { aiPortfolioQuery } from "./functions/ai-portfolioQuery";
@@ -25,3 +25,8 @@ export { ledgerMassImportCommit } from "./functions/ledger-massImportCommit";
 export { ledgerDeleteRecord } from "./functions/ledger-deleteRecord";
 export { ledgerUpdateRecord } from "./functions/ledger-updateRecord";
 export { rollupsRecompute } from "./functions/rollups-recompute";
+export { dealsSubmitPitch } from "./functions/deals-submitPitch";
+export { dealsSetRating } from "./functions/deals-setRating";
+export { dealsUpdateStage } from "./functions/deals-updateStage";
+export { dealsManageTag } from "./functions/deals-manageTag";
+export { dealsAssignTag } from "./functions/deals-assignTag";

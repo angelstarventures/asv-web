@@ -5,6 +5,11 @@ import { Readable } from "node:stream";
 // explicitly rejected native Drive sharing to avoid syncing Google Groups on every
 // allocation change — plan §3). Auth uses a dedicated service account with domain-wide
 // delegation scoped to the fixed ASV Drive folder structure, never end-user OAuth.
+//
+// Used only by the admin ledger-document intake flow (documentsOnDriveUpload/
+// documentsGetAccessUrl). The deal-flow pitch intake (deals-submitPitch.ts) uses a separate
+// OAuth-based Drive client (lib/dealsDrive.ts) against a different, real personal Google
+// account's Drive — the two are deliberately kept apart rather than sharing credentials/folders.
 
 function getDriveClient() {
   const auth = new google.auth.GoogleAuth({

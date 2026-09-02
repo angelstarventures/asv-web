@@ -32,11 +32,20 @@ export function WelcomeSection({
 
   return (
     <div className="flex flex-col gap-16">
-      <div className="text-center">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+      <section className="grid gap-8 sm:grid-cols-3">
+        {SUPPORT_SERVICES.map((s) => (
+          <div key={s.title} className="text-center">
+            <h3 className="text-sm font-semibold">{s.title}</h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{s.body}</p>
+          </div>
+        ))}
+      </section>
+
+      <div className="rounded-2xl bg-gradient-to-br from-[#8073e6] via-[#6b5d9e] to-[#2c2520] px-6 py-20 text-center">
+        <h1 className="text-3xl font-semibold tracking-tight text-white drop-shadow-sm sm:text-4xl">
           Empowering startups to reach their full potential
         </h1>
-        <p className="mx-auto mt-4 max-w-2xl text-zinc-600 dark:text-zinc-400">
+        <p className="mx-auto mt-4 max-w-2xl text-white/90 drop-shadow-sm">
           Our mission is to guide the most innovative entrepreneurs with scaling their early stage startups into
           successful businesses.
         </p>
@@ -55,15 +64,6 @@ export function WelcomeSection({
           </div>
         </section>
       )}
-
-      <section className="grid gap-8 sm:grid-cols-3">
-        {SUPPORT_SERVICES.map((s) => (
-          <div key={s.title} className="text-center">
-            <h3 className="text-sm font-semibold">{s.title}</h3>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{s.body}</p>
-          </div>
-        ))}
-      </section>
     </div>
   );
 }

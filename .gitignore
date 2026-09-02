@@ -36,6 +36,10 @@ yarn-error.log*
 # must be committed — Firebase Functions v2 loads it automatically at deploy time.
 !functions/.env
 
+# Firebase Functions v2 local secret values (Drive OAuth client secret/refresh token) — the
+# emulator-only counterpart to real secrets in Secret Manager. Never committed.
+.secret.local
+
 # vercel
 .vercel
 

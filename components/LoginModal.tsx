@@ -13,7 +13,7 @@ export function LoginModal() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-full bg-foreground px-6 py-3 text-base font-semibold text-background"
+        className="rounded-full bg-foreground px-6 py-3 text-[16px] font-semibold text-background"
       >
         Member sign in
       </button>

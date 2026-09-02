@@ -37,6 +37,21 @@ export enum ComplianceStatus {
   NON_HALAL = "NON_HALAL",
 };
 
+export enum DealDocumentType {
+  PITCH_DECK = "PITCH_DECK",
+  ADDITIONAL_DOCUMENT = "ADDITIONAL_DOCUMENT",
+};
+
+export enum DealStage {
+  NEW = "NEW",
+  LEAD = "LEAD",
+  DUE_DILIGENCE = "DUE_DILIGENCE",
+  PRESENTING = "PRESENTING",
+  INVESTED = "INVESTED",
+  PASSED = "PASSED",
+  INACTIVE = "INACTIVE",
+};
+
 export enum DocumentType {
   PITCH_DECK = "PITCH_DECK",
   DD_REPORT = "DD_REPORT",
@@ -52,6 +67,13 @@ export enum ExitType {
   MERGER = "MERGER",
   SHUTDOWN = "SHUTDOWN",
   DISSOLUTION = "DISSOLUTION",
+};
+
+export enum FundingRound {
+  PRE_SEED = "PRE_SEED",
+  SEED = "SEED",
+  SERIES_A = "SERIES_A",
+  OTHER = "OTHER",
 };
 
 export enum LedgerEntryType {
@@ -87,6 +109,13 @@ export enum Scenario {
   OPTIMISTIC = "OPTIMISTIC",
   BALANCED = "BALANCED",
   CONSERVATIVE = "CONSERVATIVE",
+};
+
+export enum SecurityType {
+  PRICED_ROUND = "PRICED_ROUND",
+  SAFE = "SAFE",
+  CONVERTIBLE_NOTE = "CONVERTIBLE_NOTE",
+  OTHER = "OTHER",
 };
 
 
@@ -131,6 +160,31 @@ export interface CustomEventDetail_Key {
   __typename?: 'CustomEventDetail_Key';
 }
 
+export interface DealDocument_Key {
+  id: UUIDString;
+  __typename?: 'DealDocument_Key';
+}
+
+export interface DealRating_Key {
+  id: UUIDString;
+  __typename?: 'DealRating_Key';
+}
+
+export interface DealTagAssignment_Key {
+  id: UUIDString;
+  __typename?: 'DealTagAssignment_Key';
+}
+
+export interface DealTag_Key {
+  id: UUIDString;
+  __typename?: 'DealTag_Key';
+}
+
+export interface Deal_Key {
+  id: UUIDString;
+  __typename?: 'Deal_Key';
+}
+
 export interface DocumentAccessLog_Key {
   id: UUIDString;
   __typename?: 'DocumentAccessLog_Key';
@@ -149,6 +203,38 @@ export interface EventTypeDefinition_Key {
 export interface ExitEventDetail_Key {
   id: UUIDString;
   __typename?: 'ExitEventDetail_Key';
+}
+
+export interface GetDealByIdData {
+  deal?: {
+    id: UUIDString;
+    companyName: string;
+    companyEmail: string;
+    entrepreneurName: string;
+    entrepreneurEmail: string;
+    entrepreneurPhone: string;
+    executiveSummary: string;
+    teamInformation: string;
+    round: FundingRound;
+    securityType: SecurityType;
+    seekingAmount: number;
+    preMoneyValuation: number;
+    hasLeadInvestor: boolean;
+    leadInvestorName?: string | null;
+    willHaveInterestBearingDebtAfterClose: boolean;
+    hasExistingInterestBearingDebt: boolean;
+    hasRestrictedBusinessLines: boolean;
+    raiseMethod: string;
+    referredBy?: string | null;
+    stage: DealStage;
+    driveFolderUrl?: string | null;
+    createdAt: TimestampString;
+    updatedAt: TimestampString;
+  } & Deal_Key;
+}
+
+export interface GetDealByIdVariables {
+  dealId: UUIDString;
 }
 
 export interface GetMemberByAuthUidData {
@@ -352,6 +438,83 @@ export interface ListCustomEventTypesData {
     label: string;
     description?: string | null;
   } & EventTypeDefinition_Key)[];
+}
+
+export interface ListDealDocumentsByDealData {
+  dealDocuments: ({
+    id: UUIDString;
+    docType: DealDocumentType;
+    driveUrl: string;
+    filename: string;
+    uploadedAt: TimestampString;
+  } & DealDocument_Key)[];
+}
+
+export interface ListDealDocumentsByDealVariables {
+  dealId: UUIDString;
+}
+
+export interface ListDealRatingsByDealData {
+  dealRatings: ({
+    rating: number;
+    review?: string | null;
+    updatedAt: TimestampString;
+    member: {
+      id: string;
+      displayName: string;
+    } & Member_Key;
+  })[];
+}
+
+export interface ListDealRatingsByDealVariables {
+  dealId: UUIDString;
+}
+
+export interface ListDealTagAssignmentsData {
+  dealTagAssignments: ({
+    deal: {
+      id: UUIDString;
+    } & Deal_Key;
+    tag: {
+      id: UUIDString;
+    } & DealTag_Key;
+  })[];
+}
+
+export interface ListDealTagsData {
+  dealTags: ({
+    id: UUIDString;
+    name: string;
+    color?: string | null;
+  } & DealTag_Key)[];
+}
+
+export interface ListDealsData {
+  deals: ({
+    id: UUIDString;
+    companyName: string;
+    companyEmail: string;
+    entrepreneurName: string;
+    entrepreneurEmail: string;
+    entrepreneurPhone: string;
+    executiveSummary: string;
+    teamInformation: string;
+    round: FundingRound;
+    securityType: SecurityType;
+    seekingAmount: number;
+    preMoneyValuation: number;
+    hasLeadInvestor: boolean;
+    leadInvestorName?: string | null;
+    willHaveInterestBearingDebtAfterClose: boolean;
+    hasExistingInterestBearingDebt: boolean;
+    hasRestrictedBusinessLines: boolean;
+    raiseMethod: string;
+    referredBy?: string | null;
+    stage: DealStage;
+    driveFolderUrl?: string | null;
+    createdAt: TimestampString;
+    updatedAt: TimestampString;
+  } & Deal_Key)[];
 }
 
 export interface ListExitEventDetailsForScenarioData {
@@ -561,11 +724,6 @@ export interface NonParticipatingRoundDetail_Key {
   __typename?: 'NonParticipatingRoundDetail_Key';
 }
 
-export interface PitchSubmission_Key {
-  id: UUIDString;
-  __typename?: 'PitchSubmission_Key';
-}
-
 export interface PricedRoundDetail_Key {
   id: UUIDString;
   __typename?: 'PricedRoundDetail_Key';
@@ -585,11 +743,6 @@ export interface SafeRoundDetail_Key {
 export interface ValuationAssessmentDetail_Key {
   id: UUIDString;
   __typename?: 'ValuationAssessmentDetail_Key';
-}
-
-export interface WatchlistRating_Key {
-  id: UUIDString;
-  __typename?: 'WatchlistRating_Key';
 }
 
 interface InsertCompanyRef {
@@ -891,4 +1044,76 @@ export const listAppSettingsRef: ListAppSettingsRef;
 
 export function listAppSettings(options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
 export function listAppSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAppSettingsData, undefined>;
+
+interface ListDealsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealsData, undefined>;
+  operationName: string;
+}
+export const listDealsRef: ListDealsRef;
+
+export function listDeals(options?: ExecuteQueryOptions): QueryPromise<ListDealsData, undefined>;
+export function listDeals(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealsData, undefined>;
+
+interface GetDealByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetDealByIdVariables): QueryRef<GetDealByIdData, GetDealByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetDealByIdVariables): QueryRef<GetDealByIdData, GetDealByIdVariables>;
+  operationName: string;
+}
+export const getDealByIdRef: GetDealByIdRef;
+
+export function getDealById(vars: GetDealByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetDealByIdData, GetDealByIdVariables>;
+export function getDealById(dc: DataConnect, vars: GetDealByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetDealByIdData, GetDealByIdVariables>;
+
+interface ListDealTagsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealTagsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealTagsData, undefined>;
+  operationName: string;
+}
+export const listDealTagsRef: ListDealTagsRef;
+
+export function listDealTags(options?: ExecuteQueryOptions): QueryPromise<ListDealTagsData, undefined>;
+export function listDealTags(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealTagsData, undefined>;
+
+interface ListDealTagAssignmentsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealTagAssignmentsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealTagAssignmentsData, undefined>;
+  operationName: string;
+}
+export const listDealTagAssignmentsRef: ListDealTagAssignmentsRef;
+
+export function listDealTagAssignments(options?: ExecuteQueryOptions): QueryPromise<ListDealTagAssignmentsData, undefined>;
+export function listDealTagAssignments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealTagAssignmentsData, undefined>;
+
+interface ListDealDocumentsByDealRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListDealDocumentsByDealVariables): QueryRef<ListDealDocumentsByDealData, ListDealDocumentsByDealVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListDealDocumentsByDealVariables): QueryRef<ListDealDocumentsByDealData, ListDealDocumentsByDealVariables>;
+  operationName: string;
+}
+export const listDealDocumentsByDealRef: ListDealDocumentsByDealRef;
+
+export function listDealDocumentsByDeal(vars: ListDealDocumentsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealDocumentsByDealData, ListDealDocumentsByDealVariables>;
+export function listDealDocumentsByDeal(dc: DataConnect, vars: ListDealDocumentsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealDocumentsByDealData, ListDealDocumentsByDealVariables>;
+
+interface ListDealRatingsByDealRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListDealRatingsByDealVariables): QueryRef<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListDealRatingsByDealVariables): QueryRef<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
+  operationName: string;
+}
+export const listDealRatingsByDealRef: ListDealRatingsByDealRef;
+
+export function listDealRatingsByDeal(vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
+export function listDealRatingsByDeal(dc: DataConnect, vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
 

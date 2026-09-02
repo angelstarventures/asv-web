@@ -287,6 +287,53 @@ export const adminTriggerPasswordReset = onCall<AdminTriggerPasswordResetInput, 
   }
 );
 
+export interface SetMemberRoleInput {
+  memberId: string;
+  role: "admin" | "member";
+}
+
+// Only meaningful for an already-provisioned member (authUid set) — provisionMember takes its
+// own role input at link time and doesn't read the member row's existing role column, so
+// changing role before provisioning would just get silently overwritten by whatever role is
+// passed to provisionMember later. Self-changes are blocked so an admin can't accidentally
+// demote (or redundantly promote) themselves. Revokes refresh tokens on change, same reasoning
+// as setMemberStatus's disable path — proxy.ts's checkRevoked=true session-cookie check means
+// a stale session cookie would otherwise keep the OLD role active until it naturally expires.
+export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(async (request) => {
+  const caller = await requireAdmin(request);
+
+  const { memberId, role } = request.data;
+  if (!memberId || (role !== "admin" && role !== "member")) {
+    throw new HttpsError("invalid-argument", "memberId and a valid role ('admin' or 'member') are required.");
+  }
+  if (memberId === caller.memberId) {
+    throw new HttpsError("failed-precondition", "You cannot change your own role.");
+  }
+
+  const members = await query<{ authUid: string | null }>(
+    `SELECT "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
+    [memberId]
+  );
+  if (members.length === 0) {
+    throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
+  }
+  const authUid = members[0].authUid;
+  if (!authUid) {
+    throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
+  }
+
+  await withTransaction(async (client) => {
+    await client.query(`UPDATE "member" SET role = $1 WHERE id = $2`, [role.toUpperCase(), memberId]);
+  });
+
+  const user = await getAuth().getUser(authUid);
+  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+  await getAuth().setCustomUserClaims(authUid, { ...existingClaims, role });
+  await getAuth().revokeRefreshTokens(authUid);
+
+  return { ok: true };
+});
+
 export interface SetMemberStatusInput {
   memberId: string;
   status: "active" | "disabled";

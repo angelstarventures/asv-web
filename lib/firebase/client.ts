@@ -37,9 +37,15 @@ if (
   connectAuthEmulator(auth, "http://127.0.0.1:9099");
   globalThis.__ASV_AUTH_EMULATOR_CONNECTED__ = true;
 }
+// Decoupled from the auth-emulator flag above: testing a new/changed Cloud Function locally
+// needs the Functions emulator, but real board members' local dev routine keeps using real
+// production Auth (per NEXT_PUBLIC_USE_FIREBASE_EMULATOR=false's own comment) — this lets
+// either be toggled independently. Falls back to the combined flag if unset.
+const USE_FUNCTIONS_EMULATOR =
+  process.env.NEXT_PUBLIC_USE_FUNCTIONS_EMULATOR ?? process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR;
 if (
   typeof window !== "undefined" &&
-  process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATOR === "true" &&
+  USE_FUNCTIONS_EMULATOR === "true" &&
   !globalThis.__ASV_FUNCTIONS_EMULATOR_CONNECTED__
 ) {
   connectFunctionsEmulator(functions, "127.0.0.1", 5001);

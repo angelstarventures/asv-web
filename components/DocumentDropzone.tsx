@@ -2,18 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { documentsAnalyze } from "@/lib/functions/documents";
-
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = reader.result as string;
-      resolve(result.slice(result.indexOf(",") + 1));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
-    reader.readAsDataURL(file);
-  });
-}
+import { readFileAsBase64 } from "@/lib/files";
 
 // Sends file(s) straight to documentsAnalyze for AI drafting — no Drive persistence yet
 // (deferred until real OAuth is set up for the personal-Gmail-owned Drive folder).

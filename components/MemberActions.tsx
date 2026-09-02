@@ -6,22 +6,25 @@ import {
   provisionMember,
   adminTriggerPasswordReset,
   setMemberStatus,
+  setMemberRole,
 } from "@/lib/functions/adminMembers";
 
-// The provisionMember/adminTriggerPasswordReset/setMemberStatus contract point (plan §4) —
-// each is a real Cloud Functions callable, invoked with the signed-in admin's own Firebase ID
-// token via the client SDK (never proxied through a Next.js API route), since the callable
-// protocol needs that token to populate request.auth server-side.
+// The provisionMember/adminTriggerPasswordReset/setMemberStatus/setMemberRole contract point
+// (plan §4) — each is a real Cloud Functions callable, invoked with the signed-in admin's own
+// Firebase ID token via the client SDK (never proxied through a Next.js API route), since the
+// callable protocol needs that token to populate request.auth server-side.
 export function MemberActions({
   memberId,
   email,
   isLinked,
   status,
+  role,
 }: {
   memberId: string;
   email: string;
   isLinked: boolean;
   status: "active" | "disabled";
+  role: "admin" | "member";
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +77,21 @@ export function MemberActions({
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update status.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleToggleRole() {
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    const next = role === "admin" ? "member" : "admin";
+    try {
+      await setMemberRole({ memberId, role: next });
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update role.");
     } finally {
       setBusy(false);
     }
@@ -147,6 +165,14 @@ export function MemberActions({
             className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
           >
             {status === "active" ? "Disable member" : "Re-activate member"}
+          </button>
+          <button
+            type="button"
+            onClick={handleToggleRole}
+            disabled={busy}
+            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            {role === "admin" ? "Demote to member" : "Promote to admin"}
           </button>
         </div>
       )}

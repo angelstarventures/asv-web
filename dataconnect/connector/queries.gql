@@ -384,3 +384,103 @@ query ListAppSettings @auth(level: USER, insecureReason: "Read from both /admin/
     value
   }
 }
+
+# --- Deal flow (member + admin deal room). Entrepreneurs never read this — the public pitch
+# form only ever calls dealsSubmitPitch (a Cloud Function), it has no query access at all. ---
+
+query ListDeals @auth(level: USER, insecureReason: "Member+admin deal room list — no per-member scoping, every member sees every deal, same posture as ListCompanyRollups.") {
+  deals(orderBy: { createdAt: DESC }, limit: 1000) {
+    id
+    companyName
+    companyEmail
+    entrepreneurName
+    entrepreneurEmail
+    entrepreneurPhone
+    executiveSummary
+    teamInformation
+    round
+    securityType
+    seekingAmount
+    preMoneyValuation
+    hasLeadInvestor
+    leadInvestorName
+    willHaveInterestBearingDebtAfterClose
+    hasExistingInterestBearingDebt
+    hasRestrictedBusinessLines
+    raiseMethod
+    referredBy
+    stage
+    driveFolderUrl
+    createdAt
+    updatedAt
+  }
+}
+
+query GetDealById($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detail page — same posture as ListDeals.") {
+  deal(key: { id: $dealId }) {
+    id
+    companyName
+    companyEmail
+    entrepreneurName
+    entrepreneurEmail
+    entrepreneurPhone
+    executiveSummary
+    teamInformation
+    round
+    securityType
+    seekingAmount
+    preMoneyValuation
+    hasLeadInvestor
+    leadInvestorName
+    willHaveInterestBearingDebtAfterClose
+    hasExistingInterestBearingDebt
+    hasRestrictedBusinessLines
+    raiseMethod
+    referredBy
+    stage
+    driveFolderUrl
+    createdAt
+    updatedAt
+  }
+}
+
+query ListDealTags @auth(level: USER, insecureReason: "Admin-managed tag list, read by every member for the deal-list filter panel.") {
+  dealTags(orderBy: { name: ASC }, limit: 200) {
+    id
+    name
+    color
+  }
+}
+
+query ListDealTagAssignments @auth(level: USER, insecureReason: "Backs the deal-list tag filter — every assignment, reduced client-side per deal, same posture as ListDeals.") {
+  dealTagAssignments(limit: 5000) {
+    deal {
+      id
+    }
+    tag {
+      id
+    }
+  }
+}
+
+query ListDealDocumentsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detail page's Pitch Deck/Documents tabs — same posture as ListDeals.") {
+  dealDocuments(where: { deal: { id: { eq: $dealId } } }, orderBy: { uploadedAt: ASC }, limit: 50) {
+    id
+    docType
+    driveUrl
+    filename
+    uploadedAt
+  }
+}
+
+query ListDealRatingsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detail page's rating panel — average + every member's own rating/review are shown to every other member (never to the entrepreneur, who has no read access to this connector at all).") {
+  dealRatings(where: { deal: { id: { eq: $dealId } } }, orderBy: { updatedAt: DESC }, limit: 200) {
+    rating
+    review
+    updatedAt
+    member {
+      id
+      displayName
+    }
+  }
+}

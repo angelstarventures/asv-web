@@ -34,5 +34,7 @@ ALTER TABLE "allocation"
 ALTER TABLE "member_valuation"
   ADD CONSTRAINT chk_member_valuation_value CHECK (value >= 0);
 
-ALTER TABLE "watchlist_rating"
-  ADD CONSTRAINT chk_watchlist_rating_range CHECK (rating BETWEEN 1 AND 5);
+-- watchlist_rating (and its chk_watchlist_rating_range constraint) was dropped and superseded
+-- by deal_rating, added for the deal-flow feature.
+ALTER TABLE "deal_rating"
+  ADD CONSTRAINT chk_deal_rating_range CHECK (rating BETWEEN 1 AND 5);

@@ -26,12 +26,17 @@ function localFirebaseCliCredential(): Credential {
   let inFlight: Promise<{ access_token: string; expires_in: number }> | null = null;
 
   async function fetchToken() {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { getGlobalDefaultAccount } = require("firebase-tools/lib/auth");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { requireAuth } = require("firebase-tools/lib/requireAuth");
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const apiv2 = require("firebase-tools/lib/apiv2");
+    // A literal require("firebase-tools/...") is still picked up by Webpack/Turbopack's
+    // static bundle analysis and included in the production server output even though this
+    // branch never runs there (FIREBASE_ADMIN_AUTH_MODE is only ever "local" in .env.local) —
+    // confirmed by a 600MB deployed function bundle and a broken content-hashed external-
+    // module reference at runtime in production. Routing through eval("require") hides the
+    // module specifier from static analysis entirely, so no bundler ever attempts to include
+    // firebase-tools (a devDependency) in what actually ships.
+    const dynamicRequire = eval("require") as NodeJS.Require;
+    const { getGlobalDefaultAccount } = dynamicRequire("firebase-tools/lib/auth");
+    const { requireAuth } = dynamicRequire("firebase-tools/lib/requireAuth");
+    const apiv2 = dynamicRequire("firebase-tools/lib/apiv2");
     const account = getGlobalDefaultAccount();
     if (!account) throw new Error("Not logged in — run `firebase login` first.");
     await requireAuth({ user: account.user, tokens: account.tokens });

@@ -86,3 +86,13 @@ export async function setMemberStatus(input: SetMemberStatusInput): Promise<{ ok
   const res = await call(input);
   return res.data;
 }
+
+export interface SetMemberRoleInput {
+  memberId: string;
+  role: "admin" | "member";
+}
+export async function setMemberRole(input: SetMemberRoleInput): Promise<{ ok: true }> {
+  const call = httpsCallable<SetMemberRoleInput, { ok: true }>(functions, "setMemberRole");
+  const res = await call(input);
+  return res.data;
+}

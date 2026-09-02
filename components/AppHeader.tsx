@@ -7,6 +7,7 @@ import { LogoutButton } from "@/components/LogoutButton";
 
 const MEMBER_TABS = [
   { href: "/member/dashboard", label: "Portfolio" },
+  { href: "/member/deals", label: "Deals" },
   { href: "/member/documents", label: "Documents" },
   { href: "/member/settings", label: "Settings" },
 ];
@@ -43,8 +44,8 @@ export function AppHeader({
                 aria-current={active ? "page" : undefined}
                 className={
                   active
-                    ? "rounded-full bg-foreground px-5 py-2.5 text-base font-semibold text-background"
-                    : "rounded-full px-5 py-2.5 text-base font-medium text-zinc-600 hover:text-foreground"
+                    ? "rounded-full bg-foreground px-5 py-2.5 text-[16px] font-semibold text-background"
+                    : "rounded-full px-5 py-2.5 text-[16px] font-medium text-zinc-600 hover:text-foreground"
                 }
               >
                 {tab.label}

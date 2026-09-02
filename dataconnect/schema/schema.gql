@@ -97,6 +97,40 @@ enum DocumentAccessDecision {
   DENIED
 }
 
+# --- Deal flow (entrepreneur pitch intake + member deal room) ---
+
+enum DealStage {
+  NEW
+  LEAD
+  DUE_DILIGENCE
+  PRESENTING
+  INVESTED
+  PASSED
+  INACTIVE
+}
+
+enum FundingRound {
+  PRE_SEED
+  SEED
+  SERIES_A
+  OTHER
+}
+
+# CONVERTIBLE_NOTE/OTHER are still selectable even though ASV won't invest in notes — the
+# entrepreneur reports their actual round terms; the criteria mismatch is an admin filter
+# concern, not a submission-time block.
+enum SecurityType {
+  PRICED_ROUND
+  SAFE
+  CONVERTIBLE_NOTE
+  OTHER
+}
+
+enum DealDocumentType {
+  PITCH_DECK
+  ADDITIONAL_DOCUMENT
+}
+
 # ---------------------------------------------------------------------------
 # Core entities
 # ---------------------------------------------------------------------------
@@ -348,17 +382,75 @@ type AiProcessingJob @table {
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
-type PitchSubmission @table {
-  id: UUID!            @default(expr: "uuidV4()")
+# ---------------------------------------------------------------------------
+# Deal flow — public pitch intake (Deal/DealDocument) + member deal room
+# (DealTag/DealTagAssignment/DealRating). Deals are deliberately NOT Company
+# rows: Company already drives real MOIC/rollup/ledger reporting and should
+# never hold never-funded prospects. `linkedCompany` is set only if/when an
+# admin later promotes a won deal into a real portfolio Company.
+# ---------------------------------------------------------------------------
+
+type Deal @table {
+  id: UUID!                    @default(expr: "uuidV4()")
   companyName: String!
-  submittedBy: String!
+  companyEmail: String!
+  entrepreneurName: String!
+  entrepreneurEmail: String!
+  entrepreneurPhone: String!
+  executiveSummary: String!
+  teamInformation: String!
+  round: FundingRound!
+  securityType: SecurityType!
+  seekingAmount: Float!
+  preMoneyValuation: Float!
+  hasLeadInvestor: Boolean!
+  leadInvestorName: String
+  willHaveInterestBearingDebtAfterClose: Boolean!
+  hasExistingInterestBearingDebt: Boolean!
+  hasRestrictedBusinessLines: Boolean!   # gambling/alcohol/insurance/financial services
+  raiseMethod: String!
+  referredBy: String
+  stage: DealStage!            @default(value: NEW)
+  driveFolderId: String
+  driveFolderUrl: String
+  linkedCompany: Company
+  createdAt: Timestamp!        @default(expr: "request.time")
+  updatedAt: Timestamp!        @default(expr: "request.time")
+}
+
+type DealDocument @table {
+  id: UUID!              @default(expr: "uuidV4()")
+  deal: Deal!
+  docType: DealDocumentType!
+  driveFileId: String!
+  driveUrl: String!
+  filename: String!
+  uploadedAt: Timestamp! @default(expr: "request.time")
+}
+
+type DealTag @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  name: String!         @unique
+  color: String
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
-type WatchlistRating @table {
-  id: UUID!         @default(expr: "uuidV4()")
-  company: Company!
+# No @table(key: [...]) composite key on relation fields here — untested against this
+# directive surface (see file header) and no other table in this schema relies on it.
+# Uniqueness (one assignment per deal+tag, one rating per deal+member) is enforced by the
+# writing Cloud Function's upsert logic instead, same posture as everywhere else in this file
+# that needs more than a single-column constraint (see post_migrations/*.sql for CHECKs).
+type DealTagAssignment @table {
+  id: UUID! @default(expr: "uuidV4()")
+  deal: Deal!
+  tag: DealTag!
+}
+
+type DealRating @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  deal: Deal!
   member: Member!
   rating: Int!
-  createdAt: Timestamp! @default(expr: "request.time")
+  review: String
+  updatedAt: Timestamp! @default(expr: "request.time")
 }

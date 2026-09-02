@@ -27,6 +27,12 @@ import {
   listAllDocumentsRef,
   listAiPromptSettingsRef,
   listAppSettingsRef,
+  getDealByIdRef,
+  listDealsRef,
+  listDealTagsRef,
+  listDealTagAssignmentsRef,
+  listDealDocumentsByDealRef,
+  listDealRatingsByDealRef,
   type ListCompaniesData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
@@ -66,6 +72,15 @@ import {
   type ListAllDocumentsData,
   type ListAiPromptSettingsData,
   type ListAppSettingsData,
+  type GetDealByIdData,
+  type GetDealByIdVariables,
+  type ListDealsData,
+  type ListDealTagsData,
+  type ListDealTagAssignmentsData,
+  type ListDealDocumentsByDealData,
+  type ListDealDocumentsByDealVariables,
+  type ListDealRatingsByDealData,
+  type ListDealRatingsByDealVariables,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -310,5 +325,48 @@ export async function listAiPromptSettings(): Promise<ListAiPromptSettingsData> 
 
 export async function listAppSettings(): Promise<ListAppSettingsData> {
   const res = await dc().executeQuery<ListAppSettingsData>(listAppSettingsRef.operationName);
+  return res.data;
+}
+
+export async function getDealById(vars: GetDealByIdVariables): Promise<GetDealByIdData> {
+  const res = await dc().executeQuery<GetDealByIdData, GetDealByIdVariables>(
+    getDealByIdRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listDeals(): Promise<ListDealsData> {
+  const res = await dc().executeQuery<ListDealsData>(listDealsRef.operationName);
+  return res.data;
+}
+
+export async function listDealTags(): Promise<ListDealTagsData> {
+  const res = await dc().executeQuery<ListDealTagsData>(listDealTagsRef.operationName);
+  return res.data;
+}
+
+export async function listDealTagAssignments(): Promise<ListDealTagAssignmentsData> {
+  const res = await dc().executeQuery<ListDealTagAssignmentsData>(listDealTagAssignmentsRef.operationName);
+  return res.data;
+}
+
+export async function listDealDocumentsByDeal(
+  vars: ListDealDocumentsByDealVariables
+): Promise<ListDealDocumentsByDealData> {
+  const res = await dc().executeQuery<ListDealDocumentsByDealData, ListDealDocumentsByDealVariables>(
+    listDealDocumentsByDealRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listDealRatingsByDeal(
+  vars: ListDealRatingsByDealVariables
+): Promise<ListDealRatingsByDealData> {
+  const res = await dc().executeQuery<ListDealRatingsByDealData, ListDealRatingsByDealVariables>(
+    listDealRatingsByDealRef.operationName,
+    vars
+  );
   return res.data;
 }
