@@ -1,7 +1,7 @@
 import { getApps, initializeApp, type FirebaseOptions } from "firebase/app";
 import { connectAuthEmulator, getAuth } from "firebase/auth";
 import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
-import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -53,11 +53,16 @@ if (
 }
 
 // Protects the public, unauthenticated landing-page queries (board/member profiles, company
-// list) from abuse. Authenticated server-to-server Data Connect calls use Admin SDK trust
-// instead, per PRD §9's "public-facing endpoints" scope — this never runs server-side.
+// list) from abuse, and gates dealsSubmitPitch. Authenticated server-to-server Data Connect
+// calls use Admin SDK trust instead, per PRD §9's "public-facing endpoints" scope — this never
+// runs server-side. Uses the Enterprise provider, not the classic ReCaptchaV3Provider — Firebase
+// has deprecated registering new classic reCAPTCHA v3 providers in App Check, so the site's
+// App Check app is registered as reCAPTCHA Enterprise, and the client must match that exactly
+// (confirmed empirically: a provider-type mismatch fails token exchange with "App not
+// registered", even though the app IS registered — just under the other provider type).
 if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
   initializeAppCheck(firebaseApp, {
-    provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
+    provider: new ReCaptchaEnterpriseProvider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
     isTokenAutoRefreshEnabled: true,
   });
 }
