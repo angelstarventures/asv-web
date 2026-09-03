@@ -23,8 +23,8 @@ export function LoginForm() {
     try {
       const credential = await signInWithEmailAndPassword(auth, email, password);
       const idToken = await credential.user.getIdToken();
-      const { role } = await exchangeIdTokenForSession(idToken);
-      router.push(redirectPathForRole(role));
+      await exchangeIdTokenForSession(idToken);
+      router.push(redirectPathForRole());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
       setLoading(false);

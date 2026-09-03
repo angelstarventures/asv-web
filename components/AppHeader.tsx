@@ -26,7 +26,7 @@ export function AppHeader({
   photoUrl?: string | null;
 }) {
   const pathname = usePathname();
-  const tabs = isAdmin ? [{ href: "/admin/members", label: "Admin" }, ...MEMBER_TABS] : MEMBER_TABS;
+  const tabs = isAdmin ? [...MEMBER_TABS, { href: "/admin/members", label: "Admin View" }] : MEMBER_TABS;
   const isTabActive = (href: string) =>
     href === "/admin/members" ? pathname.startsWith("/admin") : pathname.startsWith(href);
 

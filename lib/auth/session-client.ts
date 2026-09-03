@@ -25,6 +25,9 @@ export async function clearSession(): Promise<void> {
   await fetch("/api/auth/session", { method: "DELETE" });
 }
 
-export function redirectPathForRole(role: "admin" | "member"): string {
-  return role === "admin" ? "/admin/members" : "/member/dashboard";
+// Every signed-in user (admin or member) lands on their Portfolio view first — Admin View is
+// now a secondary tab (moved to the end of AppHeader's nav) rather than an admin's default
+// landing spot.
+export function redirectPathForRole(): string {
+  return "/member/dashboard";
 }
