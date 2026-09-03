@@ -322,7 +322,7 @@ export function PitchForm() {
                 onChange={(e) => setPitchDeckFile(e.target.files?.[0] ?? null)}
               />
             </label>
-            <span className="text-zinc-500">{pitchDeckFile?.name ?? "No file chosen"}</span>
+            <span className="min-w-0 truncate text-zinc-500">{pitchDeckFile?.name ?? "No file chosen"}</span>
           </div>
         </div>
         <div className="flex flex-col gap-1.5 text-sm">
@@ -337,7 +337,7 @@ export function PitchForm() {
                 onChange={(e) => setAdditionalFiles(e.target.files ? Array.from(e.target.files) : [])}
               />
             </label>
-            <span className="text-zinc-500">
+            <span className="min-w-0 truncate text-zinc-500">
               {additionalFiles.length > 0 ? additionalFiles.map((f) => f.name).join(", ") : "No files chosen"}
             </span>
           </div>

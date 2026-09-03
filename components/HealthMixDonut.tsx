@@ -40,7 +40,7 @@ export function HealthMixDonut({ counts }: { counts: Record<CompanyHealth, numbe
   }, []);
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center sm:gap-6">
       <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} role="img" aria-label="Company health mix">
         {segments.map((seg) => (
           <path

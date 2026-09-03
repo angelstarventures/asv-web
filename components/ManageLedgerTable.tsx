@@ -101,7 +101,73 @@ export function ManageLedgerTable() {
   return (
     <>
       <p className="text-sm text-zinc-600 dark:text-zinc-400">{state.records.length} entries.</p>
-      <div className="max-h-[70vh] overflow-y-auto rounded-lg border border-zinc-200 bg-card dark:border-zinc-800">
+
+      <div className="mb-3 flex items-center gap-2 md:hidden">
+        <label htmlFor="ledger-sort" className="text-xs font-semibold uppercase text-zinc-500">
+          Sort by
+        </label>
+        <select
+          id="ledger-sort"
+          value={sort.key}
+          onChange={(e) => setSort((prev) => ({ ...prev, key: e.target.value as SortKey }))}
+          className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {COLUMNS.map((col) => (
+            <option key={col.key} value={col.key}>
+              {col.label}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
+          aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
+          className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
+        >
+          {sort.dir === "asc" ? "▲" : "▼"}
+        </button>
+      </div>
+
+      <div className="flex flex-col gap-3 md:hidden">
+        {sortedRecords.map((row) => (
+          <div key={row.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <div>
+              <p className="font-medium">{String(row.company)}</p>
+              <p className="text-xs text-zinc-500">{String(row.date)}</p>
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <dt className="text-xs text-zinc-500">Type</dt>
+                <dd>{String(row.type)}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500">Scenario</dt>
+                <dd>{String(row.scenario)}</dd>
+              </div>
+            </dl>
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+              <button
+                type="button"
+                onClick={() => setEditing(row)}
+                className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium dark:border-zinc-700"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDelete(row)}
+                disabled={deletingId === row.id}
+                className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+              >
+                {deletingId === row.id ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        ))}
+        {sortedRecords.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No entries.</p>}
+      </div>
+
+      <div className="hidden rounded-lg border border-zinc-200 bg-card dark:border-zinc-800 md:block md:max-h-[70vh] md:overflow-y-auto">
         <table className="w-full text-left text-sm">
           <thead className="sticky top-0 bg-card">
             <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">

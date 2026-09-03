@@ -141,6 +141,57 @@ export default async function MemberDetailPage({
         </button>
       </form>
 
+      <div className="flex flex-col gap-3 md:hidden">
+        {rows.map((r) => (
+          <div key={r.id} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-medium">{r.company.tradeName ?? r.company.name}</p>
+                <p className="text-xs text-zinc-500">{r.eventDate}</p>
+              </div>
+              {r.needsReview && (
+                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                  Needs review
+                </span>
+              )}
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div>
+                <dt className="text-xs text-zinc-500">Sector</dt>
+                <dd>{r.company.sector ?? "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500">Type</dt>
+                <dd>{r.type.replaceAll("_", " ")}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-zinc-500">Source</dt>
+                {/* Legacy doc_link string, not the access-controlled Document/DocumentAccessLog
+                    system (plan §2/§3) — that system gates DocumentLink.tsx + /api/documents/[id],
+                    which have nothing to render against yet since no Document rows exist until
+                    Milestone 4's admin upload flow creates them. */}
+                <dd>
+                  {r.sourceDocument ? (
+                    <a
+                      href={r.sourceDocument}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-zinc-600 underline underline-offset-2 dark:text-zinc-400"
+                    >
+                      Link
+                    </a>
+                  ) : (
+                    <span className="text-zinc-400 dark:text-zinc-600">—</span>
+                  )}
+                </dd>
+              </div>
+            </dl>
+          </div>
+        ))}
+        {rows.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No ledger entries match this filter.</p>}
+      </div>
+
+      <div className="hidden md:block md:overflow-x-auto">
       <table className="w-full text-left text-sm">
         <thead>
           <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -188,8 +239,9 @@ export default async function MemberDetailPage({
           ))}
         </tbody>
       </table>
+      </div>
       {rows.length === 0 && (
-        <p className="text-sm text-zinc-500 dark:text-zinc-500">No ledger entries match this filter.</p>
+        <p className="hidden text-sm text-zinc-500 dark:text-zinc-500 md:block">No ledger entries match this filter.</p>
       )}
     </div>
   );

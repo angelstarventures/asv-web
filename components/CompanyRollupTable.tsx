@@ -83,7 +83,75 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-card px-5 py-4">
+    <div className="rounded-lg border border-zinc-200 bg-card px-5 py-4">
+    <div className="mb-3 flex items-center gap-2 md:hidden">
+      <label htmlFor="company-rollup-sort" className="text-xs font-semibold uppercase text-zinc-500">
+        Sort by
+      </label>
+      <select
+        id="company-rollup-sort"
+        value={sort.key}
+        onChange={(e) => setSort((prev) => ({ ...prev, key: e.target.value as SortKey }))}
+        className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+      >
+        {COLUMNS.map((col) => (
+          <option key={col.key} value={col.key}>
+            {col.label}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        onClick={() => setSort((prev) => ({ ...prev, dir: prev.dir === "asc" ? "desc" : "asc" }))}
+        aria-label={sort.dir === "asc" ? "Sort ascending" : "Sort descending"}
+        className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700"
+      >
+        {sort.dir === "asc" ? "▲" : "▼"}
+      </button>
+    </div>
+
+    <div className="flex flex-col gap-3 md:hidden">
+      {sortedRows.map((r) => (
+        <div key={r.companyKey} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p className="font-medium">{r.name}</p>
+              <p className="text-xs text-zinc-500">{r.sector ?? "—"}</p>
+            </div>
+            <HealthDot health={r.health} />
+          </div>
+          <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <div>
+              <dt className="text-xs text-zinc-500">Investment year</dt>
+              <dd className="tabular-nums">{r.investmentYear ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Amount invested</dt>
+              <dd className="tabular-nums">{formatCurrencyCompact(r.invested)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">MOIC</dt>
+              <dd className="tabular-nums">
+                <MoicBadge value={r.moic} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Unrealized</dt>
+              <dd className="tabular-nums">{formatCurrencyCompact(r.unrealizedValue)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-zinc-500">Realized</dt>
+              <dd className="tabular-nums">{formatCurrencyCompact(r.realizedValue)}</dd>
+            </div>
+          </dl>
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+            <CompanyEventsModal companyName={r.name} events={r.events} />
+          </div>
+        </div>
+      ))}
+    </div>
+
+    <div className="hidden md:block md:overflow-x-auto">
     <table className="w-full text-left text-sm">
       <thead>
         <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -139,6 +207,7 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
         ))}
       </tbody>
     </table>
+    </div>
     </div>
   );
 }

@@ -106,8 +106,8 @@ export function DealDetailView({
   const additionalDocs = documents.filter((d) => d.docType !== "PITCH_DECK");
 
   return (
-    <div className="flex flex-col gap-6 px-6 py-10">
-      <div className="flex items-start justify-between gap-4">
+    <div className="flex flex-col gap-6 px-4 py-10 sm:px-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{deal.companyName}</h1>
           <p className="text-sm text-zinc-500">
@@ -122,7 +122,7 @@ export function DealDetailView({
         <DealAdminControls dealId={deal.id} stage={deal.stage} allTags={allTags} assignedTagIds={assignedTagIds} />
       )}
 
-      <nav className="flex gap-1 rounded-full border border-zinc-200 bg-card p-1.5 self-start">
+      <nav className="flex flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-card p-1.5 self-start">
         {TABS.map((t) => (
           <button
             key={t}

@@ -16,7 +16,7 @@ export function AdminSubNav() {
   const pathname = usePathname();
 
   return (
-    <nav className="flex gap-1 border-b border-zinc-200 px-6 py-3 text-sm">
+    <nav className="flex flex-wrap gap-1 border-b border-zinc-200 px-4 py-3 text-sm sm:px-6">
       {ADMIN_TABS.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
