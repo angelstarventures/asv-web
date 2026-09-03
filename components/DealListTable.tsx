@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type DragEvent } from "react";
+import { Fragment, useMemo, useState, type DragEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteDeal, setDealRanks } from "@/lib/functions/deals";
@@ -75,11 +75,26 @@ function sortValue(row: DealRow, key: SortKey): string | number {
   return row[key].toLowerCase();
 }
 
+function ScreeningLine() {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400"
+    >
+      <span className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700" />
+      Screening line
+      <span className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700" />
+    </div>
+  );
+}
+
 // Shared by /admin/deals and /member/deals — same click-to-sort-column client pattern as
 // MembersTable, plus a left filter panel (stage + admin-managed tags) matching the reference
-// deal-list screenshot. Row click navigates to the shared detail route. isAdmin adds a
-// per-row delete action, the "above the line" ranked-screening-queue view, and drag-to-reorder
-// within it (member view never sees any of that).
+// deal-list screenshot. Row click navigates to the shared detail route. isAdmin adds a per-row
+// delete action and the screening-queue reorder controls (drag + up/down arrows), which appear
+// once the list is sorted by Rank ascending — that's the one order where ranked deals group
+// contiguously at the top, which is what makes a literal above/below-the-line divider (the
+// "screening line") and up/down moves mean anything coherent.
 export function DealListTable({
   deals,
   tags,
@@ -97,7 +112,6 @@ export function DealListTable({
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" });
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
-  const [aboveTheLineOnly, setAboveTheLineOnly] = useState(false);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -115,6 +129,19 @@ export function DealListTable({
     setter(next);
   }
 
+  async function commitRankUpdates(updates: { dealId: string; rank: number | null }[]) {
+    setError(null);
+    setBusy(true);
+    try {
+      await setDealRanks({ updates });
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update the ranking.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function handleConfirmDelete() {
     if (!confirmingDeleteId) return;
     setError(null);
@@ -130,36 +157,50 @@ export function DealListTable({
     }
   }
 
-  async function handleAddToRankedList(dealId: string) {
-    setError(null);
-    setBusy(true);
-    try {
-      const maxRank = deals.reduce((max, d) => (d.rank != null && d.rank > max ? d.rank : max), 0);
-      await setDealRanks({ updates: [{ dealId, rank: maxRank + 1 }] });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not add this deal to the ranked list.");
-    } finally {
-      setBusy(false);
-    }
+  // Global (unaffected by the stage/tag filters below), so "next available rank" and the
+  // up/down arrows' neighbor lookups are always correct even when the visible list is filtered.
+  const rankedDeals = useMemo(
+    () => deals.filter((d): d is DealRow & { rank: number } => d.rank != null).sort((a, b) => a.rank - b.rank),
+    [deals]
+  );
+  const rankedCount = rankedDeals.length;
+  function findByRank(rank: number) {
+    return rankedDeals.find((d) => d.rank === rank);
+  }
+
+  async function handlePromote(dealId: string) {
+    await commitRankUpdates([{ dealId, rank: rankedCount + 1 }]);
   }
 
   async function handleRemoveFromRankedList(dealId: string) {
-    setError(null);
-    setBusy(true);
-    try {
-      await setDealRanks({ updates: [{ dealId, rank: null }] });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not remove this deal from the ranked list.");
-    } finally {
-      setBusy(false);
+    await commitRankUpdates([{ dealId, rank: null }]);
+  }
+
+  async function handleMoveUp(d: DealRow) {
+    if (d.rank == null || d.rank <= 1) return;
+    const prev = findByRank(d.rank - 1);
+    if (!prev) return;
+    await commitRankUpdates([
+      { dealId: d.id, rank: prev.rank },
+      { dealId: prev.id, rank: d.rank },
+    ]);
+  }
+
+  async function handleMoveDown(d: DealRow) {
+    if (d.rank == null) return;
+    const next = findByRank(d.rank + 1);
+    if (next) {
+      await commitRankUpdates([
+        { dealId: d.id, rank: next.rank },
+        { dealId: next.id, rank: d.rank },
+      ]);
+    } else {
+      await handleRemoveFromRankedList(d.id);
     }
   }
 
   const filtered = useMemo(() => {
     return deals.filter((d) => {
-      if (aboveTheLineOnly && d.rank == null) return false;
       if (stageFilter.size > 0 && !stageFilter.has(d.stage)) return false;
       if (tagFilter.size > 0) {
         const dealTags = dealTagIds[d.id] ?? [];
@@ -167,7 +208,7 @@ export function DealListTable({
       }
       return true;
     });
-  }, [deals, aboveTheLineOnly, stageFilter, tagFilter, dealTagIds]);
+  }, [deals, stageFilter, tagFilter, dealTagIds]);
 
   const sorted = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -180,37 +221,35 @@ export function DealListTable({
     });
   }, [filtered, sort]);
 
-  // Drag-and-drop reordering is only meaningful/enabled in exactly this view: admin, filtered
-  // to the ranked queue, sorted by rank ascending — otherwise "drag to reorder" wouldn't map
-  // onto anything coherent. Local order diverges from the server until "Save ranking" is
-  // clicked, so dragging doesn't fire a request per row moved.
-  const reorderable = Boolean(isAdmin) && aboveTheLineOnly && sort.key === "rank" && sort.dir === "asc";
-
-  // Resets dragOrder whenever the underlying reorderable set changes, using React's "adjust
-  // state during render" pattern (not an Effect) so it doesn't cause an extra commit/paint.
-  const syncKey = reorderable ? sorted.map((d) => d.id).join(",") : "off";
-  const [lastSyncKey, setLastSyncKey] = useState(syncKey);
-  if (syncKey !== lastSyncKey) {
-    setLastSyncKey(syncKey);
-    setDragOrder(reorderable ? sorted.map((d) => d.id) : null);
-  }
+  const lineVisible = sort.key === "rank" && sort.dir === "asc";
+  const reorderable = Boolean(isAdmin) && lineVisible;
+  // Drag additionally requires no active stage/tag filter: a filtered view can hide ranked
+  // deals in between the ones shown, so renumbering just what's visible 1..N would silently
+  // corrupt the true global ranking. The arrows don't have that problem — each one swaps or
+  // reassigns specific deals by id, never assuming the visible order is the full order.
+  const dragEnabled = reorderable && stageFilter.size === 0 && tagFilter.size === 0;
 
   const displayRows = useMemo(() => {
-    if (!reorderable || !dragOrder) return sorted;
+    if (!dragOrder) return sorted;
     const byId = new Map(sorted.map((d) => [d.id, d]));
-    return dragOrder.map((id) => byId.get(id)).filter((d): d is DealRow => Boolean(d));
-  }, [reorderable, dragOrder, sorted]);
+    const reordered = dragOrder.map((id) => byId.get(id)).filter((d): d is DealRow => Boolean(d));
+    const unranked = sorted.filter((d) => d.rank == null);
+    return [...reordered, ...unranked];
+  }, [dragOrder, sorted]);
 
-  const orderDirty =
-    reorderable && dragOrder !== null && dragOrder.some((id, i) => id !== sorted[i]?.id);
+  const boundaryIndex = displayRows.filter((d) => d.rank != null).length;
+  const showLine = lineVisible && boundaryIndex > 0 && boundaryIndex < displayRows.length;
 
   function handleDragStart(id: string) {
+    if (!dragEnabled) return;
     setDraggingId(id);
+    setDragOrder(sorted.filter((d) => d.rank != null).map((d) => d.id));
   }
 
   function handleDragOver(e: DragEvent<HTMLTableRowElement>, overId: string) {
+    if (!dragEnabled) return;
     e.preventDefault();
-    if (!draggingId || draggingId === overId || !dragOrder) return;
+    if (!draggingId || draggingId === overId || !dragOrder || !dragOrder.includes(overId)) return;
     const from = dragOrder.indexOf(draggingId);
     const to = dragOrder.indexOf(overId);
     if (from === -1 || to === -1) return;
@@ -220,57 +259,22 @@ export function DealListTable({
     setDragOrder(next);
   }
 
-  function handleDragEnd() {
+  async function handleDragEnd() {
+    const finalOrder = dragOrder;
     setDraggingId(null);
-  }
-
-  // Touch devices don't fire HTML5 drag events, so the mobile card view reorders via these
-  // up/down buttons instead of the desktop drag-and-drop rows — both write to the same
-  // dragOrder state, so "Save ranking" works identically either way.
-  function moveDragOrder(id: string, delta: number) {
-    if (!dragOrder) return;
-    const from = dragOrder.indexOf(id);
-    const to = from + delta;
-    if (from === -1 || to < 0 || to >= dragOrder.length) return;
-    const next = [...dragOrder];
-    next.splice(from, 1);
-    next.splice(to, 0, id);
-    setDragOrder(next);
-  }
-
-  async function handleSaveRanking() {
-    if (!dragOrder) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await setDealRanks({ updates: dragOrder.map((dealId, i) => ({ dealId, rank: i + 1 })) });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save the new ranking.");
-    } finally {
-      setBusy(false);
-    }
+    setDragOrder(null);
+    if (!finalOrder) return;
+    const original = sorted.filter((d) => d.rank != null).map((d) => d.id);
+    if (finalOrder.length === original.length && finalOrder.every((id, i) => id === original[i])) return;
+    await commitRankUpdates(finalOrder.map((dealId, i) => ({ dealId, rank: i + 1 })));
   }
 
   const dealBeingDeleted = deals.find((d) => d.id === confirmingDeleteId) ?? null;
 
-  const activeFilterCount = (aboveTheLineOnly ? 1 : 0) + stageFilter.size + tagFilter.size;
+  const activeFilterCount = stageFilter.size + tagFilter.size;
 
   const filterSections = (
     <>
-      {isAdmin && (
-        <div>
-          <h3 className="text-xs font-semibold uppercase text-zinc-500">Screening queue</h3>
-          <label className="mt-2 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={aboveTheLineOnly}
-              onChange={(e) => setAboveTheLineOnly(e.target.checked)}
-            />
-            Above the line only
-          </label>
-        </div>
-      )}
       <div>
         <h3 className="text-xs font-semibold uppercase text-zinc-500">Filter by stage</h3>
         <div className="mt-2 flex flex-col gap-1.5">
@@ -325,20 +329,18 @@ export function DealListTable({
           </p>
         )}
         {reorderable && (
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-md border border-zinc-200 bg-background px-3 py-2 text-sm dark:border-zinc-800">
-            <span className="text-zinc-500">
-              <span className="hidden md:inline">Drag rows to reorder by interest.</span>
-              <span className="md:hidden">Use the arrows to reorder by interest.</span>
-            </span>
-            <button
-              type="button"
-              onClick={handleSaveRanking}
-              disabled={busy || !orderDirty}
-              className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
-            >
-              {busy ? "Saving..." : "Save ranking"}
-            </button>
-          </div>
+          <p className="mb-3 rounded-md border border-zinc-200 bg-background px-3 py-2 text-sm text-zinc-500 dark:border-zinc-800">
+            {dragEnabled ? (
+              <>
+                <span className="hidden md:inline">
+                  Drag rows or use the arrows to reorder the screening queue — changes save immediately.
+                </span>
+                <span className="md:hidden">Use the arrows to reorder the screening queue — changes save immediately.</span>
+              </>
+            ) : (
+              "Use the arrows to reorder the screening queue — changes save immediately. (Clear filters to also drag rows.)"
+            )}
+          </p>
         )}
 
         <div className="mb-3 flex items-center gap-2 md:hidden">
@@ -369,149 +371,79 @@ export function DealListTable({
 
         <div className="flex flex-col gap-3 md:hidden">
           {displayRows.map((d, i) => (
-            <div
-              key={d.id}
-              className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${draggingId === d.id ? "opacity-50" : ""}`}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
-                    {d.companyName}
-                  </Link>
-                  <p className="text-xs text-zinc-500">
-                    {d.round.replaceAll("_", " ")} · {STAGE_LABELS[d.stage] ?? d.stage}
-                  </p>
-                </div>
-                {reorderable && (
-                  <div className="flex flex-shrink-0 flex-col gap-1">
-                    <button
-                      type="button"
-                      onClick={() => moveDragOrder(d.id, -1)}
-                      disabled={i === 0}
-                      aria-label="Move up"
-                      className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
-                    >
-                      ▲
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveDragOrder(d.id, 1)}
-                      disabled={i === displayRows.length - 1}
-                      aria-label="Move down"
-                      className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
-                    >
-                      ▼
-                    </button>
-                  </div>
-                )}
-              </div>
-              <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                <div>
-                  <dt className="text-xs text-zinc-500">Rank</dt>
-                  <dd className="tabular-nums">{d.rank ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-zinc-500">Seeking</dt>
-                  <dd className="tabular-nums">{currency(d.seekingAmount, d.currency)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-zinc-500">Pre-money</dt>
-                  <dd className="tabular-nums">{dealValuationDisplay(d)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-zinc-500">Submitted</dt>
-                  <dd>{new Date(d.createdAt).toLocaleDateString()}</dd>
-                </div>
-              </dl>
-              {isAdmin && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-                  {d.rank == null ? (
-                    <button
-                      type="button"
-                      onClick={() => handleAddToRankedList(d.id)}
-                      disabled={busy}
-                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                    >
-                      Add to ranked list
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveFromRankedList(d.id)}
-                      disabled={busy}
-                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                    >
-                      Remove from ranked list
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingDeleteId(d.id)}
-                    className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
-                  >
-                    Delete
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
-          {displayRows.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No deals match these filters.</p>}
-        </div>
-
-        <div className="hidden md:block md:overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-              {COLUMNS.map((col) => {
-                const active = sort.key === col.key;
-                return (
-                  <th key={col.key} aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"} className="py-2 font-medium">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(col.key)}
-                      className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
-                    >
-                      {col.label}
-                      <span aria-hidden className="text-[10px]">
-                        {active ? (sort.dir === "asc" ? "▲" : "▼") : ""}
-                      </span>
-                    </button>
-                  </th>
-                );
-              })}
-              {isAdmin && <th className="py-2" />}
-            </tr>
-          </thead>
-          <tbody>
-            {displayRows.map((d) => (
-              <tr
-                key={d.id}
-                draggable={reorderable}
-                onDragStart={() => handleDragStart(d.id)}
-                onDragOver={(e) => handleDragOver(e, d.id)}
-                onDragEnd={handleDragEnd}
-                className={`border-b border-zinc-100 dark:border-zinc-900 ${reorderable ? "cursor-move" : ""} ${draggingId === d.id ? "opacity-50" : ""}`}
+            <Fragment key={d.id}>
+              {showLine && i === boundaryIndex && <ScreeningLine />}
+              <div
+                className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${draggingId === d.id ? "opacity-50" : ""}`}
               >
-                <td className="py-2 tabular-nums text-zinc-500">{d.rank ?? "—"}</td>
-                <td className="py-2">
-                  <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
-                    {d.companyName}
-                  </Link>
-                </td>
-                <td className="py-2 text-zinc-500 dark:text-zinc-500">{d.round.replaceAll("_", " ")}</td>
-                <td className="py-2 tabular-nums">{currency(d.seekingAmount, d.currency)}</td>
-                <td className="py-2 tabular-nums">{dealValuationDisplay(d)}</td>
-                <td className="py-2">{STAGE_LABELS[d.stage] ?? d.stage}</td>
-                <td className="py-2 text-zinc-500 dark:text-zinc-500">
-                  {new Date(d.createdAt).toLocaleDateString()}
-                </td>
-                {isAdmin && (
-                  <td className="py-2 text-right">
-                    <div className="flex justify-end gap-2">
-                      {d.rank == null ? (
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
+                      {d.companyName}
+                    </Link>
+                    <p className="text-xs text-zinc-500">
+                      {d.round.replaceAll("_", " ")} · {STAGE_LABELS[d.stage] ?? d.stage}
+                    </p>
+                  </div>
+                  {reorderable &&
+                    (d.rank != null ? (
+                      <div className="flex flex-shrink-0 flex-col gap-1">
                         <button
                           type="button"
-                          onClick={() => handleAddToRankedList(d.id)}
+                          onClick={() => handleMoveUp(d)}
+                          disabled={busy || d.rank <= 1}
+                          aria-label="Move up"
+                          className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveDown(d)}
+                          disabled={busy}
+                          aria-label="Move down"
+                          className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handlePromote(d.id)}
+                        disabled={busy}
+                        aria-label="Add to screening queue"
+                        className="flex-shrink-0 rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
+                      >
+                        ▲
+                      </button>
+                    ))}
+                </div>
+                <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <dt className="text-xs text-zinc-500">Rank</dt>
+                    <dd className="tabular-nums">{d.rank ?? "—"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-zinc-500">Seeking</dt>
+                    <dd className="tabular-nums">{currency(d.seekingAmount, d.currency)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-zinc-500">Pre-money</dt>
+                    <dd className="tabular-nums">{dealValuationDisplay(d)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-zinc-500">Submitted</dt>
+                    <dd>{new Date(d.createdAt).toLocaleDateString()}</dd>
+                  </div>
+                </dl>
+                {isAdmin && (
+                  <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+                    {!reorderable &&
+                      (d.rank == null ? (
+                        <button
+                          type="button"
+                          onClick={() => handlePromote(d.id)}
                           disabled={busy}
                           className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
                         >
@@ -526,28 +458,157 @@ export function DealListTable({
                         >
                           Remove from ranked list
                         </button>
-                      )}
+                      ))}
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(d.id)}
+                      className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Fragment>
+          ))}
+          {displayRows.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No deals match these filters.</p>}
+        </div>
+
+        <div className="hidden md:block md:overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                {COLUMNS.map((col) => {
+                  const active = sort.key === col.key;
+                  return (
+                    <th
+                      key={col.key}
+                      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2 font-medium"
+                    >
                       <button
                         type="button"
-                        onClick={() => setConfirmingDeleteId(d.id)}
-                        className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+                        onClick={() => toggleSort(col.key)}
+                        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
                       >
-                        Delete
+                        {col.label}
+                        <span aria-hidden className="text-[10px]">
+                          {active ? (sort.dir === "asc" ? "▲" : "▼") : ""}
+                        </span>
                       </button>
-                    </div>
+                    </th>
+                  );
+                })}
+                {isAdmin && <th className="py-2" />}
+              </tr>
+            </thead>
+            <tbody>
+              {displayRows.map((d, i) => (
+                <Fragment key={d.id}>
+                  {showLine && i === boundaryIndex && (
+                    <tr aria-hidden="true">
+                      <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-1">
+                        <ScreeningLine />
+                      </td>
+                    </tr>
+                  )}
+                  <tr
+                    draggable={dragEnabled && d.rank != null}
+                    onDragStart={() => handleDragStart(d.id)}
+                    onDragOver={(e) => handleDragOver(e, d.id)}
+                    onDragEnd={handleDragEnd}
+                    className={`border-b border-zinc-100 dark:border-zinc-900 ${
+                      dragEnabled && d.rank != null ? "cursor-move" : ""
+                    } ${draggingId === d.id ? "opacity-50" : ""}`}
+                  >
+                    <td className="py-2 tabular-nums text-zinc-500">{d.rank ?? "—"}</td>
+                    <td className="py-2">
+                      <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
+                        {d.companyName}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-zinc-500 dark:text-zinc-500">{d.round.replaceAll("_", " ")}</td>
+                    <td className="py-2 tabular-nums">{currency(d.seekingAmount, d.currency)}</td>
+                    <td className="py-2 tabular-nums">{dealValuationDisplay(d)}</td>
+                    <td className="py-2">{STAGE_LABELS[d.stage] ?? d.stage}</td>
+                    <td className="py-2 text-zinc-500 dark:text-zinc-500">{new Date(d.createdAt).toLocaleDateString()}</td>
+                    {isAdmin && (
+                      <td className="py-2 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          {reorderable ? (
+                            d.rank != null ? (
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveUp(d)}
+                                  disabled={busy || d.rank <= 1}
+                                  aria-label="Move up"
+                                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
+                                >
+                                  ▲
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveDown(d)}
+                                  disabled={busy}
+                                  aria-label="Move down"
+                                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
+                                >
+                                  ▼
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handlePromote(d.id)}
+                                disabled={busy}
+                                aria-label="Add to screening queue"
+                                className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
+                              >
+                                ▲
+                              </button>
+                            )
+                          ) : d.rank == null ? (
+                            <button
+                              type="button"
+                              onClick={() => handlePromote(d.id)}
+                              disabled={busy}
+                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+                            >
+                              Add to ranked list
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFromRankedList(d.id)}
+                              disabled={busy}
+                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
+                            >
+                              Remove from ranked list
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setConfirmingDeleteId(d.id)}
+                            className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                </Fragment>
+              ))}
+              {displayRows.length === 0 && (
+                <tr>
+                  <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-6 text-center text-zinc-500">
+                    No deals match these filters.
                   </td>
-                )}
-              </tr>
-            ))}
-            {displayRows.length === 0 && (
-              <tr>
-                <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-6 text-center text-zinc-500">
-                  No deals match these filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
