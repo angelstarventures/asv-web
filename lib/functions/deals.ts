@@ -59,6 +59,44 @@ export async function submitPitch(input: SubmitPitchInput): Promise<{ dealId: st
   return res.data;
 }
 
+// Same core fields as SubmitPitchInput, minus the file/upload-only concerns (no Drive folder or
+// document upload here) and minus fundingHistory (entrepreneur-only, immutable after
+// submission). Admins can also correct sector/keywords/companyLocation here — those are
+// AI-derived at submission time and occasionally wrong.
+export interface UpdateDealFieldsInput {
+  dealId: string;
+  companyName: string;
+  companyEmail: string;
+  companyUrl: string;
+  entrepreneurName: string;
+  entrepreneurEmail: string;
+  entrepreneurPhone: string;
+  executiveSummary?: string;
+  teamInformation?: string;
+  round: FundingRound;
+  securityType: SecurityType;
+  seekingAmount: number;
+  currency: string;
+  preMoneyValuation?: number;
+  valuationCap?: number;
+  discountPercent?: number;
+  hasLeadInvestor: boolean;
+  leadInvestorName?: string;
+  willHaveInterestBearingDebtAfterClose: boolean;
+  hasExistingInterestBearingDebt: boolean;
+  hasRestrictedBusinessLines: boolean;
+  raiseMethod?: string;
+  referredBy?: string;
+  sector?: string;
+  keywords?: string[];
+  companyLocation?: string;
+}
+export async function updateDealFields(input: UpdateDealFieldsInput): Promise<{ ok: true }> {
+  const call = httpsCallable<UpdateDealFieldsInput, { ok: true }>(functions, "dealsUpdateFields");
+  const res = await call(input);
+  return res.data;
+}
+
 export interface SetDealRatingInput {
   dealId: string;
   rating: number;

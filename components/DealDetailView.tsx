@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { DealRatingModal } from "@/components/DealRatingModal";
 import { DealAdminControls } from "@/components/DealAdminControls";
+import { EditDealForm } from "@/components/EditDealForm";
 import type { DealTagOption } from "@/components/DealListTable";
 
 const TABS = ["overview", "deck", "team", "summary", "financials", "documents"] as const;
@@ -129,7 +131,9 @@ export function DealDetailView({
   allTags: DealTagOption[];
   assignedTagIds: string[];
 }) {
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
+  const [editing, setEditing] = useState(false);
   const mine = ratings.find((r) => r.member.id === currentMemberId) ?? null;
   const avgRating = ratings.length ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : null;
   const pitchDeck = documents.find((d) => d.docType === "PITCH_DECK");
@@ -146,30 +150,52 @@ export function DealDetailView({
             {deal.companyLocation ? ` · ${deal.companyLocation}` : ""}
           </p>
         </div>
-        <DealRatingModal dealId={deal.id} myRating={mine?.rating ?? null} myReview={mine?.review ?? null} />
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
+            >
+              Edit deal
+            </button>
+          )}
+          <DealRatingModal dealId={deal.id} myRating={mine?.rating ?? null} myReview={mine?.review ?? null} />
+        </div>
       </div>
 
       {isAdmin && (
         <DealAdminControls dealId={deal.id} stage={deal.stage} allTags={allTags} assignedTagIds={assignedTagIds} />
       )}
 
-      <nav className="flex flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-card p-1.5 self-start">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            type="button"
-            onClick={() => setTab(t)}
-            aria-current={tab === t ? "page" : undefined}
-            className={
-              tab === t
-                ? "rounded-full bg-foreground px-4 py-1.5 text-sm font-semibold text-background"
-                : "rounded-full px-4 py-1.5 text-sm font-medium text-zinc-600 hover:text-foreground"
-            }
-          >
-            {TAB_LABELS[t]}
-          </button>
-        ))}
-      </nav>
+      {editing ? (
+        <EditDealForm
+          deal={deal}
+          onCancel={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            router.refresh();
+          }}
+        />
+      ) : (
+        <>
+          <nav className="flex flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-card p-1.5 self-start">
+            {TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                aria-current={tab === t ? "page" : undefined}
+                className={
+                  tab === t
+                    ? "rounded-full bg-foreground px-4 py-1.5 text-sm font-semibold text-background"
+                    : "rounded-full px-4 py-1.5 text-sm font-medium text-zinc-600 hover:text-foreground"
+                }
+              >
+                {TAB_LABELS[t]}
+              </button>
+            ))}
+          </nav>
 
       <div className="rounded-lg border border-zinc-200 bg-card p-6 text-sm dark:border-zinc-800">
         {tab === "overview" && (
@@ -334,6 +360,8 @@ export function DealDetailView({
           </div>
         )}
       </div>
+        </>
+      )}
 
       <div className="rounded-lg border border-zinc-200 bg-card p-6 dark:border-zinc-800">
         <div className="flex items-center justify-between">

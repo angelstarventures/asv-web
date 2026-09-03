@@ -33,3 +33,4 @@ export { dealsAssignTag } from "./functions/deals-assignTag";
 export { dealsDeleteDeal } from "./functions/deals-deleteDeal";
 export { updateCompanyLogo } from "./functions/companies-updateLogo";
 export { dealsSetRanks } from "./functions/deals-setRanks";
+export { dealsUpdateFields } from "./functions/deals-updateFields";

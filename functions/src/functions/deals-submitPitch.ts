@@ -2,18 +2,22 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { createDealFolder, uploadDealFile, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 import { generateContent } from "../lib/vertexAi";
+import {
+  assertValidDealCoreFields,
+  assertValidFundingHistory,
+  type DealCoreFields,
+  type DealFundingRoundEntryInput,
+  type FundingRound,
+  type SecurityType,
+} from "../lib/dealFields";
 
 // The one genuinely public callable in this app — an entrepreneur submitting a pitch has no
 // Firebase Auth session at all, so this never calls requireCaller/requireAdmin. Firebase App
 // Check (enforceAppCheck below) is the abuse-prevention layer instead of a member/admin check.
 
+export type { FundingRound, SecurityType };
+
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
-
-export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
-export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
-
-const FUNDING_ROUNDS: readonly FundingRound[] = ["PRE_SEED", "SEED", "SERIES_A", "SERIES_B", "SERIES_C", "OTHER"];
-const SECURITY_TYPES: readonly SecurityType[] = ["PRICED_ROUND", "SAFE", "CONVERTIBLE_NOTE", "OTHER"];
 
 export interface DealsSubmitPitchFile {
   filename: string;
@@ -21,37 +25,9 @@ export interface DealsSubmitPitchFile {
   contentBase64: string;
 }
 
-export interface DealsSubmitPitchFundingRoundEntry {
-  round: FundingRound;
-  amount: number;
-  currency: string;
-}
+export type DealsSubmitPitchFundingRoundEntry = DealFundingRoundEntryInput;
 
-export interface DealsSubmitPitchInput {
-  companyName: string;
-  companyEmail: string;
-  companyUrl: string;
-  entrepreneurName: string;
-  entrepreneurEmail: string;
-  entrepreneurPhone: string;
-  executiveSummary?: string;
-  teamInformation?: string;
-  round: FundingRound;
-  securityType: SecurityType;
-  seekingAmount: number;
-  currency: string;
-  // Required unless securityType is SAFE, in which case valuationCap/discountPercent are used
-  // instead (a SAFE has no pre-money valuation in the traditional sense).
-  preMoneyValuation?: number;
-  valuationCap?: number;
-  discountPercent?: number;
-  hasLeadInvestor: boolean;
-  leadInvestorName?: string;
-  willHaveInterestBearingDebtAfterClose: boolean;
-  hasExistingInterestBearingDebt: boolean;
-  hasRestrictedBusinessLines: boolean;
-  raiseMethod?: string;
-  referredBy?: string;
+export interface DealsSubmitPitchInput extends DealCoreFields {
   fundingHistory?: DealsSubmitPitchFundingRoundEntry[];
   pitchDeck: DealsSubmitPitchFile;
   additionalDocuments?: DealsSubmitPitchFile[];
@@ -61,72 +37,8 @@ export interface DealsSubmitPitchOutput {
   dealId: string;
 }
 
-const REQUIRED_STRING_FIELDS: (keyof DealsSubmitPitchInput)[] = [
-  "companyName",
-  "companyEmail",
-  "companyUrl",
-  "entrepreneurName",
-  "entrepreneurEmail",
-  "entrepreneurPhone",
-];
-
 function assertValid(input: DealsSubmitPitchInput) {
-  for (const field of REQUIRED_STRING_FIELDS) {
-    if (typeof input[field] !== "string" || !(input[field] as string).trim()) {
-      throw new HttpsError("invalid-argument", `${field} is required.`);
-    }
-  }
-  if (!FUNDING_ROUNDS.includes(input.round)) {
-    throw new HttpsError("invalid-argument", `round must be one of ${FUNDING_ROUNDS.join(", ")}.`);
-  }
-  if (!SECURITY_TYPES.includes(input.securityType)) {
-    throw new HttpsError("invalid-argument", `securityType must be one of ${SECURITY_TYPES.join(", ")}.`);
-  }
-  if (!Number.isFinite(input.seekingAmount) || input.seekingAmount <= 0) {
-    throw new HttpsError("invalid-argument", "seekingAmount must be a positive number.");
-  }
-  if (typeof input.currency !== "string" || input.currency.trim().length < 3 || input.currency.trim().length > 10) {
-    throw new HttpsError("invalid-argument", "currency must be a valid currency code.");
-  }
-  if (input.securityType === "SAFE") {
-    if (!Number.isFinite(input.valuationCap) || (input.valuationCap as number) <= 0) {
-      throw new HttpsError("invalid-argument", "valuationCap must be a positive number for a SAFE.");
-    }
-    if (
-      input.discountPercent !== undefined &&
-      (!Number.isFinite(input.discountPercent) || input.discountPercent < 0 || input.discountPercent > 100)
-    ) {
-      throw new HttpsError("invalid-argument", "discountPercent must be between 0 and 100.");
-    }
-  } else if (!Number.isFinite(input.preMoneyValuation) || (input.preMoneyValuation as number) <= 0) {
-    throw new HttpsError("invalid-argument", "preMoneyValuation must be a positive number.");
-  }
-  if (input.fundingHistory !== undefined) {
-    if (!Array.isArray(input.fundingHistory)) {
-      throw new HttpsError("invalid-argument", "fundingHistory must be an array.");
-    }
-    for (const entry of input.fundingHistory) {
-      if (!FUNDING_ROUNDS.includes(entry.round)) {
-        throw new HttpsError("invalid-argument", `fundingHistory round must be one of ${FUNDING_ROUNDS.join(", ")}.`);
-      }
-      if (!Number.isFinite(entry.amount) || entry.amount <= 0) {
-        throw new HttpsError("invalid-argument", "fundingHistory amount must be a positive number.");
-      }
-      if (typeof entry.currency !== "string" || entry.currency.trim().length < 3 || entry.currency.trim().length > 10) {
-        throw new HttpsError("invalid-argument", "fundingHistory currency must be a valid currency code.");
-      }
-    }
-  }
-  for (const flag of [
-    "hasLeadInvestor",
-    "willHaveInterestBearingDebtAfterClose",
-    "hasExistingInterestBearingDebt",
-    "hasRestrictedBusinessLines",
-  ] as const) {
-    if (typeof input[flag] !== "boolean") {
-      throw new HttpsError("invalid-argument", `${flag} must be a boolean.`);
-    }
-  }
+  assertValidDealCoreFields(input);
   if (!input.pitchDeck?.filename || !input.pitchDeck?.contentBase64) {
     throw new HttpsError("invalid-argument", "pitchDeck is required.");
   }
@@ -206,6 +118,7 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
   async (request) => {
     const input = request.data;
     assertValid(input);
+    const fundingHistory = assertValidFundingHistory(input.fundingHistory);
 
     const rootFolderId = process.env.DEALS_DRIVE_ROOT_FOLDER_ID;
     if (!rootFolderId) {
@@ -292,7 +205,7 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
         );
       }
 
-      for (const entry of input.fundingHistory ?? []) {
+      for (const entry of fundingHistory) {
         await client.query(
           `INSERT INTO "deal_funding_round_entry" ("deal_id", "round", "amount", "currency", "created_at")
            VALUES ($1, $2, $3, $4, now())`,

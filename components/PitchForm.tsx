@@ -3,41 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { readFileAsBase64 } from "@/lib/files";
 import { submitPitch, type FundingRound, type SecurityType } from "@/lib/functions/deals";
-
-const ROUND_OPTIONS: { value: FundingRound; label: string }[] = [
-  { value: "PRE_SEED", label: "Pre-seed" },
-  { value: "SEED", label: "Seed" },
-  { value: "SERIES_A", label: "Series A" },
-  { value: "SERIES_B", label: "Series B" },
-  { value: "SERIES_C", label: "Series C" },
-  { value: "OTHER", label: "Other" },
-];
-
-const SECURITY_TYPE_OPTIONS: { value: SecurityType; label: string }[] = [
-  { value: "PRICED_ROUND", label: "Priced round" },
-  { value: "SAFE", label: "SAFE" },
-  { value: "CONVERTIBLE_NOTE", label: "Convertible note" },
-  { value: "OTHER", label: "Other" },
-];
-
-// A curated list rather than free text for the common case, with "Other" as an escape hatch —
-// avoids typo'd/invalid ISO codes for the vast majority of submissions.
-const CURRENCY_OPTIONS = ["USD", "EUR", "GBP", "CAD", "AUD", "INR", "AED", "SGD", "OTHER"] as const;
-const CURRENCY_LABELS: Record<(typeof CURRENCY_OPTIONS)[number], string> = {
-  USD: "USD ($)",
-  EUR: "EUR (€)",
-  GBP: "GBP (£)",
-  CAD: "CAD ($)",
-  AUD: "AUD ($)",
-  INR: "INR (₹)",
-  AED: "AED (د.إ)",
-  SGD: "SGD ($)",
-  OTHER: "Other",
-};
-
-function resolveCurrency(selected: string, custom: string): string {
-  return selected === "OTHER" ? custom.trim().toUpperCase() : selected;
-}
+import { ROUND_OPTIONS, SECURITY_TYPE_OPTIONS, CurrencySelect, YesNoField, inputClass, resolveCurrency } from "@/components/dealFormShared";
 
 interface FundingHistoryRow {
   key: string;
@@ -55,39 +21,6 @@ function emptyFundingHistoryRow(): FundingHistoryRow {
     currency: "USD",
     customCurrency: "",
   };
-}
-
-function CurrencySelect({
-  value,
-  onChange,
-  customValue,
-  onCustomChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  customValue: string;
-  onCustomChange: (v: string) => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <select className={inputClass()} value={value} onChange={(e) => onChange(e.target.value)}>
-        {CURRENCY_OPTIONS.map((opt) => (
-          <option key={opt} value={opt}>
-            {CURRENCY_LABELS[opt]}
-          </option>
-        ))}
-      </select>
-      {value === "OTHER" && (
-        <input
-          placeholder="3-letter currency code"
-          maxLength={10}
-          className={inputClass()}
-          value={customValue}
-          onChange={(e) => onCustomChange(e.target.value)}
-        />
-      )}
-    </div>
-  );
 }
 
 interface FormState {
@@ -157,38 +90,6 @@ const REQUIRED_YES_NO_FIELDS: (keyof FormState)[] = [
   "hasExistingInterestBearingDebt",
   "hasRestrictedBusinessLines",
 ];
-
-function inputClass() {
-  return "rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
-}
-
-function YesNoField({
-  label,
-  value,
-  onChange,
-  name,
-}: {
-  label: string;
-  value: "" | "yes" | "no";
-  onChange: (v: "yes" | "no") => void;
-  name: string;
-}) {
-  return (
-    <fieldset className="flex flex-col gap-1 text-sm">
-      <legend>{label}</legend>
-      <div className="flex gap-4">
-        <label className="flex items-center gap-1.5">
-          <input type="radio" name={name} checked={value === "yes"} onChange={() => onChange("yes")} required />
-          Yes
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input type="radio" name={name} checked={value === "no"} onChange={() => onChange("no")} required />
-          No
-        </label>
-      </div>
-    </fieldset>
-  );
-}
 
 export function PitchForm() {
   const [form, setForm] = useState<FormState>(INITIAL_STATE);
