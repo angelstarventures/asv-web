@@ -30,3 +30,5 @@ export { dealsSetRating } from "./functions/deals-setRating";
 export { dealsUpdateStage } from "./functions/deals-updateStage";
 export { dealsManageTag } from "./functions/deals-manageTag";
 export { dealsAssignTag } from "./functions/deals-assignTag";
+export { dealsDeleteDeal } from "./functions/deals-deleteDeal";
+export { updateCompanyLogo } from "./functions/companies-updateLogo";

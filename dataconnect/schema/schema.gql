@@ -99,6 +99,10 @@ enum DocumentAccessDecision {
 
 # --- Deal flow (entrepreneur pitch intake + member deal room) ---
 
+# LEAD/DUE_DILIGENCE/PRESENTING/INVESTED/INACTIVE are no longer used by the app (the UI now
+# only ever shows/sets NEW/OLD/PASSED/ARCHIVED) but are kept in the enum rather than removed —
+# Postgres can't cheaply drop enum values in place, and Data Connect's migration tool tries to
+# fully recreate the type (and collides with itself) when a value is removed. Additive-only.
 enum DealStage {
   NEW
   LEAD
@@ -107,6 +111,8 @@ enum DealStage {
   INVESTED
   PASSED
   INACTIVE
+  OLD
+  ARCHIVED
 }
 
 enum FundingRound {
@@ -394,11 +400,13 @@ type Deal @table {
   id: UUID!                    @default(expr: "uuidV4()")
   companyName: String!
   companyEmail: String!
+  companyUrl: String       # NOT NULL at the app level (dealsSubmitPitch/PitchForm) — nullable
+                            # here only because existing rows predate this field; no backfill.
   entrepreneurName: String!
   entrepreneurEmail: String!
   entrepreneurPhone: String!
-  executiveSummary: String!
-  teamInformation: String!
+  executiveSummary: String
+  teamInformation: String
   round: FundingRound!
   securityType: SecurityType!
   seekingAmount: Float!
@@ -408,8 +416,12 @@ type Deal @table {
   willHaveInterestBearingDebtAfterClose: Boolean!
   hasExistingInterestBearingDebt: Boolean!
   hasRestrictedBusinessLines: Boolean!   # gambling/alcohol/insurance/financial services
-  raiseMethod: String!
+  raiseMethod: String                    # nullable — the question asking this was removed from the form
   referredBy: String
+  # AI-derived from companyUrl (Vertex AI, functions/src/functions/deals-submitPitch.ts) —
+  # nullable since the fetch/analysis is best-effort and must never block a real submission.
+  sector: String
+  keywords: [String!]
   stage: DealStage!            @default(value: NEW)
   driveFolderId: String
   driveFolderUrl: String

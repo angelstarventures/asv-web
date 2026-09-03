@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { deleteDeal } from "@/lib/functions/deals";
 
 export interface DealRow {
   id: string;
@@ -19,16 +21,13 @@ export interface DealTagOption {
   name: string;
 }
 
-const STAGES = ["NEW", "LEAD", "DUE_DILIGENCE", "PRESENTING", "INVESTED", "PASSED", "INACTIVE"] as const;
+const STAGES = ["NEW", "OLD", "PASSED", "ARCHIVED"] as const;
 
 const STAGE_LABELS: Record<string, string> = {
   NEW: "New",
-  LEAD: "Lead",
-  DUE_DILIGENCE: "Due diligence",
-  PRESENTING: "Presenting",
-  INVESTED: "Invested",
+  OLD: "Old",
   PASSED: "Passed",
-  INACTIVE: "Inactive",
+  ARCHIVED: "Archived",
 };
 
 type SortKey = "companyName" | "round" | "seekingAmount" | "preMoneyValuation" | "stage" | "createdAt";
@@ -54,21 +53,28 @@ function sortValue(row: DealRow, key: SortKey): string | number {
 
 // Shared by /admin/deals and /member/deals — same click-to-sort-column client pattern as
 // MembersTable, plus a left filter panel (stage + admin-managed tags) matching the reference
-// deal-list screenshot. Row click navigates to the shared detail route.
+// deal-list screenshot. Row click navigates to the shared detail route. isAdmin adds a
+// per-row delete action (member view never sees it).
 export function DealListTable({
   deals,
   tags,
   dealTagIds,
   detailHrefBase,
+  isAdmin,
 }: {
   deals: DealRow[];
   tags: DealTagOption[];
   dealTagIds: Record<string, string[]>;
   detailHrefBase: string;
+  isAdmin?: boolean;
 }) {
+  const router = useRouter();
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" });
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function toggleSort(key: SortKey) {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
@@ -79,6 +85,21 @@ export function DealListTable({
     if (next.has(value)) next.delete(value);
     else next.add(value);
     setter(next);
+  }
+
+  async function handleConfirmDelete() {
+    if (!confirmingDeleteId) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteDeal({ dealId: confirmingDeleteId });
+      setConfirmingDeleteId(null);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this deal.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   const filtered = useMemo(() => {
@@ -102,6 +123,8 @@ export function DealListTable({
       return 0;
     });
   }, [filtered, sort]);
+
+  const dealBeingDeleted = deals.find((d) => d.id === confirmingDeleteId) ?? null;
 
   return (
     <div className="flex gap-6">
@@ -141,6 +164,11 @@ export function DealListTable({
       </aside>
 
       <div className="flex-1 overflow-x-auto rounded-lg border border-zinc-200 bg-card px-5 py-4">
+        {error && (
+          <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
         <table className="w-full text-left text-sm">
           <thead>
             <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
@@ -161,6 +189,7 @@ export function DealListTable({
                   </th>
                 );
               })}
+              {isAdmin && <th className="py-2" />}
             </tr>
           </thead>
           <tbody>
@@ -178,11 +207,22 @@ export function DealListTable({
                 <td className="py-2 text-zinc-500 dark:text-zinc-500">
                   {new Date(d.createdAt).toLocaleDateString()}
                 </td>
+                {isAdmin && (
+                  <td className="py-2 text-right">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDeleteId(d.id)}
+                      className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
             {sorted.length === 0 && (
               <tr>
-                <td colSpan={COLUMNS.length} className="py-6 text-center text-zinc-500">
+                <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-6 text-center text-zinc-500">
                   No deals match these filters.
                 </td>
               </tr>
@@ -190,6 +230,44 @@ export function DealListTable({
           </tbody>
         </table>
       </div>
+
+      {dealBeingDeleted && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-background p-6 shadow-lg">
+            <h3 className="text-base font-semibold">Delete {dealBeingDeleted.companyName}?</h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              This permanently removes the deal, its documents, tags, and ratings. This cannot
+              be undone.
+            </p>
+            {error && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              {/* "No" is styled as the primary action and autoFocused, so it's the visually and
+                  functionally pre-selected/default choice (e.g. pressing Enter is the safe path). */}
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmingDeleteId(null)}
+                disabled={busy}
+                className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={busy}
+                className="rounded-full border border-red-300 px-4 py-1.5 text-sm font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+              >
+                {busy ? "Deleting..." : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

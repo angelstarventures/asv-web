@@ -23,6 +23,7 @@ export default async function AdminDealsPage() {
         tags={dealTags}
         dealTagIds={buildDealTagIdsMap(dealTagAssignments)}
         detailHrefBase="/admin/deals"
+        isAdmin
       />
     </div>
   );

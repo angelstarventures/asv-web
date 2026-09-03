@@ -6,7 +6,7 @@ import { functions } from "@/lib/firebase/client";
 
 export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
-export type DealStage = "NEW" | "LEAD" | "DUE_DILIGENCE" | "PRESENTING" | "INVESTED" | "PASSED" | "INACTIVE";
+export type DealStage = "NEW" | "OLD" | "PASSED" | "ARCHIVED";
 
 export interface SubmitPitchFile {
   filename: string;
@@ -17,11 +17,12 @@ export interface SubmitPitchFile {
 export interface SubmitPitchInput {
   companyName: string;
   companyEmail: string;
+  companyUrl: string;
   entrepreneurName: string;
   entrepreneurEmail: string;
   entrepreneurPhone: string;
-  executiveSummary: string;
-  teamInformation: string;
+  executiveSummary?: string;
+  teamInformation?: string;
   round: FundingRound;
   securityType: SecurityType;
   seekingAmount: number;
@@ -31,7 +32,7 @@ export interface SubmitPitchInput {
   willHaveInterestBearingDebtAfterClose: boolean;
   hasExistingInterestBearingDebt: boolean;
   hasRestrictedBusinessLines: boolean;
-  raiseMethod: string;
+  raiseMethod?: string;
   referredBy?: string;
   pitchDeck: SubmitPitchFile;
   additionalDocuments?: SubmitPitchFile[];
@@ -87,6 +88,15 @@ export interface AssignDealTagInput {
 }
 export async function assignDealTag(input: AssignDealTagInput): Promise<{ ok: true }> {
   const call = httpsCallable<AssignDealTagInput, { ok: true }>(functions, "dealsAssignTag");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface DeleteDealInput {
+  dealId: string;
+}
+export async function deleteDeal(input: DeleteDealInput): Promise<{ ok: true }> {
+  const call = httpsCallable<DeleteDealInput, { ok: true }>(functions, "dealsDeleteDeal");
   const res = await call(input);
   return res.data;
 }

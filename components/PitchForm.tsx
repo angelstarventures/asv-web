@@ -21,6 +21,7 @@ const SECURITY_TYPE_OPTIONS: { value: SecurityType; label: string }[] = [
 interface FormState {
   companyName: string;
   companyEmail: string;
+  companyUrl: string;
   entrepreneurName: string;
   entrepreneurEmail: string;
   entrepreneurPhone: string;
@@ -35,13 +36,13 @@ interface FormState {
   willHaveInterestBearingDebtAfterClose: "" | "yes" | "no";
   hasExistingInterestBearingDebt: "" | "yes" | "no";
   hasRestrictedBusinessLines: "" | "yes" | "no";
-  raiseMethod: string;
   referredBy: string;
 }
 
 const INITIAL_STATE: FormState = {
   companyName: "",
   companyEmail: "",
+  companyUrl: "",
   entrepreneurName: "",
   entrepreneurEmail: "",
   entrepreneurPhone: "",
@@ -56,19 +57,16 @@ const INITIAL_STATE: FormState = {
   willHaveInterestBearingDebtAfterClose: "",
   hasExistingInterestBearingDebt: "",
   hasRestrictedBusinessLines: "",
-  raiseMethod: "",
   referredBy: "",
 };
 
 const REQUIRED_TEXT_FIELDS: (keyof FormState)[] = [
   "companyName",
   "companyEmail",
+  "companyUrl",
   "entrepreneurName",
   "entrepreneurEmail",
   "entrepreneurPhone",
-  "executiveSummary",
-  "teamInformation",
-  "raiseMethod",
 ];
 
 const REQUIRED_YES_NO_FIELDS: (keyof FormState)[] = [
@@ -171,11 +169,12 @@ export function PitchForm() {
       await submitPitch({
         companyName: form.companyName.trim(),
         companyEmail: form.companyEmail.trim(),
+        companyUrl: form.companyUrl.trim(),
         entrepreneurName: form.entrepreneurName.trim(),
         entrepreneurEmail: form.entrepreneurEmail.trim(),
         entrepreneurPhone: form.entrepreneurPhone.trim(),
-        executiveSummary: form.executiveSummary.trim(),
-        teamInformation: form.teamInformation.trim(),
+        executiveSummary: form.executiveSummary.trim() || undefined,
+        teamInformation: form.teamInformation.trim() || undefined,
         round: form.round,
         securityType: form.securityType,
         seekingAmount,
@@ -185,7 +184,6 @@ export function PitchForm() {
         willHaveInterestBearingDebtAfterClose: form.willHaveInterestBearingDebtAfterClose === "yes",
         hasExistingInterestBearingDebt: form.hasExistingInterestBearingDebt === "yes",
         hasRestrictedBusinessLines: form.hasRestrictedBusinessLines === "yes",
-        raiseMethod: form.raiseMethod.trim(),
         referredBy: form.referredBy.trim() || undefined,
         pitchDeck,
         additionalDocuments,
@@ -240,6 +238,17 @@ export function PitchForm() {
             onChange={(e) => set("companyEmail", e.target.value)}
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm">
+          Company website
+          <input
+            required
+            type="url"
+            placeholder="https://..."
+            className={inputClass()}
+            value={form.companyUrl}
+            onChange={(e) => set("companyUrl", e.target.value)}
+          />
+        </label>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="flex flex-col gap-1 text-sm">
             Entrepreneur name
@@ -272,9 +281,8 @@ export function PitchForm() {
           </label>
         </div>
         <label className="flex flex-col gap-1 text-sm">
-          Executive summary
+          Executive summary (optional)
           <textarea
-            required
             rows={4}
             className={inputClass()}
             value={form.executiveSummary}
@@ -282,9 +290,8 @@ export function PitchForm() {
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
-          Team information
+          Team information (optional)
           <textarea
-            required
             rows={4}
             placeholder="Founders, key hires, relevant backgrounds..."
             className={inputClass()}
@@ -294,26 +301,40 @@ export function PitchForm() {
         </label>
       </section>
 
-      <section className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
-        <h2 className="text-sm font-semibold">Pitch Deck</h2>
-        <label className="flex flex-col gap-1 text-sm">
+      <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold">Documents</h2>
+        <div className="flex flex-col gap-1.5 text-sm">
           Pitch deck
-          <input
-            required
-            type="file"
-            className="text-sm"
-            onChange={(e) => setPitchDeckFile(e.target.files?.[0] ?? null)}
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
+          <div className="flex items-center gap-3">
+            <label className="w-fit cursor-pointer rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700">
+              Choose file
+              <input
+                required
+                type="file"
+                className="hidden"
+                onChange={(e) => setPitchDeckFile(e.target.files?.[0] ?? null)}
+              />
+            </label>
+            <span className="text-zinc-500">{pitchDeckFile?.name ?? "No file chosen"}</span>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5 text-sm">
           Any additional document (optional)
-          <input
-            type="file"
-            multiple
-            className="text-sm"
-            onChange={(e) => setAdditionalFiles(e.target.files ? Array.from(e.target.files) : [])}
-          />
-        </label>
+          <div className="flex items-center gap-3">
+            <label className="w-fit cursor-pointer rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700">
+              Choose file(s)
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => setAdditionalFiles(e.target.files ? Array.from(e.target.files) : [])}
+              />
+            </label>
+            <span className="text-zinc-500">
+              {additionalFiles.length > 0 ? additionalFiles.map((f) => f.name).join(", ") : "No files chosen"}
+            </span>
+          </div>
+        </div>
       </section>
 
       <section className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
@@ -395,17 +416,17 @@ export function PitchForm() {
         )}
 
         <YesNoField
-          name="willHaveInterestBearingDebtAfterClose"
-          label="Will the company have any interest-bearing debt after the close of this funding round?"
-          value={form.willHaveInterestBearingDebtAfterClose}
-          onChange={(v) => set("willHaveInterestBearingDebtAfterClose", v)}
-        />
-
-        <YesNoField
           name="hasExistingInterestBearingDebt"
           label="Does the company have any interest-bearing debt today?"
           value={form.hasExistingInterestBearingDebt}
           onChange={(v) => set("hasExistingInterestBearingDebt", v)}
+        />
+
+        <YesNoField
+          name="willHaveInterestBearingDebtAfterClose"
+          label="Will the company have any interest-bearing debt after the close of this funding round?"
+          value={form.willHaveInterestBearingDebtAfterClose}
+          onChange={(v) => set("willHaveInterestBearingDebtAfterClose", v)}
         />
 
         <YesNoField
@@ -414,17 +435,6 @@ export function PitchForm() {
           value={form.hasRestrictedBusinessLines}
           onChange={(v) => set("hasRestrictedBusinessLines", v)}
         />
-
-        <label className="flex flex-col gap-1 text-sm">
-          How are you raising the current funding round?
-          <textarea
-            required
-            rows={2}
-            className={inputClass()}
-            value={form.raiseMethod}
-            onChange={(e) => set("raiseMethod", e.target.value)}
-          />
-        </label>
 
         <label className="flex flex-col gap-1 text-sm">
           Referred by (optional)

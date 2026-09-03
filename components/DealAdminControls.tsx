@@ -2,17 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { assignDealTag, updateDealStage, type DealStage } from "@/lib/functions/deals";
+import { assignDealTag, updateDealStage, deleteDeal, type DealStage } from "@/lib/functions/deals";
 import type { DealTagOption } from "@/components/DealListTable";
 
 const STAGE_OPTIONS: { value: DealStage; label: string }[] = [
   { value: "NEW", label: "New" },
-  { value: "LEAD", label: "Lead" },
-  { value: "DUE_DILIGENCE", label: "Due diligence" },
-  { value: "PRESENTING", label: "Presenting" },
-  { value: "INVESTED", label: "Invested" },
+  { value: "OLD", label: "Old" },
   { value: "PASSED", label: "Passed" },
-  { value: "INACTIVE", label: "Inactive" },
+  { value: "ARCHIVED", label: "Archived" },
 ];
 
 export function DealAdminControls({
@@ -29,6 +26,7 @@ export function DealAdminControls({
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   async function handleStageChange(next: DealStage) {
     setError(null);
@@ -53,6 +51,20 @@ export function DealAdminControls({
       setError(err instanceof Error ? err.message : "Could not update tags.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteDeal({ dealId });
+      router.push("/admin/deals");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete this deal.");
+      setBusy(false);
+      setConfirmingDelete(false);
     }
   }
 
@@ -95,6 +107,55 @@ export function DealAdminControls({
                 {tag.name}
               </label>
             ))}
+          </div>
+        </div>
+      )}
+
+      <div className="mt-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+        <button
+          type="button"
+          onClick={() => setConfirmingDelete(true)}
+          disabled={busy}
+          className="rounded-full border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+        >
+          Delete deal
+        </button>
+      </div>
+
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-lg bg-background p-6 shadow-lg">
+            <h3 className="text-base font-semibold">Delete this deal?</h3>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              This permanently removes the deal, its documents, tags, and ratings. This cannot
+              be undone.
+            </p>
+            {error && (
+              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {error}
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              {/* "No" is styled as the primary action and autoFocused, so it's the visually and
+                  functionally pre-selected/default choice (e.g. pressing Enter is the safe path). */}
+              <button
+                type="button"
+                autoFocus
+                onClick={() => setConfirmingDelete(false)}
+                disabled={busy}
+                className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={busy}
+                className="rounded-full border border-red-300 px-4 py-1.5 text-sm font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+              >
+                {busy ? "Deleting..." : "Yes, delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}

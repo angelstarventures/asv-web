@@ -2,7 +2,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction } from "../lib/dataconnect-admin";
 
-const DEAL_STAGES = ["NEW", "LEAD", "DUE_DILIGENCE", "PRESENTING", "INVESTED", "PASSED", "INACTIVE"] as const;
+// The DealStage Postgres enum also still has LEAD/DUE_DILIGENCE/PRESENTING/INVESTED/INACTIVE
+// (kept for cheap-migration reasons, see schema.gql's DealStage comment) — this app-level list
+// is the actual set members/admins can pick from.
+const DEAL_STAGES = ["NEW", "OLD", "PASSED", "ARCHIVED"] as const;
 export type DealStage = (typeof DEAL_STAGES)[number];
 
 export interface DealsUpdateStageInput {

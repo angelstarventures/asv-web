@@ -20,11 +20,12 @@ export interface DealDetail {
   id: string;
   companyName: string;
   companyEmail: string;
+  companyUrl?: string | null;
   entrepreneurName: string;
   entrepreneurEmail: string;
   entrepreneurPhone: string;
-  executiveSummary: string;
-  teamInformation: string;
+  executiveSummary?: string | null;
+  teamInformation?: string | null;
   round: string;
   securityType: string;
   seekingAmount: number;
@@ -34,8 +35,10 @@ export interface DealDetail {
   willHaveInterestBearingDebtAfterClose: boolean;
   hasExistingInterestBearingDebt: boolean;
   hasRestrictedBusinessLines: boolean;
-  raiseMethod: string;
+  raiseMethod?: string | null;
   referredBy?: string | null;
+  sector?: string | null;
+  keywords?: string[] | null;
   stage: string;
   driveFolderUrl?: string | null;
   createdAt: string;
@@ -62,6 +65,21 @@ function currency(n: number): string {
 
 function yesNo(v: boolean): string {
   return v ? "Yes" : "No";
+}
+
+// A document "button" (rounded-full border pill, matching the rest of this app's button
+// styling) rather than a plain underlined text link.
+function DocumentButton({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex w-fit items-center gap-2 rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium hover:bg-card dark:border-zinc-700"
+    >
+      {children}
+    </a>
+  );
 }
 
 export function DealDetailView({
@@ -135,6 +153,33 @@ export function DealDetailView({
               <dt className="text-zinc-500">Company</dt>
               <dd>{deal.companyName}</dd>
               <dd className="text-zinc-500">{deal.companyEmail}</dd>
+              {deal.companyUrl && (
+                <dd>
+                  <a href={deal.companyUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline dark:text-blue-400">
+                    {deal.companyUrl}
+                  </a>
+                </dd>
+              )}
+            </div>
+            <div>
+              <dt className="text-zinc-500">Sector</dt>
+              <dd>{deal.sector ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Keywords</dt>
+              <dd>
+                {deal.keywords && deal.keywords.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {deal.keywords.map((k) => (
+                      <span key={k} className="rounded-full border border-zinc-300 px-2 py-0.5 text-xs dark:border-zinc-700">
+                        {k}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  "—"
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-zinc-500">Stage</dt>
@@ -150,18 +195,16 @@ export function DealDetailView({
         {tab === "deck" && (
           <div className="flex flex-col gap-2">
             {pitchDeck ? (
-              <a href={pitchDeck.driveUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline dark:text-blue-400">
-                {pitchDeck.filename}
-              </a>
+              <DocumentButton href={pitchDeck.driveUrl}>{pitchDeck.filename}</DocumentButton>
             ) : (
               <p className="text-zinc-500">No pitch deck on file.</p>
             )}
           </div>
         )}
 
-        {tab === "team" && <p className="whitespace-pre-wrap">{deal.teamInformation}</p>}
+        {tab === "team" && <p className="whitespace-pre-wrap">{deal.teamInformation || "Not provided."}</p>}
 
-        {tab === "summary" && <p className="whitespace-pre-wrap">{deal.executiveSummary}</p>}
+        {tab === "summary" && <p className="whitespace-pre-wrap">{deal.executiveSummary || "Not provided."}</p>}
 
         {tab === "financials" && (
           <dl className="grid gap-3 sm:grid-cols-2">
@@ -189,21 +232,23 @@ export function DealDetailView({
               </dd>
             </div>
             <div>
-              <dt className="text-zinc-500">Interest-bearing debt after close?</dt>
-              <dd>{yesNo(deal.willHaveInterestBearingDebtAfterClose)}</dd>
-            </div>
-            <div>
               <dt className="text-zinc-500">Existing interest-bearing debt?</dt>
               <dd>{yesNo(deal.hasExistingInterestBearingDebt)}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Interest-bearing debt after close?</dt>
+              <dd>{yesNo(deal.willHaveInterestBearingDebtAfterClose)}</dd>
             </div>
             <div>
               <dt className="text-zinc-500">Restricted business lines?</dt>
               <dd>{yesNo(deal.hasRestrictedBusinessLines)}</dd>
             </div>
-            <div>
-              <dt className="text-zinc-500">Raising via</dt>
-              <dd>{deal.raiseMethod}</dd>
-            </div>
+            {deal.raiseMethod && (
+              <div>
+                <dt className="text-zinc-500">Raising via</dt>
+                <dd>{deal.raiseMethod}</dd>
+              </div>
+            )}
             {deal.referredBy && (
               <div>
                 <dt className="text-zinc-500">Referred by</dt>
@@ -217,14 +262,12 @@ export function DealDetailView({
           <div className="flex flex-col gap-2">
             {additionalDocs.length === 0 && <p className="text-zinc-500">No additional documents.</p>}
             {additionalDocs.map((d) => (
-              <a key={d.id} href={d.driveUrl} target="_blank" rel="noreferrer" className="text-blue-600 underline dark:text-blue-400">
+              <DocumentButton key={d.id} href={d.driveUrl}>
                 {d.filename}
-              </a>
+              </DocumentButton>
             ))}
             {deal.driveFolderUrl && (
-              <a href={deal.driveFolderUrl} target="_blank" rel="noreferrer" className="mt-2 text-zinc-500 underline">
-                Open Drive folder
-              </a>
+              <DocumentButton href={deal.driveFolderUrl}>Open Drive folder</DocumentButton>
             )}
           </div>
         )}

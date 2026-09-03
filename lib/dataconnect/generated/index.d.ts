@@ -50,6 +50,8 @@ export enum DealStage {
   INVESTED = "INVESTED",
   PASSED = "PASSED",
   INACTIVE = "INACTIVE",
+  OLD = "OLD",
+  ARCHIVED = "ARCHIVED",
 };
 
 export enum DocumentType {
@@ -210,11 +212,12 @@ export interface GetDealByIdData {
     id: UUIDString;
     companyName: string;
     companyEmail: string;
+    companyUrl?: string | null;
     entrepreneurName: string;
     entrepreneurEmail: string;
     entrepreneurPhone: string;
-    executiveSummary: string;
-    teamInformation: string;
+    executiveSummary?: string | null;
+    teamInformation?: string | null;
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
@@ -224,8 +227,10 @@ export interface GetDealByIdData {
     willHaveInterestBearingDebtAfterClose: boolean;
     hasExistingInterestBearingDebt: boolean;
     hasRestrictedBusinessLines: boolean;
-    raiseMethod: string;
+    raiseMethod?: string | null;
     referredBy?: string | null;
+    sector?: string | null;
+    keywords?: string[] | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
     createdAt: TimestampString;
@@ -494,11 +499,12 @@ export interface ListDealsData {
     id: UUIDString;
     companyName: string;
     companyEmail: string;
+    companyUrl?: string | null;
     entrepreneurName: string;
     entrepreneurEmail: string;
     entrepreneurPhone: string;
-    executiveSummary: string;
-    teamInformation: string;
+    executiveSummary?: string | null;
+    teamInformation?: string | null;
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
@@ -508,8 +514,10 @@ export interface ListDealsData {
     willHaveInterestBearingDebtAfterClose: boolean;
     hasExistingInterestBearingDebt: boolean;
     hasRestrictedBusinessLines: boolean;
-    raiseMethod: string;
+    raiseMethod?: string | null;
     referredBy?: string | null;
+    sector?: string | null;
+    keywords?: string[] | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
     createdAt: TimestampString;

@@ -48,6 +48,11 @@ export async function createDealFolder(parentFolderId: string, companyName: stri
   return { driveFileId: res.data.id, driveUrl: res.data.webViewLink ?? "" };
 }
 
+export async function deleteDealFolder(driveFolderId: string): Promise<void> {
+  const drive = getDealsDriveClient();
+  await drive.files.delete({ fileId: driveFolderId });
+}
+
 export async function uploadDealFile(
   parentFolderId: string,
   filename: string,

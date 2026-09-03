@@ -1,14 +1,11 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { createDealFolder, uploadDealFile, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
+import { generateContent } from "../lib/vertexAi";
 
 // The one genuinely public callable in this app — an entrepreneur submitting a pitch has no
 // Firebase Auth session at all, so this never calls requireCaller/requireAdmin. Firebase App
 // Check (enforceAppCheck below) is the abuse-prevention layer instead of a member/admin check.
-// App Check only actually rejects unattested calls once NEXT_PUBLIC_RECAPTCHA_SITE_KEY is set
-// to a real key client-side (lib/firebase/client.ts already initializes the provider whenever
-// that env var is non-empty) — until then this call is effectively open, by design, so pitch
-// intake isn't blocked on that one-time setup step.
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
@@ -27,11 +24,12 @@ export interface DealsSubmitPitchFile {
 export interface DealsSubmitPitchInput {
   companyName: string;
   companyEmail: string;
+  companyUrl: string;
   entrepreneurName: string;
   entrepreneurEmail: string;
   entrepreneurPhone: string;
-  executiveSummary: string;
-  teamInformation: string;
+  executiveSummary?: string;
+  teamInformation?: string;
   round: FundingRound;
   securityType: SecurityType;
   seekingAmount: number;
@@ -41,7 +39,7 @@ export interface DealsSubmitPitchInput {
   willHaveInterestBearingDebtAfterClose: boolean;
   hasExistingInterestBearingDebt: boolean;
   hasRestrictedBusinessLines: boolean;
-  raiseMethod: string;
+  raiseMethod?: string;
   referredBy?: string;
   pitchDeck: DealsSubmitPitchFile;
   additionalDocuments?: DealsSubmitPitchFile[];
@@ -54,12 +52,10 @@ export interface DealsSubmitPitchOutput {
 const REQUIRED_STRING_FIELDS: (keyof DealsSubmitPitchInput)[] = [
   "companyName",
   "companyEmail",
+  "companyUrl",
   "entrepreneurName",
   "entrepreneurEmail",
   "entrepreneurPhone",
-  "executiveSummary",
-  "teamInformation",
-  "raiseMethod",
 ];
 
 function assertValid(input: DealsSubmitPitchInput) {
@@ -103,8 +99,57 @@ function decodeAndCheckSize(file: DealsSubmitPitchFile): Buffer {
   return content;
 }
 
+// Best-effort only — a slow/unreachable company site or a flaky Gemini call must never block a
+// real pitch submission, so every failure here just leaves sector/keywords null rather than
+// throwing. Fetches the site's raw HTML (no JS rendering) and lets Gemini work from that; a
+// company URL that's JS-only client-rendered may yield weaker results, which is an acceptable
+// tradeoff for not running a full headless browser inside this function.
+async function detectSectorAndKeywords(url: string): Promise<{ sector: string | null; keywords: string[] | null }> {
+  const empty = { sector: null, keywords: null };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    // A real browser User-Agent — some sites (confirmed: tesla.com) return a bare 403 to
+    // Node's default fetch UA as basic bot-blocking. This doesn't get past JS-challenge-based
+    // protection (Cloudflare etc.), which is an accepted limitation for a best-effort feature.
+    const res = await fetch(url, {
+      signal: controller.signal,
+      redirect: "follow",
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    }).finally(() => clearTimeout(timeout));
+    if (!res.ok) return empty;
+    const html = (await res.text()).slice(0, 50_000);
+
+    const text = await generateContent({
+      systemPrompt:
+        "You classify early-stage startup companies from their website's raw HTML. Respond with ONLY a JSON object " +
+        'of the exact shape {"sector": string, "keywords": string[]} — sector is a short (1-4 word) industry ' +
+        "classification (e.g. \"Biotech\", \"Medical Devices\", \"CPG\", \"IT/Software\"), keywords is 3-8 short " +
+        "phrases describing the company's specific technology/product. No prose, no markdown, just the JSON object.",
+      parts: [`Company website HTML:\n\n${html}`],
+      responseMimeType: "application/json",
+    });
+
+    const parsed = JSON.parse(text) as { sector?: unknown; keywords?: unknown };
+    const sector = typeof parsed.sector === "string" && parsed.sector.trim() ? parsed.sector.trim() : null;
+    const keywords =
+      Array.isArray(parsed.keywords) && parsed.keywords.every((k) => typeof k === "string")
+        ? (parsed.keywords as string[]).map((k) => k.trim()).filter(Boolean)
+        : null;
+    return { sector, keywords: keywords && keywords.length > 0 ? keywords : null };
+  } catch (err) {
+    // Logged (not rethrown) so a silent sector/keywords miss is still visible in Cloud Logging
+    // without ever surfacing as a failed submission to the entrepreneur.
+    console.error("detectSectorAndKeywords: best-effort classification failed", err);
+    return empty;
+  }
+}
+
 export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmitPitchOutput>>(
-  { enforceAppCheck: true, secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
+  { enforceAppCheck: true, secrets: [driveOAuthClientSecret, driveOAuthRefreshToken], timeoutSeconds: 120 },
   async (request) => {
     const input = request.data;
     assertValid(input);
@@ -118,7 +163,10 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
     const deckContent = decodeAndCheckSize(input.pitchDeck);
     const additionalContents = additionalDocuments.map(decodeAndCheckSize);
 
-    const folder = await createDealFolder(rootFolderId, input.companyName);
+    const [folder, { sector, keywords }] = await Promise.all([
+      createDealFolder(rootFolderId, input.companyName),
+      detectSectorAndKeywords(input.companyUrl),
+    ]);
     const uploads = [
       { docType: "PITCH_DECK" as const, file: input.pitchDeck, content: deckContent },
       ...additionalDocuments.map((file, i) => ({
@@ -138,25 +186,26 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
     const dealId = await withTransaction(async (client) => {
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO "deal" (
-           "company_name", "company_email", "entrepreneur_name", "entrepreneur_email",
+           "company_name", "company_email", "company_url", "entrepreneur_name", "entrepreneur_email",
            "entrepreneur_phone", "executive_summary", "team_information", "round",
            "security_type", "seeking_amount", "pre_money_valuation", "has_lead_investor",
            "lead_investor_name", "will_have_interest_bearing_debt_after_close",
            "has_existing_interest_bearing_debt", "has_restricted_business_lines",
-           "raise_method", "referred_by", "stage", "drive_folder_id", "drive_folder_url",
-           "created_at", "updated_at"
+           "raise_method", "referred_by", "sector", "keywords", "stage", "drive_folder_id",
+           "drive_folder_url", "created_at", "updated_at"
          ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
-           'NEW', $19, $20, now(), now()
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
+           'NEW', $22, $23, now(), now()
          ) RETURNING id`,
         [
           input.companyName,
           input.companyEmail,
+          input.companyUrl,
           input.entrepreneurName,
           input.entrepreneurEmail,
           input.entrepreneurPhone,
-          input.executiveSummary,
-          input.teamInformation,
+          input.executiveSummary?.trim() || null,
+          input.teamInformation?.trim() || null,
           input.round,
           input.securityType,
           input.seekingAmount,
@@ -166,8 +215,10 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
           input.willHaveInterestBearingDebtAfterClose,
           input.hasExistingInterestBearingDebt,
           input.hasRestrictedBusinessLines,
-          input.raiseMethod,
+          input.raiseMethod?.trim() || null,
           input.referredBy ?? null,
+          sector,
+          keywords,
           folder.driveFileId,
           folder.driveUrl,
         ]
