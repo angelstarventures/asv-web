@@ -231,6 +231,7 @@ export interface GetDealByIdData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
     createdAt: TimestampString;
@@ -518,6 +519,7 @@ export interface ListDealsData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
     createdAt: TimestampString;

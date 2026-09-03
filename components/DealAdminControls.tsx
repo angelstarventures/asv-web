@@ -7,6 +7,7 @@ import type { DealTagOption } from "@/components/DealListTable";
 
 const STAGE_OPTIONS: { value: DealStage; label: string }[] = [
   { value: "NEW", label: "New" },
+  { value: "PRESENTING", label: "Presenting" },
   { value: "OLD", label: "Old" },
   { value: "PASSED", label: "Passed" },
   { value: "ARCHIVED", label: "Archived" },

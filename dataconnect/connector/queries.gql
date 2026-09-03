@@ -412,6 +412,7 @@ query ListDeals @auth(level: USER, insecureReason: "Member+admin deal room list 
     referredBy
     sector
     keywords
+    rank
     stage
     driveFolderUrl
     createdAt
@@ -443,6 +444,7 @@ query GetDealById($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detai
     referredBy
     sector
     keywords
+    rank
     stage
     driveFolderUrl
     createdAt

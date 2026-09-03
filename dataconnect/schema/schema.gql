@@ -422,6 +422,12 @@ type Deal @table {
   # nullable since the fetch/analysis is best-effort and must never block a real submission.
   sector: String
   keywords: [String!]
+  # The screening call queue: a deal is "above the line" simply by having a rank at all — null
+  # means not currently in consideration. Admins add a deal to the ranked list (assigning it
+  # the next rank) and drag-reorder within it; removing it from the list sets this back to
+  # null. 1 = most interesting. Not unique/contiguous by DB constraint — the app keeps it
+  # dense (1..N) on every reorder, but nothing breaks if it briefly isn't.
+  rank: Int
   stage: DealStage!            @default(value: NEW)
   driveFolderId: String
   driveFolderUrl: String

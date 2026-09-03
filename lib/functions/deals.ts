@@ -6,7 +6,7 @@ import { functions } from "@/lib/firebase/client";
 
 export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
-export type DealStage = "NEW" | "OLD" | "PASSED" | "ARCHIVED";
+export type DealStage = "NEW" | "PRESENTING" | "OLD" | "PASSED" | "ARCHIVED";
 
 export interface SubmitPitchFile {
   filename: string;
@@ -97,6 +97,19 @@ export interface DeleteDealInput {
 }
 export async function deleteDeal(input: DeleteDealInput): Promise<{ ok: true }> {
   const call = httpsCallable<DeleteDealInput, { ok: true }>(functions, "dealsDeleteDeal");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface DealRankUpdate {
+  dealId: string;
+  rank: number | null;
+}
+export interface SetDealRanksInput {
+  updates: DealRankUpdate[];
+}
+export async function setDealRanks(input: SetDealRanksInput): Promise<{ ok: true }> {
+  const call = httpsCallable<SetDealRanksInput, { ok: true }>(functions, "dealsSetRanks");
   const res = await call(input);
   return res.data;
 }

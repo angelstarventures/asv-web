@@ -2,10 +2,12 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction } from "../lib/dataconnect-admin";
 
-// The DealStage Postgres enum also still has LEAD/DUE_DILIGENCE/PRESENTING/INVESTED/INACTIVE
-// (kept for cheap-migration reasons, see schema.gql's DealStage comment) — this app-level list
-// is the actual set members/admins can pick from.
-const DEAL_STAGES = ["NEW", "OLD", "PASSED", "ARCHIVED"] as const;
+// The DealStage Postgres enum also still has LEAD/DUE_DILIGENCE/INVESTED/INACTIVE (kept for
+// cheap-migration reasons, see schema.gql's DealStage comment) — this app-level list is the
+// actual set members/admins can pick from. PRESENTING marks a deal that was screened and
+// actually presented; a deal that couldn't be reached just stays NEW and resurfaces in the
+// next screening round via the ranked list (rank), no separate call-tracking needed.
+const DEAL_STAGES = ["NEW", "PRESENTING", "OLD", "PASSED", "ARCHIVED"] as const;
 export type DealStage = (typeof DEAL_STAGES)[number];
 
 export interface DealsUpdateStageInput {
