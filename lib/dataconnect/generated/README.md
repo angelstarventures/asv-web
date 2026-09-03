@@ -38,6 +38,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListDealTagAssignments*](#listdealtagassignments)
   - [*ListDealDocumentsByDeal*](#listdealdocumentsbydeal)
   - [*ListDealRatingsByDeal*](#listdealratingsbydeal)
+  - [*ListDealFundingRoundsByDeal*](#listdealfundingroundsbydeal)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -2810,7 +2811,10 @@ export interface ListDealsData {
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
-    preMoneyValuation: number;
+    currency: string;
+    preMoneyValuation?: number | null;
+    valuationCap?: number | null;
+    discountPercent?: number | null;
     hasLeadInvestor: boolean;
     leadInvestorName?: string | null;
     willHaveInterestBearingDebtAfterClose: boolean;
@@ -2820,6 +2824,7 @@ export interface ListDealsData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    companyLocation?: string | null;
     rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
@@ -2935,7 +2940,10 @@ export interface GetDealByIdData {
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
-    preMoneyValuation: number;
+    currency: string;
+    preMoneyValuation?: number | null;
+    valuationCap?: number | null;
+    discountPercent?: number | null;
     hasLeadInvestor: boolean;
     leadInvestorName?: string | null;
     willHaveInterestBearingDebtAfterClose: boolean;
@@ -2945,6 +2953,7 @@ export interface GetDealByIdData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    companyLocation?: string | null;
     rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
@@ -3438,6 +3447,120 @@ console.log(data.dealRatings);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.dealRatings);
+});
+```
+
+## ListDealFundingRoundsByDeal
+You can execute the `ListDealFundingRoundsByDeal` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listDealFundingRoundsByDeal(vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+
+interface ListDealFundingRoundsByDealRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListDealFundingRoundsByDealVariables): QueryRef<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+}
+export const listDealFundingRoundsByDealRef: ListDealFundingRoundsByDealRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listDealFundingRoundsByDeal(dc: DataConnect, vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+
+interface ListDealFundingRoundsByDealRef {
+  ...
+  (dc: DataConnect, vars: ListDealFundingRoundsByDealVariables): QueryRef<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+}
+export const listDealFundingRoundsByDealRef: ListDealFundingRoundsByDealRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listDealFundingRoundsByDealRef:
+```typescript
+const name = listDealFundingRoundsByDealRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListDealFundingRoundsByDeal` query requires an argument of type `ListDealFundingRoundsByDealVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListDealFundingRoundsByDealVariables {
+  dealId: UUIDString;
+}
+```
+### Return Type
+Recall that executing the `ListDealFundingRoundsByDeal` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListDealFundingRoundsByDealData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListDealFundingRoundsByDealData {
+  dealFundingRoundEntries: ({
+    id: UUIDString;
+    round: FundingRound;
+    amount: number;
+    currency: string;
+  } & DealFundingRoundEntry_Key)[];
+}
+```
+### Using `ListDealFundingRoundsByDeal`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listDealFundingRoundsByDeal, ListDealFundingRoundsByDealVariables } from '@asv/dataconnect-generated';
+
+// The `ListDealFundingRoundsByDeal` query requires an argument of type `ListDealFundingRoundsByDealVariables`:
+const listDealFundingRoundsByDealVars: ListDealFundingRoundsByDealVariables = {
+  dealId: ..., 
+};
+
+// Call the `listDealFundingRoundsByDeal()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listDealFundingRoundsByDeal(listDealFundingRoundsByDealVars);
+// Variables can be defined inline as well.
+const { data } = await listDealFundingRoundsByDeal({ dealId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listDealFundingRoundsByDeal(dataConnect, listDealFundingRoundsByDealVars);
+
+console.log(data.dealFundingRoundEntries);
+
+// Or, you can use the `Promise` API.
+listDealFundingRoundsByDeal(listDealFundingRoundsByDealVars).then((response) => {
+  const data = response.data;
+  console.log(data.dealFundingRoundEntries);
+});
+```
+
+### Using `ListDealFundingRoundsByDeal`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listDealFundingRoundsByDealRef, ListDealFundingRoundsByDealVariables } from '@asv/dataconnect-generated';
+
+// The `ListDealFundingRoundsByDeal` query requires an argument of type `ListDealFundingRoundsByDealVariables`:
+const listDealFundingRoundsByDealVars: ListDealFundingRoundsByDealVariables = {
+  dealId: ..., 
+};
+
+// Call the `listDealFundingRoundsByDealRef()` function to get a reference to the query.
+const ref = listDealFundingRoundsByDealRef(listDealFundingRoundsByDealVars);
+// Variables can be defined inline as well.
+const ref = listDealFundingRoundsByDealRef({ dealId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listDealFundingRoundsByDealRef(dataConnect, listDealFundingRoundsByDealVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.dealFundingRoundEntries);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.dealFundingRoundEntries);
 });
 ```
 

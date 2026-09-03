@@ -29,7 +29,10 @@ export interface DealDetail {
   round: string;
   securityType: string;
   seekingAmount: number;
-  preMoneyValuation: number;
+  currency?: string | null;
+  preMoneyValuation?: number | null;
+  valuationCap?: number | null;
+  discountPercent?: number | null;
   hasLeadInvestor: boolean;
   leadInvestorName?: string | null;
   willHaveInterestBearingDebtAfterClose: boolean;
@@ -39,6 +42,7 @@ export interface DealDetail {
   referredBy?: string | null;
   sector?: string | null;
   keywords?: string[] | null;
+  companyLocation?: string | null;
   stage: string;
   driveFolderUrl?: string | null;
   createdAt: string;
@@ -59,12 +63,36 @@ export interface DealRatingRow {
   member: { id: string; displayName: string };
 }
 
-function currency(n: number): string {
+export interface DealFundingRoundRow {
+  id: string;
+  round: string;
+  amount: number;
+  currency: string;
+}
+
+function currency(n: number, code?: string | null): string {
+  if (code) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: code, maximumFractionDigits: 0 }).format(
+        n
+      );
+    } catch {
+      // Fall through to the $-prefixed fallback for an invalid/unrecognized code.
+    }
+  }
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
 function yesNo(v: boolean): string {
   return v ? "Yes" : "No";
+}
+
+// A SAFE has no pre-money valuation — fall back to its valuation cap so this always shows
+// something meaningful, labeled to distinguish it from a priced round's pre-money figure.
+function valuationLabel(deal: DealDetail): string {
+  if (deal.preMoneyValuation != null) return `${currency(deal.preMoneyValuation, deal.currency)} pre-money`;
+  if (deal.valuationCap != null) return `${currency(deal.valuationCap, deal.currency)} valuation cap`;
+  return "valuation not provided";
 }
 
 // A document "button" (rounded-full border pill, matching the rest of this app's button
@@ -86,6 +114,7 @@ export function DealDetailView({
   deal,
   documents,
   ratings,
+  fundingHistory,
   currentMemberId,
   isAdmin,
   allTags,
@@ -94,6 +123,7 @@ export function DealDetailView({
   deal: DealDetail;
   documents: DealDocumentRow[];
   ratings: DealRatingRow[];
+  fundingHistory: DealFundingRoundRow[];
   currentMemberId: string;
   isAdmin: boolean;
   allTags: DealTagOption[];
@@ -111,8 +141,9 @@ export function DealDetailView({
         <div>
           <h1 className="text-xl font-semibold tracking-tight">{deal.companyName}</h1>
           <p className="text-sm text-zinc-500">
-            {deal.round.replaceAll("_", " ")} · Seeking {currency(deal.seekingAmount)} at{" "}
-            {currency(deal.preMoneyValuation)} pre-money
+            {deal.round.replaceAll("_", " ")} · Seeking {currency(deal.seekingAmount, deal.currency)} at{" "}
+            {valuationLabel(deal)}
+            {deal.companyLocation ? ` · ${deal.companyLocation}` : ""}
           </p>
         </div>
         <DealRatingModal dealId={deal.id} myRating={mine?.rating ?? null} myReview={mine?.review ?? null} />
@@ -164,6 +195,10 @@ export function DealDetailView({
             <div>
               <dt className="text-zinc-500">Sector</dt>
               <dd>{deal.sector ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Location</dt>
+              <dd>{deal.companyLocation ?? "—"}</dd>
             </div>
             <div>
               <dt className="text-zinc-500">Keywords</dt>
@@ -218,12 +253,25 @@ export function DealDetailView({
             </div>
             <div>
               <dt className="text-zinc-500">Seeking</dt>
-              <dd>{currency(deal.seekingAmount)}</dd>
+              <dd>{currency(deal.seekingAmount, deal.currency)}</dd>
             </div>
-            <div>
-              <dt className="text-zinc-500">Pre-money valuation</dt>
-              <dd>{currency(deal.preMoneyValuation)}</dd>
-            </div>
+            {deal.preMoneyValuation != null ? (
+              <div>
+                <dt className="text-zinc-500">Pre-money valuation</dt>
+                <dd>{currency(deal.preMoneyValuation, deal.currency)}</dd>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <dt className="text-zinc-500">Valuation cap</dt>
+                  <dd>{deal.valuationCap != null ? currency(deal.valuationCap, deal.currency) : "—"}</dd>
+                </div>
+                <div>
+                  <dt className="text-zinc-500">Discount</dt>
+                  <dd>{deal.discountPercent != null ? `${deal.discountPercent}%` : "—"}</dd>
+                </div>
+              </>
+            )}
             <div>
               <dt className="text-zinc-500">Lead investor?</dt>
               <dd>
@@ -253,6 +301,20 @@ export function DealDetailView({
               <div>
                 <dt className="text-zinc-500">Referred by</dt>
                 <dd>{deal.referredBy}</dd>
+              </div>
+            )}
+            {fundingHistory.length > 0 && (
+              <div className="sm:col-span-2">
+                <dt className="text-zinc-500">Funding history</dt>
+                <dd>
+                  <ul className="mt-1 flex flex-col gap-1">
+                    {fundingHistory.map((f) => (
+                      <li key={f.id}>
+                        {f.round.replaceAll("_", " ")} — {currency(f.amount, f.currency)}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
               </div>
             )}
           </dl>

@@ -402,7 +402,10 @@ query ListDeals @auth(level: USER, insecureReason: "Member+admin deal room list 
     round
     securityType
     seekingAmount
+    currency
     preMoneyValuation
+    valuationCap
+    discountPercent
     hasLeadInvestor
     leadInvestorName
     willHaveInterestBearingDebtAfterClose
@@ -412,6 +415,7 @@ query ListDeals @auth(level: USER, insecureReason: "Member+admin deal room list 
     referredBy
     sector
     keywords
+    companyLocation
     rank
     stage
     driveFolderUrl
@@ -434,7 +438,10 @@ query GetDealById($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detai
     round
     securityType
     seekingAmount
+    currency
     preMoneyValuation
+    valuationCap
+    discountPercent
     hasLeadInvestor
     leadInvestorName
     willHaveInterestBearingDebtAfterClose
@@ -444,6 +451,7 @@ query GetDealById($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detai
     referredBy
     sector
     keywords
+    companyLocation
     rank
     stage
     driveFolderUrl
@@ -490,5 +498,14 @@ query ListDealRatingsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "
       id
       displayName
     }
+  }
+}
+
+query ListDealFundingRoundsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "Deal detail page's funding-history list — same posture as ListDeals.") {
+  dealFundingRoundEntries(where: { deal: { id: { eq: $dealId } } }, orderBy: { createdAt: ASC }, limit: 50) {
+    id
+    round
+    amount
+    currency
   }
 }

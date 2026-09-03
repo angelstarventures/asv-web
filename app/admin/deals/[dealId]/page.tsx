@@ -4,6 +4,7 @@ import {
   getDealById,
   listDealDocumentsByDeal,
   listDealRatingsByDeal,
+  listDealFundingRoundsByDeal,
   listDealTags,
   listDealTagAssignments,
 } from "@/lib/dataconnect/client";
@@ -17,13 +18,15 @@ export default async function AdminDealDetailPage({ params }: { params: Promise<
   const current = await getCurrentMember();
   if (!current) notFound();
 
-  const [{ deal }, { dealDocuments }, { dealRatings }, { dealTags }, { dealTagAssignments }] = await Promise.all([
-    getDealById({ dealId }),
-    listDealDocumentsByDeal({ dealId }),
-    listDealRatingsByDeal({ dealId }),
-    listDealTags(),
-    listDealTagAssignments(),
-  ]);
+  const [{ deal }, { dealDocuments }, { dealRatings }, { dealFundingRoundEntries }, { dealTags }, { dealTagAssignments }] =
+    await Promise.all([
+      getDealById({ dealId }),
+      listDealDocumentsByDeal({ dealId }),
+      listDealRatingsByDeal({ dealId }),
+      listDealFundingRoundsByDeal({ dealId }),
+      listDealTags(),
+      listDealTagAssignments(),
+    ]);
   if (!deal) notFound();
 
   const assignedTagIds = dealTagAssignments.filter((a) => a.deal.id === dealId).map((a) => a.tag.id);
@@ -39,6 +42,7 @@ export default async function AdminDealDetailPage({ params }: { params: Promise<
         deal={deal}
         documents={dealDocuments}
         ratings={dealRatings}
+        fundingHistory={dealFundingRoundEntries}
         currentMemberId={current.memberId}
         isAdmin
         allTags={dealTags}

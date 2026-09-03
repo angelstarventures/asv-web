@@ -119,6 +119,8 @@ enum FundingRound {
   PRE_SEED
   SEED
   SERIES_A
+  SERIES_B
+  SERIES_C
   OTHER
 }
 
@@ -410,7 +412,16 @@ type Deal @table {
   round: FundingRound!
   securityType: SecurityType!
   seekingAmount: Float!
-  preMoneyValuation: Float!
+  currency: String!            @default(value: "USD")  # ISO 4217 code — the round's currency
+  # Required for a priced round; null for a SAFE, which uses valuationCap/discountPercent
+  # instead (a SAFE has no pre-money valuation in the traditional sense).
+  preMoneyValuation: Float
+  # SAFE-only terms — typically a post-money valuation cap, optionally with a discount.
+  # Both nullable: a SAFE can have a cap with no discount, a discount with no cap, or (rare)
+  # neither ("uncapped, no discount" MFN-only SAFE). Enforced/required as appropriate at the
+  # app level (PitchForm/dealsSubmitPitch), not by a DB NOT NULL constraint.
+  valuationCap: Float
+  discountPercent: Float                                 # CHECK 0..100 — see post_migrations/001
   hasLeadInvestor: Boolean!
   leadInvestorName: String
   willHaveInterestBearingDebtAfterClose: Boolean!
@@ -422,6 +433,7 @@ type Deal @table {
   # nullable since the fetch/analysis is best-effort and must never block a real submission.
   sector: String
   keywords: [String!]
+  companyLocation: String       # AI-derived HQ city/region, same best-effort posture as sector
   # The screening call queue: a deal is "above the line" simply by having a rank at all — null
   # means not currently in consideration. Admins add a deal to the ranked list (assigning it
   # the next rank) and drag-reorder within it; removing it from the list sets this back to
@@ -434,6 +446,18 @@ type Deal @table {
   linkedCompany: Company
   createdAt: Timestamp!        @default(expr: "request.time")
   updatedAt: Timestamp!        @default(expr: "request.time")
+}
+
+# Prior funding rounds the entrepreneur reports at pitch time (round type + amount, in the
+# currency they raised in) — zero or more per deal. Entrepreneur-reported and immutable after
+# submission (no update/delete path); dealsSubmitPitch is the only writer.
+type DealFundingRoundEntry @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  deal: Deal!
+  round: FundingRound!
+  amount: Float!
+  currency: String!     @default(value: "USD")
+  createdAt: Timestamp! @default(expr: "request.time")
 }
 
 type DealDocument @table {

@@ -33,6 +33,7 @@ import {
   listDealTagAssignmentsRef,
   listDealDocumentsByDealRef,
   listDealRatingsByDealRef,
+  listDealFundingRoundsByDealRef,
   type ListCompaniesData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
@@ -81,6 +82,8 @@ import {
   type ListDealDocumentsByDealVariables,
   type ListDealRatingsByDealData,
   type ListDealRatingsByDealVariables,
+  type ListDealFundingRoundsByDealData,
+  type ListDealFundingRoundsByDealVariables,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -366,6 +369,16 @@ export async function listDealRatingsByDeal(
 ): Promise<ListDealRatingsByDealData> {
   const res = await dc().executeQuery<ListDealRatingsByDealData, ListDealRatingsByDealVariables>(
     listDealRatingsByDealRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listDealFundingRoundsByDeal(
+  vars: ListDealFundingRoundsByDealVariables
+): Promise<ListDealFundingRoundsByDealData> {
+  const res = await dc().executeQuery<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>(
+    listDealFundingRoundsByDealRef.operationName,
     vars
   );
   return res.data;

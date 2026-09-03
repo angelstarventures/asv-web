@@ -38,3 +38,11 @@ ALTER TABLE "member_valuation"
 -- by deal_rating, added for the deal-flow feature.
 ALTER TABLE "deal_rating"
   ADD CONSTRAINT chk_deal_rating_range CHECK (rating BETWEEN 1 AND 5);
+
+ALTER TABLE "deal"
+  ADD CONSTRAINT chk_deal_discount_percent CHECK ("discount_percent" IS NULL OR "discount_percent" BETWEEN 0 AND 100),
+  ADD CONSTRAINT chk_deal_valuation_cap CHECK ("valuation_cap" IS NULL OR "valuation_cap" >= 0),
+  ADD CONSTRAINT chk_deal_pre_money_valuation CHECK ("pre_money_valuation" IS NULL OR "pre_money_valuation" >= 0);
+
+ALTER TABLE "deal_funding_round_entry"
+  ADD CONSTRAINT chk_deal_funding_round_amount CHECK (amount >= 0);

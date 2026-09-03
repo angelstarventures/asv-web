@@ -75,6 +75,8 @@ export enum FundingRound {
   PRE_SEED = "PRE_SEED",
   SEED = "SEED",
   SERIES_A = "SERIES_A",
+  SERIES_B = "SERIES_B",
+  SERIES_C = "SERIES_C",
   OTHER = "OTHER",
 };
 
@@ -167,6 +169,11 @@ export interface DealDocument_Key {
   __typename?: 'DealDocument_Key';
 }
 
+export interface DealFundingRoundEntry_Key {
+  id: UUIDString;
+  __typename?: 'DealFundingRoundEntry_Key';
+}
+
 export interface DealRating_Key {
   id: UUIDString;
   __typename?: 'DealRating_Key';
@@ -221,7 +228,10 @@ export interface GetDealByIdData {
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
-    preMoneyValuation: number;
+    currency: string;
+    preMoneyValuation?: number | null;
+    valuationCap?: number | null;
+    discountPercent?: number | null;
     hasLeadInvestor: boolean;
     leadInvestorName?: string | null;
     willHaveInterestBearingDebtAfterClose: boolean;
@@ -231,6 +241,7 @@ export interface GetDealByIdData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    companyLocation?: string | null;
     rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
@@ -460,6 +471,19 @@ export interface ListDealDocumentsByDealVariables {
   dealId: UUIDString;
 }
 
+export interface ListDealFundingRoundsByDealData {
+  dealFundingRoundEntries: ({
+    id: UUIDString;
+    round: FundingRound;
+    amount: number;
+    currency: string;
+  } & DealFundingRoundEntry_Key)[];
+}
+
+export interface ListDealFundingRoundsByDealVariables {
+  dealId: UUIDString;
+}
+
 export interface ListDealRatingsByDealData {
   dealRatings: ({
     rating: number;
@@ -509,7 +533,10 @@ export interface ListDealsData {
     round: FundingRound;
     securityType: SecurityType;
     seekingAmount: number;
-    preMoneyValuation: number;
+    currency: string;
+    preMoneyValuation?: number | null;
+    valuationCap?: number | null;
+    discountPercent?: number | null;
     hasLeadInvestor: boolean;
     leadInvestorName?: string | null;
     willHaveInterestBearingDebtAfterClose: boolean;
@@ -519,6 +546,7 @@ export interface ListDealsData {
     referredBy?: string | null;
     sector?: string | null;
     keywords?: string[] | null;
+    companyLocation?: string | null;
     rank?: number | null;
     stage: DealStage;
     driveFolderUrl?: string | null;
@@ -1126,4 +1154,16 @@ export const listDealRatingsByDealRef: ListDealRatingsByDealRef;
 
 export function listDealRatingsByDeal(vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
 export function listDealRatingsByDeal(dc: DataConnect, vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
+
+interface ListDealFundingRoundsByDealRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListDealFundingRoundsByDealVariables): QueryRef<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListDealFundingRoundsByDealVariables): QueryRef<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+  operationName: string;
+}
+export const listDealFundingRoundsByDealRef: ListDealFundingRoundsByDealRef;
+
+export function listDealFundingRoundsByDeal(vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+export function listDealFundingRoundsByDeal(dc: DataConnect, vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
 

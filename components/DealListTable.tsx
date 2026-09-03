@@ -11,7 +11,9 @@ export interface DealRow {
   round: string;
   securityType: string;
   seekingAmount: number;
-  preMoneyValuation: number;
+  currency?: string;
+  preMoneyValuation?: number | null;
+  valuationCap?: number | null;
   stage: string;
   rank?: number | null;
   createdAt: string;
@@ -44,12 +46,30 @@ const COLUMNS: { key: SortKey; label: string }[] = [
   { key: "createdAt", label: "Submitted" },
 ];
 
-function currency(n: number): string {
+function currency(n: number, code?: string): string {
+  if (code) {
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: code, maximumFractionDigits: 0 }).format(
+        n
+      );
+    } catch {
+      // Fall through to the $-prefixed fallback for an invalid/unrecognized code.
+    }
+  }
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+// A SAFE has no pre-money valuation — fall back to its valuation cap so the column still shows
+// something meaningful, with a "(cap)" suffix to distinguish it from a priced round's figure.
+function dealValuationDisplay(d: DealRow): string {
+  if (d.preMoneyValuation != null) return currency(d.preMoneyValuation, d.currency);
+  if (d.valuationCap != null) return `${currency(d.valuationCap, d.currency)} (cap)`;
+  return "—";
+}
+
 function sortValue(row: DealRow, key: SortKey): string | number {
-  if (key === "seekingAmount" || key === "preMoneyValuation") return row[key];
+  if (key === "seekingAmount") return row.seekingAmount;
+  if (key === "preMoneyValuation") return row.preMoneyValuation ?? row.valuationCap ?? 0;
   if (key === "createdAt") return new Date(row.createdAt).getTime();
   if (key === "rank") return row.rank ?? Number.MAX_SAFE_INTEGER;
   return row[key].toLowerCase();
@@ -392,11 +412,11 @@ export function DealListTable({
                 </div>
                 <div>
                   <dt className="text-xs text-zinc-500">Seeking</dt>
-                  <dd className="tabular-nums">{currency(d.seekingAmount)}</dd>
+                  <dd className="tabular-nums">{currency(d.seekingAmount, d.currency)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-zinc-500">Pre-money</dt>
-                  <dd className="tabular-nums">{currency(d.preMoneyValuation)}</dd>
+                  <dd className="tabular-nums">{dealValuationDisplay(d)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-zinc-500">Submitted</dt>
@@ -479,8 +499,8 @@ export function DealListTable({
                   </Link>
                 </td>
                 <td className="py-2 text-zinc-500 dark:text-zinc-500">{d.round.replaceAll("_", " ")}</td>
-                <td className="py-2 tabular-nums">{currency(d.seekingAmount)}</td>
-                <td className="py-2 tabular-nums">{currency(d.preMoneyValuation)}</td>
+                <td className="py-2 tabular-nums">{currency(d.seekingAmount, d.currency)}</td>
+                <td className="py-2 tabular-nums">{dealValuationDisplay(d)}</td>
                 <td className="py-2">{STAGE_LABELS[d.stage] ?? d.stage}</td>
                 <td className="py-2 text-zinc-500 dark:text-zinc-500">
                   {new Date(d.createdAt).toLocaleDateString()}

@@ -9,16 +9,22 @@ import { generateContent } from "../lib/vertexAi";
 
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 
-export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "OTHER";
+export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
 
-const FUNDING_ROUNDS: readonly FundingRound[] = ["PRE_SEED", "SEED", "SERIES_A", "OTHER"];
+const FUNDING_ROUNDS: readonly FundingRound[] = ["PRE_SEED", "SEED", "SERIES_A", "SERIES_B", "SERIES_C", "OTHER"];
 const SECURITY_TYPES: readonly SecurityType[] = ["PRICED_ROUND", "SAFE", "CONVERTIBLE_NOTE", "OTHER"];
 
 export interface DealsSubmitPitchFile {
   filename: string;
   mimeType: string;
   contentBase64: string;
+}
+
+export interface DealsSubmitPitchFundingRoundEntry {
+  round: FundingRound;
+  amount: number;
+  currency: string;
 }
 
 export interface DealsSubmitPitchInput {
@@ -33,7 +39,12 @@ export interface DealsSubmitPitchInput {
   round: FundingRound;
   securityType: SecurityType;
   seekingAmount: number;
-  preMoneyValuation: number;
+  currency: string;
+  // Required unless securityType is SAFE, in which case valuationCap/discountPercent are used
+  // instead (a SAFE has no pre-money valuation in the traditional sense).
+  preMoneyValuation?: number;
+  valuationCap?: number;
+  discountPercent?: number;
   hasLeadInvestor: boolean;
   leadInvestorName?: string;
   willHaveInterestBearingDebtAfterClose: boolean;
@@ -41,6 +52,7 @@ export interface DealsSubmitPitchInput {
   hasRestrictedBusinessLines: boolean;
   raiseMethod?: string;
   referredBy?: string;
+  fundingHistory?: DealsSubmitPitchFundingRoundEntry[];
   pitchDeck: DealsSubmitPitchFile;
   additionalDocuments?: DealsSubmitPitchFile[];
 }
@@ -73,8 +85,37 @@ function assertValid(input: DealsSubmitPitchInput) {
   if (!Number.isFinite(input.seekingAmount) || input.seekingAmount <= 0) {
     throw new HttpsError("invalid-argument", "seekingAmount must be a positive number.");
   }
-  if (!Number.isFinite(input.preMoneyValuation) || input.preMoneyValuation <= 0) {
+  if (typeof input.currency !== "string" || input.currency.trim().length < 3 || input.currency.trim().length > 10) {
+    throw new HttpsError("invalid-argument", "currency must be a valid currency code.");
+  }
+  if (input.securityType === "SAFE") {
+    if (!Number.isFinite(input.valuationCap) || (input.valuationCap as number) <= 0) {
+      throw new HttpsError("invalid-argument", "valuationCap must be a positive number for a SAFE.");
+    }
+    if (
+      input.discountPercent !== undefined &&
+      (!Number.isFinite(input.discountPercent) || input.discountPercent < 0 || input.discountPercent > 100)
+    ) {
+      throw new HttpsError("invalid-argument", "discountPercent must be between 0 and 100.");
+    }
+  } else if (!Number.isFinite(input.preMoneyValuation) || (input.preMoneyValuation as number) <= 0) {
     throw new HttpsError("invalid-argument", "preMoneyValuation must be a positive number.");
+  }
+  if (input.fundingHistory !== undefined) {
+    if (!Array.isArray(input.fundingHistory)) {
+      throw new HttpsError("invalid-argument", "fundingHistory must be an array.");
+    }
+    for (const entry of input.fundingHistory) {
+      if (!FUNDING_ROUNDS.includes(entry.round)) {
+        throw new HttpsError("invalid-argument", `fundingHistory round must be one of ${FUNDING_ROUNDS.join(", ")}.`);
+      }
+      if (!Number.isFinite(entry.amount) || entry.amount <= 0) {
+        throw new HttpsError("invalid-argument", "fundingHistory amount must be a positive number.");
+      }
+      if (typeof entry.currency !== "string" || entry.currency.trim().length < 3 || entry.currency.trim().length > 10) {
+        throw new HttpsError("invalid-argument", "fundingHistory currency must be a valid currency code.");
+      }
+    }
   }
   for (const flag of [
     "hasLeadInvestor",
@@ -100,12 +141,14 @@ function decodeAndCheckSize(file: DealsSubmitPitchFile): Buffer {
 }
 
 // Best-effort only — a slow/unreachable company site or a flaky Gemini call must never block a
-// real pitch submission, so every failure here just leaves sector/keywords null rather than
-// throwing. Fetches the site's raw HTML (no JS rendering) and lets Gemini work from that; a
+// real pitch submission, so every failure here just leaves sector/keywords/location null rather
+// than throwing. Fetches the site's raw HTML (no JS rendering) and lets Gemini work from that; a
 // company URL that's JS-only client-rendered may yield weaker results, which is an acceptable
 // tradeoff for not running a full headless browser inside this function.
-async function detectSectorAndKeywords(url: string): Promise<{ sector: string | null; keywords: string[] | null }> {
-  const empty = { sector: null, keywords: null };
+async function detectCompanyProfile(
+  url: string
+): Promise<{ sector: string | null; keywords: string[] | null; location: string | null }> {
+  const empty = { sector: null, keywords: null, location: null };
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
@@ -126,24 +169,27 @@ async function detectSectorAndKeywords(url: string): Promise<{ sector: string | 
     const text = await generateContent({
       systemPrompt:
         "You classify early-stage startup companies from their website's raw HTML. Respond with ONLY a JSON object " +
-        'of the exact shape {"sector": string, "keywords": string[]} — sector is a short (1-4 word) industry ' +
-        "classification (e.g. \"Biotech\", \"Medical Devices\", \"CPG\", \"IT/Software\"), keywords is 3-8 short " +
-        "phrases describing the company's specific technology/product. No prose, no markdown, just the JSON object.",
+        'of the exact shape {"sector": string, "keywords": string[], "location": string|null} — sector is a short ' +
+        '(1-4 word) industry classification (e.g. "Biotech", "Medical Devices", "CPG", "IT/Software"), keywords is ' +
+        "3-8 short phrases describing the company's specific technology/product, location is the company's " +
+        'headquarters city and state/country (e.g. "San Francisco, CA" or "London, UK") if it can be determined ' +
+        "from the page, otherwise null. No prose, no markdown, just the JSON object.",
       parts: [`Company website HTML:\n\n${html}`],
       responseMimeType: "application/json",
     });
 
-    const parsed = JSON.parse(text) as { sector?: unknown; keywords?: unknown };
+    const parsed = JSON.parse(text) as { sector?: unknown; keywords?: unknown; location?: unknown };
     const sector = typeof parsed.sector === "string" && parsed.sector.trim() ? parsed.sector.trim() : null;
     const keywords =
       Array.isArray(parsed.keywords) && parsed.keywords.every((k) => typeof k === "string")
         ? (parsed.keywords as string[]).map((k) => k.trim()).filter(Boolean)
         : null;
-    return { sector, keywords: keywords && keywords.length > 0 ? keywords : null };
+    const location = typeof parsed.location === "string" && parsed.location.trim() ? parsed.location.trim() : null;
+    return { sector, keywords: keywords && keywords.length > 0 ? keywords : null, location };
   } catch (err) {
-    // Logged (not rethrown) so a silent sector/keywords miss is still visible in Cloud Logging
-    // without ever surfacing as a failed submission to the entrepreneur.
-    console.error("detectSectorAndKeywords: best-effort classification failed", err);
+    // Logged (not rethrown) so a silent sector/keywords/location miss is still visible in Cloud
+    // Logging without ever surfacing as a failed submission to the entrepreneur.
+    console.error("detectCompanyProfile: best-effort classification failed", err);
     return empty;
   }
 }
@@ -170,9 +216,9 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
     const deckContent = decodeAndCheckSize(input.pitchDeck);
     const additionalContents = additionalDocuments.map(decodeAndCheckSize);
 
-    const [folder, { sector, keywords }] = await Promise.all([
+    const [folder, { sector, keywords, location }] = await Promise.all([
       createDealFolder(rootFolderId, input.companyName),
-      detectSectorAndKeywords(input.companyUrl),
+      detectCompanyProfile(input.companyUrl),
     ]);
     const uploads = [
       { docType: "PITCH_DECK" as const, file: input.pitchDeck, content: deckContent },
@@ -190,19 +236,21 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
       })
     );
 
+    const isSafe = input.securityType === "SAFE";
     const dealId = await withTransaction(async (client) => {
       const { rows } = await client.query<{ id: string }>(
         `INSERT INTO "deal" (
            "company_name", "company_email", "company_url", "entrepreneur_name", "entrepreneur_email",
            "entrepreneur_phone", "executive_summary", "team_information", "round",
-           "security_type", "seeking_amount", "pre_money_valuation", "has_lead_investor",
+           "security_type", "seeking_amount", "currency", "pre_money_valuation", "valuation_cap",
+           "discount_percent", "has_lead_investor",
            "lead_investor_name", "will_have_interest_bearing_debt_after_close",
            "has_existing_interest_bearing_debt", "has_restricted_business_lines",
-           "raise_method", "referred_by", "sector", "keywords", "stage", "drive_folder_id",
-           "drive_folder_url", "created_at", "updated_at"
+           "raise_method", "referred_by", "sector", "keywords", "company_location", "stage",
+           "drive_folder_id", "drive_folder_url", "created_at", "updated_at"
          ) VALUES (
-           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21,
-           'NEW', $22, $23, now(), now()
+           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25,
+           'NEW', $26, $27, now(), now()
          ) RETURNING id`,
         [
           input.companyName,
@@ -216,7 +264,10 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
           input.round,
           input.securityType,
           input.seekingAmount,
-          input.preMoneyValuation,
+          input.currency.trim().toUpperCase(),
+          isSafe ? null : input.preMoneyValuation,
+          isSafe ? input.valuationCap : null,
+          isSafe ? (input.discountPercent ?? null) : null,
           input.hasLeadInvestor,
           input.leadInvestorName ?? null,
           input.willHaveInterestBearingDebtAfterClose,
@@ -226,6 +277,7 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
           input.referredBy ?? null,
           sector,
           keywords,
+          location,
           folder.driveFileId,
           folder.driveUrl,
         ]
@@ -237,6 +289,14 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
           `INSERT INTO "deal_document" ("deal_id", "doc_type", "drive_file_id", "drive_url", "filename", "uploaded_at")
            VALUES ($1, $2, $3, $4, $5, now())`,
           [id, doc.docType, doc.driveFileId, doc.driveUrl, doc.filename]
+        );
+      }
+
+      for (const entry of input.fundingHistory ?? []) {
+        await client.query(
+          `INSERT INTO "deal_funding_round_entry" ("deal_id", "round", "amount", "currency", "created_at")
+           VALUES ($1, $2, $3, $4, now())`,
+          [id, entry.round, entry.amount, entry.currency.trim().toUpperCase()]
         );
       }
 

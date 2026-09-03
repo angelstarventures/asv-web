@@ -4,7 +4,7 @@ import { functions } from "@/lib/firebase/client";
 // Mirrors functions/src/functions/deals-*.ts exactly — same duplicated-boundary-contract
 // reasoning as the other lib/functions/*.ts wrappers.
 
-export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "OTHER";
+export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
 export type DealStage = "NEW" | "PRESENTING" | "OLD" | "PASSED" | "ARCHIVED";
 
@@ -12,6 +12,12 @@ export interface SubmitPitchFile {
   filename: string;
   mimeType: string;
   contentBase64: string;
+}
+
+export interface SubmitPitchFundingRoundEntry {
+  round: FundingRound;
+  amount: number;
+  currency: string;
 }
 
 export interface SubmitPitchInput {
@@ -26,7 +32,11 @@ export interface SubmitPitchInput {
   round: FundingRound;
   securityType: SecurityType;
   seekingAmount: number;
-  preMoneyValuation: number;
+  currency: string;
+  // Required unless securityType is SAFE, in which case valuationCap/discountPercent apply.
+  preMoneyValuation?: number;
+  valuationCap?: number;
+  discountPercent?: number;
   hasLeadInvestor: boolean;
   leadInvestorName?: string;
   willHaveInterestBearingDebtAfterClose: boolean;
@@ -34,6 +44,7 @@ export interface SubmitPitchInput {
   hasRestrictedBusinessLines: boolean;
   raiseMethod?: string;
   referredBy?: string;
+  fundingHistory?: SubmitPitchFundingRoundEntry[];
   pitchDeck: SubmitPitchFile;
   additionalDocuments?: SubmitPitchFile[];
 }
