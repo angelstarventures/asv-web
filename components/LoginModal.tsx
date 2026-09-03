@@ -12,7 +12,14 @@ export function LoginModal() {
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        // stopPropagation: this button can render inside HeaderMobileMenu's dropdown, which
+        // closes itself on any click within it (so tapping a nav link dismisses the menu) —
+        // without this, that same click bubbles up and unmounts this component (along with the
+        // `open` state it just set to true) before the popup ever renders.
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(true);
+        }}
         className="rounded-full bg-foreground px-6 py-3 text-[16px] font-semibold text-background"
       >
         Member sign in
