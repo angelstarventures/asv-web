@@ -149,7 +149,14 @@ async function detectSectorAndKeywords(url: string): Promise<{ sector: string | 
 }
 
 export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmitPitchOutput>>(
-  { enforceAppCheck: true, secrets: [driveOAuthClientSecret, driveOAuthRefreshToken], timeoutSeconds: 120 },
+  {
+    enforceAppCheck: true,
+    secrets: [driveOAuthClientSecret, driveOAuthRefreshToken],
+    timeoutSeconds: 120,
+    // Default 256MiB was getting exhausted in production: decoding uploaded files, buffering
+    // the fetched company homepage before truncation, and the Vertex AI SDK together exceed it.
+    memory: "512MiB",
+  },
   async (request) => {
     const input = request.data;
     assertValid(input);

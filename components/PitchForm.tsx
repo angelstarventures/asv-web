@@ -151,6 +151,13 @@ export function PitchForm() {
       return;
     }
 
+    // The website field accepts a bare domain (e.g. "faunabio.com") for entrepreneurs who
+    // don't type the scheme — normalize to an absolute https:// URL so it's both a valid
+    // clickable link later and a URL the backend's own fetch() (for sector detection) can use.
+    const companyUrl = /^https?:\/\//i.test(form.companyUrl.trim())
+      ? form.companyUrl.trim()
+      : `https://${form.companyUrl.trim()}`;
+
     setBusy(true);
     try {
       const pitchDeck = {
@@ -169,7 +176,7 @@ export function PitchForm() {
       await submitPitch({
         companyName: form.companyName.trim(),
         companyEmail: form.companyEmail.trim(),
-        companyUrl: form.companyUrl.trim(),
+        companyUrl,
         entrepreneurName: form.entrepreneurName.trim(),
         entrepreneurEmail: form.entrepreneurEmail.trim(),
         entrepreneurPhone: form.entrepreneurPhone.trim(),
@@ -242,8 +249,8 @@ export function PitchForm() {
           Company website
           <input
             required
-            type="url"
-            placeholder="https://..."
+            type="text"
+            placeholder="yourcompany.com"
             className={inputClass()}
             value={form.companyUrl}
             onChange={(e) => set("companyUrl", e.target.value)}
