@@ -77,13 +77,10 @@ function sortValue(row: DealRow, key: SortKey): string | number {
 
 function ScreeningLine() {
   return (
-    <div
-      aria-hidden="true"
-      className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-zinc-400"
-    >
-      <span className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700" />
+    <div aria-hidden="true" className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-red-600">
+      <span className="h-0.5 flex-1 bg-red-600" />
       Screening line
-      <span className="h-px flex-1 bg-zinc-300 dark:bg-zinc-700" />
+      <span className="h-0.5 flex-1 bg-red-600" />
     </div>
   );
 }
@@ -109,7 +106,10 @@ export function DealListTable({
   isAdmin?: boolean;
 }) {
   const router = useRouter();
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "createdAt", dir: "desc" });
+  // Rank ascending by default — the screening queue (highest-ranked/most-interesting first,
+  // with the screening line dividing "in consideration" from everything else) is the primary
+  // view now, not something reached by clicking the Rank header first.
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rank", dir: "asc" });
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
@@ -229,24 +229,35 @@ export function DealListTable({
   // reassigns specific deals by id, never assuming the visible order is the full order.
   const dragEnabled = reorderable && stageFilter.size === 0 && tagFilter.size === 0;
 
+  // The screening line is just another slot in the dragged sequence (a sentinel id no real deal
+  // can have) — dragging a row to either side of it, or dropping directly on it, moves that row
+  // across without any special-casing beyond treating LINE_MARKER as a normal drag-over target.
+  const LINE_MARKER = "__LINE__";
+
   const displayRows = useMemo(() => {
     if (!dragOrder) return sorted;
     const byId = new Map(sorted.map((d) => [d.id, d]));
-    const reordered = dragOrder.map((id) => byId.get(id)).filter((d): d is DealRow => Boolean(d));
-    const unranked = sorted.filter((d) => d.rank == null);
-    return [...reordered, ...unranked];
+    return dragOrder
+      .filter((id) => id !== LINE_MARKER)
+      .map((id) => byId.get(id))
+      .filter((d): d is DealRow => Boolean(d));
   }, [dragOrder, sorted]);
 
-  const boundaryIndex = displayRows.filter((d) => d.rank != null).length;
+  const boundaryIndex = dragOrder
+    ? dragOrder.indexOf(LINE_MARKER)
+    : displayRows.filter((d) => d.rank != null).length;
   const showLine = lineVisible && boundaryIndex > 0 && boundaryIndex < displayRows.length;
 
   function handleDragStart(id: string) {
     if (!dragEnabled) return;
     setDraggingId(id);
-    setDragOrder(sorted.filter((d) => d.rank != null).map((d) => d.id));
+    const ids = sorted.map((d) => d.id);
+    const initialBoundary = sorted.filter((d) => d.rank != null).length;
+    ids.splice(initialBoundary, 0, LINE_MARKER);
+    setDragOrder(ids);
   }
 
-  function handleDragOver(e: DragEvent<HTMLTableRowElement>, overId: string) {
+  function handleDragOver(e: DragEvent<HTMLElement>, overId: string) {
     if (!dragEnabled) return;
     e.preventDefault();
     if (!draggingId || draggingId === overId || !dragOrder || !dragOrder.includes(overId)) return;
@@ -264,9 +275,24 @@ export function DealListTable({
     setDraggingId(null);
     setDragOrder(null);
     if (!finalOrder) return;
-    const original = sorted.filter((d) => d.rank != null).map((d) => d.id);
-    if (finalOrder.length === original.length && finalOrder.every((id, i) => id === original[i])) return;
-    await commitRankUpdates(finalOrder.map((dealId, i) => ({ dealId, rank: i + 1 })));
+
+    const lineIdx = finalOrder.indexOf(LINE_MARKER);
+    const finalRankedIds = finalOrder.slice(0, lineIdx);
+    const originalRankedIds = sorted.filter((d) => d.rank != null).map((d) => d.id);
+    if (finalRankedIds.length === originalRankedIds.length && finalRankedIds.every((id, i) => id === originalRankedIds[i])) {
+      return;
+    }
+
+    // Every currently-above-the-line id gets a fresh dense rank; anything that used to be
+    // ranked but ended up below the line gets explicitly cleared.
+    const updates: { dealId: string; rank: number | null }[] = finalRankedIds.map((dealId, i) => ({
+      dealId,
+      rank: i + 1,
+    }));
+    for (const id of originalRankedIds) {
+      if (!finalRankedIds.includes(id)) updates.push({ dealId: id, rank: null });
+    }
+    await commitRankUpdates(updates);
   }
 
   const dealBeingDeleted = deals.find((d) => d.id === confirmingDeleteId) ?? null;
@@ -506,19 +532,19 @@ export function DealListTable({
               {displayRows.map((d, i) => (
                 <Fragment key={d.id}>
                   {showLine && i === boundaryIndex && (
-                    <tr aria-hidden="true">
+                    <tr aria-hidden="true" onDragOver={(e) => handleDragOver(e, LINE_MARKER)}>
                       <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-1">
                         <ScreeningLine />
                       </td>
                     </tr>
                   )}
                   <tr
-                    draggable={dragEnabled && d.rank != null}
+                    draggable={dragEnabled}
                     onDragStart={() => handleDragStart(d.id)}
                     onDragOver={(e) => handleDragOver(e, d.id)}
                     onDragEnd={handleDragEnd}
                     className={`border-b border-zinc-100 dark:border-zinc-900 ${
-                      dragEnabled && d.rank != null ? "cursor-move" : ""
+                      dragEnabled ? "cursor-move" : ""
                     } ${draggingId === d.id ? "opacity-50" : ""}`}
                   >
                     <td className="py-2 tabular-nums text-zinc-500">{d.rank ?? "—"}</td>
