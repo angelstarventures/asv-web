@@ -1,4 +1,10 @@
-import { ENUM_TO_AUDIT_TYPE, ENUM_TO_EXIT_TYPE, ENUM_TO_HEALTH, ENUM_TO_TRAJECTORY } from "@/lib/legacyEnumMap";
+import {
+  ENUM_TO_AUDIT_TYPE,
+  ENUM_TO_EXIT_TYPE,
+  ENUM_TO_HEALTH,
+  ENUM_TO_TRAJECTORY,
+  ENUM_TO_VIEWPOINT_SCENARIO,
+} from "@/lib/legacyEnumMap";
 import type {
   ListCompanyUpdatesForScenarioData,
   ListComplianceFlagDetailsForScenarioData,
@@ -107,6 +113,9 @@ export function buildLegacyRecordFragments(sources: LegacyRecordSources): Map<st
   }
 
   for (const d of sources.valuationAssessmentDetails) {
+    // viewpointScenario is only ever set for INTERNAL_VALUATION_ASSESSMENT rows — null on every
+    // TRANSACTION_VALUATION_CHANGE row, which this table is also shared by.
+    const hasViewpoint = d.viewpointScenario != null;
     byEntry.set(
       d.ledgerEntry.id,
       omitNullish({
@@ -114,6 +123,13 @@ export function buildLegacyRecordFragments(sources: LegacyRecordSources): Map<st
         asv_total_fair_market_value: d.asvTotalFairMarketValue,
         implied_enterprise_value: d.impliedEnterpriseValue,
         assessment_rationale: d.assessmentRationale,
+        viewpoint_analysis: hasViewpoint
+          ? {
+              scenario: ENUM_TO_VIEWPOINT_SCENARIO[d.viewpointScenario as keyof typeof ENUM_TO_VIEWPOINT_SCENARIO],
+              market_research_grounding: d.viewpointMarketResearchGrounding,
+              valuation_impact_summary: d.viewpointValuationImpactSummary,
+            }
+          : undefined,
       })
     );
   }
@@ -131,6 +147,12 @@ export function buildLegacyRecordFragments(sources: LegacyRecordSources): Map<st
       health: ENUM_TO_HEALTH[d.health],
       trajectory: ENUM_TO_TRAJECTORY[d.trajectory],
       summary: { highlights: d.highlights, lowlights: d.lowlights, upcoming_plans: d.upcomingPlans },
+      viewpoint_analysis: {
+        scenario: ENUM_TO_VIEWPOINT_SCENARIO[d.viewpointScenario as keyof typeof ENUM_TO_VIEWPOINT_SCENARIO],
+        market_research_grounding: d.viewpointMarketResearchGrounding,
+        valuation_impact_summary: d.viewpointValuationImpactSummary,
+        ...(d.viewpointWebSources?.length && { web_sources: d.viewpointWebSources }),
+      },
     });
   }
 

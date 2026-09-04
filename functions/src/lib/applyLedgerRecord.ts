@@ -55,7 +55,7 @@ export async function applyLedgerRecord(
     needsReview: opts.needsReview ?? false,
   });
 
-  await insertDetailForType(client, ledgerEntryId, type, record, companyId);
+  await insertDetailForType(client, ledgerEntryId, type, record, companyId, opts.scenario);
   await client.query(
     `INSERT INTO "imported_record_hash" ("ledger_entry_id", "content_hash") VALUES ($1, $2)`,
     [ledgerEntryId, contentHashOf(record)]
@@ -69,7 +69,8 @@ async function insertDetailForType(
   ledgerEntryId: string,
   type: ReturnType<typeof legacyTypeToEnum>,
   record: Record<string, unknown>,
-  companyId: string
+  companyId: string,
+  scenario: ScenarioEnum
 ): Promise<void> {
   switch (type) {
     case "PARTICIPATING_PRICED_ROUND":
@@ -123,15 +124,29 @@ async function insertDetailForType(
       break;
     }
     case "TRANSACTION_VALUATION_CHANGE":
-    case "INTERNAL_VALUATION_ASSESSMENT":
+    case "INTERNAL_VALUATION_ASSESSMENT": {
+      // viewpoint_analysis is only ever meaningful (and only ever schema-required) for
+      // INTERNAL_VALUATION_ASSESSMENT — guard on `type`, not just presence, since the legacy
+      // schema has no additionalProperties:false and can't itself forbid a stray
+      // viewpoint_analysis on a Transaction_ValuationChange record. viewpointScenario is set
+      // from this call's own `scenario` (the row actually being written), not the AI's own
+      // viewpoint_analysis.scenario label — the model doesn't reliably include a top-level
+      // scenario field on every record type, and the authoritative answer to "which scenario is
+      // this row for" is always opts.scenario/the caller's own decision, never the draft's guess.
+      const viewpoint =
+        type === "INTERNAL_VALUATION_ASSESSMENT" ? (record.viewpoint_analysis as Record<string, unknown> | undefined) : undefined;
       await insertValuationAssessmentDetail(client, ledgerEntryId, {
         drivingEventDate: String(record.driving_event_date),
         asvTotalFairMarketValue: Number(record.asv_total_fair_market_value),
         impliedEnterpriseValue: record.implied_enterprise_value as number | undefined,
         assessmentRationale: record.assessment_rationale as string | undefined,
+        viewpointScenario: viewpoint ? scenario : undefined,
+        viewpointMarketResearchGrounding: viewpoint?.market_research_grounding as string | undefined,
+        viewpointValuationImpactSummary: viewpoint?.valuation_impact_summary as string | undefined,
       });
       await insertMemberValuations(client, ledgerEntryId, (record.member_valuations as Record<string, number>) ?? {});
       break;
+    }
     case "COMPLIANCE_FLAG_CHANGE": {
       const compliance = (record.compliance_status as Record<string, unknown>) ?? {};
       await insertComplianceFlagDetail(client, ledgerEntryId, {
@@ -144,12 +159,22 @@ async function insertDetailForType(
     }
     case "COMPANY_UPDATE": {
       const summary = (record.summary as Record<string, unknown>) ?? {};
+      // Required by the schema, but tolerate a missing/malformed one rather than throw — an
+      // admin hand-editing the JSON in LedgerRecordsEditor before AJV validation runs shouldn't
+      // get a raw crash here; ledgerMassImportDiff's own validation is the real gate.
+      const viewpoint = (record.viewpoint_analysis as Record<string, unknown>) ?? {};
       await insertCompanyUpdateDetail(client, ledgerEntryId, {
         health: String(record.health).toUpperCase(),
         trajectory: String(record.trajectory).toUpperCase(),
         highlights: (summary.highlights as string[]) ?? [],
         lowlights: (summary.lowlights as string[]) ?? [],
         upcomingPlans: (summary.upcoming_plans as string[]) ?? [],
+        // See the TRANSACTION_VALUATION_CHANGE/INTERNAL_VALUATION_ASSESSMENT case above for why
+        // this is `scenario` (this call's own, authoritative) rather than the AI's own label.
+        viewpointScenario: scenario,
+        viewpointMarketResearchGrounding: (viewpoint.market_research_grounding as string) ?? "",
+        viewpointValuationImpactSummary: (viewpoint.valuation_impact_summary as string) ?? "",
+        viewpointWebSources: viewpoint.web_sources as string[] | undefined,
       });
       break;
     }

@@ -414,6 +414,10 @@ export interface ListCompanyUpdatesForScenarioData {
     highlights: string[];
     lowlights: string[];
     upcomingPlans: string[];
+    viewpointScenario: Scenario;
+    viewpointMarketResearchGrounding: string;
+    viewpointValuationImpactSummary: string;
+    viewpointWebSources?: string[] | null;
     ledgerEntry: {
       id: UUIDString;
       eventDate: DateString;
@@ -740,6 +744,9 @@ export interface ListValuationAssessmentDetailsForScenarioData {
     asvTotalFairMarketValue: number;
     impliedEnterpriseValue?: number | null;
     assessmentRationale?: string | null;
+    viewpointScenario?: Scenario | null;
+    viewpointMarketResearchGrounding?: string | null;
+    viewpointValuationImpactSummary?: string | null;
   })[];
 }
 

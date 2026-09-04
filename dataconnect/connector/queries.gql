@@ -80,6 +80,10 @@ query ListCompanyUpdatesForScenario($scenario: Scenario!) @auth(level: USER, ins
     highlights
     lowlights
     upcomingPlans
+    viewpointScenario
+    viewpointMarketResearchGrounding
+    viewpointValuationImpactSummary
+    viewpointWebSources
     ledgerEntry {
       id
       eventDate
@@ -199,6 +203,9 @@ query ListValuationAssessmentDetailsForScenario($scenario: Scenario!) @auth(leve
     asvTotalFairMarketValue
     impliedEnterpriseValue
     assessmentRationale
+    viewpointScenario
+    viewpointMarketResearchGrounding
+    viewpointValuationImpactSummary
   }
 }
 

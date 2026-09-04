@@ -26,11 +26,15 @@ function getClient(): GoogleGenAI {
 export type ContentPart = string | { inlineData: { mimeType: string; data: string } };
 
 export interface GenerateContentInput {
-  systemPrompt: string;
+  // Ignored when cachedContentName is set (the cache already carries its own systemInstruction).
+  systemPrompt?: string;
   parts: ContentPart[];
   // Set to "application/json" to ask Gemini for a JSON-only response (still not guaranteed
   // schema-valid — callers must still validate, same as any other untrusted input).
   responseMimeType?: string;
+  // A cache from createContextCache — when set, replaces systemPrompt entirely (the cache
+  // already carries its own systemInstruction) rather than sending it again on every call.
+  cachedContentName?: string;
 }
 
 export async function generateContent(input: GenerateContentInput): Promise<string> {
@@ -43,7 +47,7 @@ export async function generateContent(input: GenerateContentInput): Promise<stri
       },
     ],
     config: {
-      systemInstruction: input.systemPrompt,
+      ...(input.cachedContentName ? { cachedContent: input.cachedContentName } : { systemInstruction: input.systemPrompt }),
       ...(input.responseMimeType ? { responseMimeType: input.responseMimeType } : {}),
     },
   });
@@ -52,6 +56,55 @@ export async function generateContent(input: GenerateContentInput): Promise<stri
     throw new Error("Gemini returned no text content (possibly blocked by a safety filter).");
   }
   return response.text;
+}
+
+export interface GroundingSource {
+  uri: string;
+  title?: string;
+}
+
+export interface GenerateGroundedContentInput {
+  systemPrompt: string;
+  parts: ContentPart[];
+}
+
+export interface GenerateGroundedContentOutput {
+  text: string;
+  sources: GroundingSource[];
+}
+
+// Google Search grounding gives the model live web access instead of relying on training-data
+// knowledge alone — real citations come back in groundingMetadata.groundingChunks. Vertex AI
+// rejects combining this tool with responseMimeType/controlled generation ("controlled
+// generation is not supported with Search tool", confirmed empirically), so this is always a
+// plain-text call — never JSON mode. Callers needing structured output must do a separate,
+// ungrounded generateContent call that incorporates this call's text/sources as plain context.
+export async function generateGroundedContent(input: GenerateGroundedContentInput): Promise<GenerateGroundedContentOutput> {
+  const response = await getClient().models.generateContent({
+    model: MODEL,
+    contents: [
+      {
+        role: "user",
+        parts: input.parts.map((part) => (typeof part === "string" ? { text: part } : part)),
+      },
+    ],
+    config: {
+      systemInstruction: input.systemPrompt,
+      tools: [{ googleSearch: {} }],
+    },
+  });
+
+  if (response.text === undefined) {
+    throw new Error("Gemini returned no text content (possibly blocked by a safety filter).");
+  }
+
+  const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+  const sources: GroundingSource[] = [];
+  for (const chunk of chunks) {
+    if (chunk.web?.uri) sources.push({ uri: chunk.web.uri, title: chunk.web.title });
+  }
+
+  return { text: response.text, sources };
 }
 
 // Portfolio chat (ai-portfolioQuery.ts): the schema + full ledger(s) + member list are seeded

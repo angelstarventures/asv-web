@@ -149,6 +149,15 @@
           "asv_total_fair_market_value": { "type": "number", "minimum": 0 },
           "implied_enterprise_value": { "type": "number", "minimum": 0 },
           "assessment_rationale": { "type": "string", "description": "Why the fund believes this is the fair value absent an external pricing event (e.g. company health/market-conditions analysis)." },
+          "viewpoint_analysis": {
+            "type": "object",
+            "required": ["scenario", "market_research_grounding", "valuation_impact_summary"],
+            "properties": {
+              "scenario": { "type": "string", "enum": ["Optimistic", "Balanced", "Conservative"] },
+              "market_research_grounding": { "type": "string", "description": "Web search insights, M&A/funding comps, and sector trends supporting this risk profile." },
+              "valuation_impact_summary": { "type": "string", "description": "Justification for whether this analysis triggers a markup, markdown, or no change." }
+            }
+          },
           "member_valuations": {
             "type": "object",
             "additionalProperties": { "type": "number", "minimum": 0 },
@@ -160,7 +169,7 @@
     {
       "if": { "properties": { "type": { "const": "CompanyUpdate" } } },
       "then": {
-        "required": ["health", "trajectory", "summary"],
+        "required": ["health", "trajectory", "summary", "viewpoint_analysis"],
         "properties": {
           "health": { "type": "string", "enum": ["Green", "Yellow", "Red"] },
           "trajectory": { "type": "string", "enum": ["Improving", "Stable", "Declining"] },
@@ -171,6 +180,30 @@
               "highlights": { "type": "array", "items": { "type": "string" } },
               "lowlights": { "type": "array", "items": { "type": "string" } },
               "upcoming_plans": { "type": "array", "items": { "type": "string" } }
+            }
+          },
+          "viewpoint_analysis": {
+            "type": "object",
+            "required": ["scenario", "market_research_grounding", "valuation_impact_summary"],
+            "properties": {
+              "scenario": {
+                "type": "string",
+                "enum": ["Optimistic", "Balanced", "Conservative"],
+                "description": "The specific ledger risk profile being analyzed."
+              },
+              "market_research_grounding": {
+                "type": "string",
+                "description": "Real-time Google search findings including peer valuation multiples, competitor rounds, or macro factors."
+              },
+              "valuation_impact_summary": {
+                "type": "string",
+                "description": "Analysis of how the update and market research impact the company's valuation under this scenario."
+              },
+              "web_sources": {
+                "type": "array",
+                "items": { "type": "string", "format": "uri" },
+                "description": "Optional URLs referenced during Google Search Grounding."
+              }
             }
           }
         }

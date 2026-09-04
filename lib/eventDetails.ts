@@ -104,7 +104,12 @@ export function buildEventDetailIndex(sources: EventDetailSources): Map<string, 
         ["Driving event date", d.drivingEventDate],
         ["ASV total fair market value", formatCurrencyCompact(d.asvTotalFairMarketValue)],
         ["Implied enterprise value", d.impliedEnterpriseValue != null ? formatCurrencyCompact(d.impliedEnterpriseValue) : null],
-        ["Rationale", d.assessmentRationale]
+        ["Rationale", d.assessmentRationale],
+        // Only ever populated for INTERNAL_VALUATION_ASSESSMENT rows — naturally absent (via
+        // fields()'s null filter) for TRANSACTION_VALUATION_CHANGE, which shares this table.
+        ["Viewpoint scenario", d.viewpointScenario ? humanize(d.viewpointScenario) : null],
+        ["Market research grounding", d.viewpointMarketResearchGrounding],
+        ["Valuation impact summary", d.viewpointValuationImpactSummary]
       )
     );
   }
@@ -130,7 +135,11 @@ export function buildEventDetailIndex(sources: EventDetailSources): Map<string, 
         ["Trajectory", humanize(d.trajectory)],
         ["Highlights", d.highlights.join("; ")],
         ["Lowlights", d.lowlights.join("; ")],
-        ["Upcoming plans", d.upcomingPlans.join("; ")]
+        ["Upcoming plans", d.upcomingPlans.join("; ")],
+        ["Viewpoint scenario", humanize(d.viewpointScenario)],
+        ["Market research grounding", d.viewpointMarketResearchGrounding],
+        ["Valuation impact summary", d.viewpointValuationImpactSummary],
+        ["Web sources", d.viewpointWebSources?.length ? d.viewpointWebSources.join("; ") : null]
       )
     );
   }

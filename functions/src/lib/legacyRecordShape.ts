@@ -5,6 +5,7 @@ import {
   ENUM_TO_TRAJECTORY,
   ENUM_TO_EXIT_TYPE,
   ENUM_TO_AUDIT_TYPE,
+  ENUM_TO_VIEWPOINT_SCENARIO,
   type LedgerEntryTypeEnum,
   type ScenarioEnum,
 } from "./enumMap";
@@ -140,12 +141,32 @@ export async function fetchDetailForEntry(
     case "INTERNAL_VALUATION_ASSESSMENT": {
       const rows = await query<Record<string, unknown>>(
         `SELECT "driving_event_date"::text AS "driving_event_date", "asv_total_fair_market_value",
-                "implied_enterprise_value", "assessment_rationale"
+                "implied_enterprise_value", "assessment_rationale",
+                "viewpoint_scenario", "viewpoint_market_research_grounding", "viewpoint_valuation_impact_summary"
          FROM "valuation_assessment_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
       );
+      const row = (rows[0] ?? {}) as Record<string, unknown>;
+      const {
+        viewpoint_scenario: viewpointScenario,
+        viewpoint_market_research_grounding: viewpointGrounding,
+        viewpoint_valuation_impact_summary: viewpointImpact,
+        ...rest
+      } = row;
       const memberValuations = await fetchMemberValuations(ledgerEntryId, memberScopeId);
-      return { ...omitNullish(rows[0] ?? {}), member_valuations: memberValuations };
+      return {
+        ...omitNullish(rest),
+        // Only ever populated for INTERNAL_VALUATION_ASSESSMENT rows — null on every
+        // TRANSACTION_VALUATION_CHANGE row, which this table is also shared by.
+        ...(viewpointScenario != null && {
+          viewpoint_analysis: {
+            scenario: ENUM_TO_VIEWPOINT_SCENARIO[viewpointScenario as keyof typeof ENUM_TO_VIEWPOINT_SCENARIO] ?? viewpointScenario,
+            market_research_grounding: viewpointGrounding,
+            valuation_impact_summary: viewpointImpact,
+          },
+        }),
+        member_valuations: memberValuations,
+      };
     }
     case "COMPLIANCE_FLAG_CHANGE": {
       // audit_type and compliance_officer_notes are TOP-LEVEL fields per the schema —
@@ -167,7 +188,8 @@ export async function fetchDetailForEntry(
     }
     case "COMPANY_UPDATE": {
       const rows = await query<{ health: string; trajectory: string } & Record<string, unknown>>(
-        `SELECT health, trajectory, highlights, lowlights, "upcoming_plans"
+        `SELECT health, trajectory, highlights, lowlights, "upcoming_plans",
+                "viewpoint_scenario", "viewpoint_market_research_grounding", "viewpoint_valuation_impact_summary", "viewpoint_web_sources"
          FROM "company_update_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
       );
@@ -176,6 +198,15 @@ export async function fetchDetailForEntry(
         health: ENUM_TO_HEALTH[row.health as keyof typeof ENUM_TO_HEALTH] ?? row.health,
         trajectory: ENUM_TO_TRAJECTORY[row.trajectory as keyof typeof ENUM_TO_TRAJECTORY] ?? row.trajectory,
         summary: { highlights: row.highlights, lowlights: row.lowlights, upcoming_plans: row.upcoming_plans },
+        viewpoint_analysis: {
+          scenario:
+            ENUM_TO_VIEWPOINT_SCENARIO[row.viewpoint_scenario as keyof typeof ENUM_TO_VIEWPOINT_SCENARIO] ?? row.viewpoint_scenario,
+          market_research_grounding: row.viewpoint_market_research_grounding ?? "",
+          valuation_impact_summary: row.viewpoint_valuation_impact_summary ?? "",
+          ...((row.viewpoint_web_sources as string[] | null)?.length && {
+            web_sources: row.viewpoint_web_sources as string[],
+          }),
+        },
       };
     }
     default:

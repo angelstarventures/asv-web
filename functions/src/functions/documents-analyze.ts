@@ -1,7 +1,8 @@
 import { onCall, HttpsError, type CallableRequest } from "firebase-functions/v2/https";
+import { ApiError } from "@google/genai";
 import { requireAdmin } from "../lib/auth";
 import { query } from "../lib/dataconnect-admin";
-import { generateContent } from "../lib/vertexAi";
+import { generateContent, generateGroundedContent, createContextCache, type ContentPart } from "../lib/vertexAi";
 import { getPromptSetting } from "../lib/aiPrompts";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
 
@@ -30,6 +31,94 @@ export interface DocumentsAnalyzeOutput {
 }
 
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25MB total across all files in one analysis call
+
+const DRAFTING_FORMAT_INSTRUCTIONS =
+  'Respond with a JSON array of record objects only — no prose, no markdown fences. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.';
+
+// Module-level, reused across warm invocations of this function (Cloud Functions instance
+// reuse) — the schema + format instructions are ~200 lines and identical on every call
+// regardless of company/document, so caching them (instead of resending on every
+// documentsAnalyze invocation) cuts token cost meaningfully. Invalidated when the admin-editable
+// prompt text changes; a Vertex AI ApiError on an expired/invalid cache name (1-hour TTL)
+// triggers a one-time rebuild-and-retry, same pattern as ai-portfolioQuery.ts's own cache reuse.
+let draftingCache: { name: string; promptSignature: string } | undefined;
+
+async function getDraftingCache(prompt: string): Promise<string> {
+  if (draftingCache && draftingCache.promptSignature === prompt) {
+    return draftingCache.name;
+  }
+  const name = await createContextCache({
+    systemPrompt: prompt,
+    contextText: [
+      `The JSON schema every record you draft must conform to:\n${JSON.stringify(portfolioSchema)}`,
+      DRAFTING_FORMAT_INSTRUCTIONS,
+    ].join("\n\n"),
+  });
+  draftingCache = { name, promptSignature: prompt };
+  return name;
+}
+
+const VIEWPOINT_TYPES = new Set(["Internal_ValuationAssessment", "CompanyUpdate"]);
+type ViewpointScenario = "Optimistic" | "Balanced" | "Conservative";
+const SCENARIO_LABELS: Record<string, ViewpointScenario> = {
+  optimistic: "Optimistic",
+  balanced: "Balanced",
+  conservative: "Conservative",
+};
+
+interface MarketResearchResult {
+  marketResearchGrounding: string;
+  impactByScenario: Record<ViewpointScenario, string>;
+  sources: string[];
+}
+
+// Grounded, plain-text research — deliberately never JSON mode: Vertex AI rejects combining
+// Google Search grounding with controlled/JSON generation ("controlled generation is not
+// supported with Search tool", confirmed empirically against the live API). Parses a small
+// delimited plain-text format instead of structured output, and falls back to a generic note on
+// any failure (malformed response, safety block, network error) rather than throwing — this is
+// an enrichment step, not something that should ever block a real analysis from completing.
+async function researchMarketContext(companyName: string, fileParts: ContentPart[]): Promise<MarketResearchResult> {
+  const fallback: MarketResearchResult = {
+    marketResearchGrounding: "Market research unavailable for this analysis.",
+    impactByScenario: {
+      Optimistic: "No additional assessment.",
+      Balanced: "No additional assessment.",
+      Conservative: "No additional assessment.",
+    },
+    sources: [],
+  };
+  try {
+    const prompt = [
+      `Using Google Search, research current market conditions relevant to "${companyName}"'s sector: comparable company valuations, recent funding rounds, M&A or exit activity, and broader sector trends. The attached document(s) describe a specific update or valuation event for this company — ground your research in what's relevant to assessing it.`,
+      "Respond in EXACTLY this plain-text format, nothing else (no JSON, no markdown, no extra commentary):",
+      "MARKET_RESEARCH_GROUNDING: <2-4 sentence summary of your findings and how they relate to this company>",
+      "OPTIMISTIC_IMPACT: <1-2 sentences: under an optimistic scenario, does this research support a markup, markdown, or no change, and why>",
+      "BALANCED_IMPACT: <same, under a balanced/base-case scenario>",
+      "CONSERVATIVE_IMPACT: <same, under a conservative scenario>",
+    ].join("\n");
+
+    const { text, sources } = await generateGroundedContent({
+      systemPrompt: "You are a market research analyst supporting a venture fund's portfolio valuation process.",
+      parts: [prompt, ...fileParts],
+    });
+
+    const extract = (label: string) => text.match(new RegExp(`${label}:\\s*(.+?)(?=\\n[A-Z_]+:|$)`, "s"))?.[1]?.trim();
+
+    return {
+      marketResearchGrounding: extract("MARKET_RESEARCH_GROUNDING") ?? fallback.marketResearchGrounding,
+      impactByScenario: {
+        Optimistic: extract("OPTIMISTIC_IMPACT") ?? fallback.impactByScenario.Optimistic,
+        Balanced: extract("BALANCED_IMPACT") ?? fallback.impactByScenario.Balanced,
+        Conservative: extract("CONSERVATIVE_IMPACT") ?? fallback.impactByScenario.Conservative,
+      },
+      sources: sources.map((s) => s.uri),
+    };
+  } catch (err) {
+    console.error("researchMarketContext: best-effort grounding failed", err);
+    return fallback;
+  }
+}
 
 // timeoutSeconds: the default 60s is too tight for an AI drafting call — the context includes
 // the full member list, this company's ledger history, its allocation table, and the ~200-line
@@ -109,7 +198,10 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   );
 
   const prompt = await getPromptSetting("document_analysis");
+  const cacheName = await getDraftingCache(prompt);
 
+  // The schema + response-format instructions moved into the drafting cache (getDraftingCache)
+  // since they're identical on every call — this context is just the parts that vary per call.
   const context = [
     `Company: ${companyName}`,
     `Member list (id, name, investing entity) — resolve any investor named in the document to the matching id:\n${JSON.stringify(members)}`,
@@ -119,27 +211,39 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     companyId
       ? `Each member's cumulative cash allocation into this company to date (memberId -> total dollars invested, balanced scenario, which equals every scenario since investment-round records never diverge by scenario). Use this to compute member_valuations proportionally whenever you draft a Transaction_ValuationChange or Internal_ValuationAssessment record for this company: member_valuations[memberId] = (that member's total here / sum of all totals here) * asv_total_fair_market_value:\n${JSON.stringify(memberAllocationTotals)}`
       : null,
-    `The JSON schema every record you draft must conform to:\n${JSON.stringify(portfolioSchema)}`,
-    'Respond with a JSON array of record objects only — no prose, no markdown fences. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.',
   ]
     .filter((line): line is string => Boolean(line))
     .join("\n\n");
 
-  const fileParts = files.map((f, i) => ({
+  const fileParts: ContentPart[] = files.map((f, i) => ({
     inlineData: { mimeType: f.mimeType, data: fileBuffers[i].toString("base64") },
   }));
 
-  const responseText = await generateContent({
-    systemPrompt: prompt,
-    parts: [context, ...fileParts],
-    responseMimeType: "application/json",
-  });
+  async function draftOnce(cache: string): Promise<unknown> {
+    const responseText = await generateContent({
+      cachedContentName: cache,
+      parts: [context, ...fileParts],
+      responseMimeType: "application/json",
+    });
+    try {
+      return JSON.parse(responseText);
+    } catch {
+      throw new HttpsError("internal", "Gemini did not return valid JSON.");
+    }
+  }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(responseText);
-  } catch {
-    throw new HttpsError("internal", "Gemini did not return valid JSON.");
+    parsed = await draftOnce(cacheName);
+  } catch (err) {
+    // A reused cache can fail if it expired (1-hour TTL) or was otherwise invalidated — rebuild
+    // once and retry, same pattern as ai-portfolioQuery.ts's own cache-reuse fallback.
+    if (err instanceof ApiError) {
+      draftingCache = undefined;
+      parsed = await draftOnce(await getDraftingCache(prompt));
+    } else {
+      throw err;
+    }
   }
   if (!Array.isArray(parsed)) {
     throw new HttpsError("internal", "Gemini did not return a JSON array.");
@@ -155,7 +259,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   // The admin already told us definitively which company this document is about (at upload
   // time) — force it on every record rather than trusting whatever spelling the model used,
   // so a drafted record can never silently create a near-duplicate company row.
-  const proposedRecords = (parsed as Record<string, unknown>[]).map((record) => {
+  const proposedRecords: Record<string, unknown>[] = (parsed as Record<string, unknown>[]).map((record) => {
     const withCompany = { ...record, company: companyName };
     const fmv = record.asv_total_fair_market_value;
     if (VALUATION_TYPES.has(record.type as string) && totalAllocated > 0 && typeof fmv === "number") {
@@ -167,6 +271,29 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     }
     return withCompany;
   });
+
+  // Same reasoning as member_valuations above: the model's own viewpoint_analysis guess (drafted
+  // from training data alone, since it has no real web access without the grounding tool, which
+  // itself can't run in the same JSON-mode call) is replaced with real, grounded research —
+  // never trust the model's own citations. Runs once per company, not once per record: the same
+  // underlying market facts apply to every optimistic/balanced/conservative scenario copy the
+  // model drafted, only the impact interpretation differs, so one grounding call covers all of
+  // them.
+  const needsResearch = proposedRecords.some((record) => VIEWPOINT_TYPES.has(record.type as string));
+  if (needsResearch) {
+    const research = await researchMarketContext(companyName, fileParts);
+    for (const record of proposedRecords) {
+      const type = record.type as string;
+      if (!VIEWPOINT_TYPES.has(type)) continue;
+      const scenario = SCENARIO_LABELS[String(record.scenario).toLowerCase()] ?? "Balanced";
+      record.viewpoint_analysis = {
+        scenario,
+        market_research_grounding: research.marketResearchGrounding,
+        valuation_impact_summary: research.impactByScenario[scenario],
+        ...(type === "CompanyUpdate" && research.sources.length > 0 ? { web_sources: research.sources } : {}),
+      };
+    }
+  }
 
   return { proposedRecords };
 }

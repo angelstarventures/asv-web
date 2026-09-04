@@ -6,6 +6,8 @@
 // reshape DB enum values back into the legacy JSON schema's title-case strings — note IPO
 // stays all-caps (not "Ipo"), so this can't be a mechanical title-case transform.
 
+export const ENUM_TO_VIEWPOINT_SCENARIO = { OPTIMISTIC: "Optimistic", BALANCED: "Balanced", CONSERVATIVE: "Conservative" } as const;
+
 export const ENUM_TO_HEALTH = { GREEN: "Green", YELLOW: "Yellow", RED: "Red" } as const;
 export const ENUM_TO_TRAJECTORY = { IMPROVING: "Improving", STABLE: "Stable", DECLINING: "Declining" } as const;
 export const ENUM_TO_EXIT_TYPE = {

@@ -25,7 +25,15 @@ const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "no priced transaction behind it. In both cases, compute member_valuations by splitting " +
     "asv_total_fair_market_value across members in proportion to each member's cumulative cash " +
     "allocation into that company relative to ASV's total cumulative allocation there — you will be " +
-    "given each member's cumulative allocation for the company being analyzed for this purpose.",
+    "given each member's cumulative allocation for the company being analyzed for this purpose. " +
+    "Every CompanyUpdate record, and any Internal_ValuationAssessment record you draft, needs a " +
+    "viewpoint_analysis object. You will separately be given real, Google Search-grounded market " +
+    "research (comparable company valuations, recent funding rounds, M&A/exit activity, sector " +
+    "trends) for this company, plus a scenario-specific valuation-impact take for each of " +
+    "optimistic/balanced/conservative — use that verbatim for market_research_grounding and " +
+    "valuation_impact_summary rather than inventing your own; only fall back to your own " +
+    "best-effort text if no research was provided. For CompanyUpdate, also copy the given source " +
+    "URLs into web_sources (omit it if none were given). Never fabricate a URL yourself.",
   portfolio_chat:
     "You are a portfolio assistant for ASV, a venture investment fund. Answer the question " +
     "using only the ledger data and schema provided in this conversation's context — never " +

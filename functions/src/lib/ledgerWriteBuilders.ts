@@ -176,6 +176,11 @@ export interface ValuationAssessmentDetailInput {
   asvTotalFairMarketValue: number;
   impliedEnterpriseValue?: number;
   assessmentRationale?: string;
+  // Only ever set for INTERNAL_VALUATION_ASSESSMENT rows — always null for
+  // TRANSACTION_VALUATION_CHANGE, which this table is also shared by.
+  viewpointScenario?: ScenarioEnum;
+  viewpointMarketResearchGrounding?: string;
+  viewpointValuationImpactSummary?: string;
 }
 
 export async function insertValuationAssessmentDetail(
@@ -185,9 +190,19 @@ export async function insertValuationAssessmentDetail(
 ): Promise<void> {
   await client.query(
     `INSERT INTO "valuation_assessment_detail"
-       ("ledger_entry_id", "driving_event_date", "asv_total_fair_market_value", "implied_enterprise_value", "assessment_rationale")
-     VALUES ($1, $2, $3, $4, $5)`,
-    [ledgerEntryId, d.drivingEventDate, d.asvTotalFairMarketValue, d.impliedEnterpriseValue ?? null, d.assessmentRationale ?? null]
+       ("ledger_entry_id", "driving_event_date", "asv_total_fair_market_value", "implied_enterprise_value", "assessment_rationale",
+        "viewpoint_scenario", "viewpoint_market_research_grounding", "viewpoint_valuation_impact_summary")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      ledgerEntryId,
+      d.drivingEventDate,
+      d.asvTotalFairMarketValue,
+      d.impliedEnterpriseValue ?? null,
+      d.assessmentRationale ?? null,
+      d.viewpointScenario ?? null,
+      d.viewpointMarketResearchGrounding ?? null,
+      d.viewpointValuationImpactSummary ?? null,
+    ]
   );
 }
 
@@ -216,6 +231,10 @@ export interface CompanyUpdateDetailInput {
   highlights: string[];
   lowlights: string[];
   upcomingPlans: string[];
+  viewpointScenario: ScenarioEnum;
+  viewpointMarketResearchGrounding: string;
+  viewpointValuationImpactSummary: string;
+  viewpointWebSources?: string[];
 }
 
 export async function insertCompanyUpdateDetail(
@@ -224,9 +243,22 @@ export async function insertCompanyUpdateDetail(
   d: CompanyUpdateDetailInput
 ): Promise<void> {
   await client.query(
-    `INSERT INTO "company_update_detail" ("ledger_entry_id", health, trajectory, highlights, lowlights, "upcoming_plans")
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [ledgerEntryId, d.health, d.trajectory, d.highlights, d.lowlights, d.upcomingPlans]
+    `INSERT INTO "company_update_detail"
+       ("ledger_entry_id", health, trajectory, highlights, lowlights, "upcoming_plans",
+        "viewpoint_scenario", "viewpoint_market_research_grounding", "viewpoint_valuation_impact_summary", "viewpoint_web_sources")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [
+      ledgerEntryId,
+      d.health,
+      d.trajectory,
+      d.highlights,
+      d.lowlights,
+      d.upcomingPlans,
+      d.viewpointScenario,
+      d.viewpointMarketResearchGrounding,
+      d.viewpointValuationImpactSummary,
+      d.viewpointWebSources ?? null,
+    ]
   );
 }
 

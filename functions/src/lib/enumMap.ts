@@ -35,6 +35,13 @@ export const ENUM_TO_SCENARIO = Object.fromEntries(
   Object.entries(SCENARIO_TO_ENUM).map(([legacy, enumVal]) => [enumVal, legacy])
 ) as Record<ScenarioEnum, LegacyScenario>;
 
+// A separate map from SCENARIO_TO_ENUM even though the value sets coincide (both are
+// OPTIMISTIC/BALANCED/CONSERVATIVE) — that map's legacy keys are lowercase (the top-level
+// ledger_entry.scenario convention), while viewpoint_analysis.scenario uses the capitalized
+// convention shared by health/trajectory/etc. below. Reusing SCENARIO_TO_ENUM's keys here would
+// silently reject every real value this field ever receives.
+export const VIEWPOINT_SCENARIO_TO_ENUM = { Optimistic: "OPTIMISTIC", Balanced: "BALANCED", Conservative: "CONSERVATIVE" } as const;
+
 export const HEALTH_TO_ENUM = { Green: "GREEN", Yellow: "YELLOW", Red: "RED" } as const;
 export const TRAJECTORY_TO_ENUM = { Improving: "IMPROVING", Stable: "STABLE", Declining: "DECLINING" } as const;
 export const EXIT_TYPE_TO_ENUM = {
@@ -59,6 +66,7 @@ export const AUDIT_TYPE_TO_ENUM = {
 function reverse<T extends Record<string, string>>(map: T): Record<T[keyof T], keyof T> {
   return Object.fromEntries(Object.entries(map).map(([k, v]) => [v, k])) as Record<T[keyof T], keyof T>;
 }
+export const ENUM_TO_VIEWPOINT_SCENARIO = reverse(VIEWPOINT_SCENARIO_TO_ENUM);
 export const ENUM_TO_HEALTH = reverse(HEALTH_TO_ENUM);
 export const ENUM_TO_TRAJECTORY = reverse(TRAJECTORY_TO_ENUM);
 export const ENUM_TO_EXIT_TYPE = reverse(EXIT_TYPE_TO_ENUM);

@@ -247,6 +247,12 @@ type ValuationAssessmentDetail @table {
   asvTotalFairMarketValue: Float!
   impliedEnterpriseValue: Float
   assessmentRationale: String
+  # viewpoint_analysis, flattened (same pattern as SafeRoundDetail's warrant* fields) — only
+  # meaningful for INTERNAL_VALUATION_ASSESSMENT rows (optional there); always null for
+  # TRANSACTION_VALUATION_CHANGE rows, which this table is also shared by.
+  viewpointScenario: Scenario
+  viewpointMarketResearchGrounding: String
+  viewpointValuationImpactSummary: String
 }
 
 # Halal/Shariah screening only — status is always NON_HALAL when this row exists.
@@ -268,6 +274,13 @@ type CompanyUpdateDetail @table {
   highlights: [String!]!
   lowlights: [String!]!
   upcomingPlans: [String!]!
+  # viewpoint_analysis, flattened (same pattern as SafeRoundDetail's warrant* fields) — required
+  # for every CompanyUpdate going forward. Existing rows predate this field: backfilled to ""
+  # (text fields) and the row's own ledger entry scenario (see post_migrations/003).
+  viewpointScenario: Scenario!                @default(value: BALANCED)
+  viewpointMarketResearchGrounding: String!   @default(value: "")
+  viewpointValuationImpactSummary: String!    @default(value: "")
+  viewpointWebSources: [String!]
 }
 
 # --- Per-member breakdowns ---
