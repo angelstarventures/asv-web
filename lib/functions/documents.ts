@@ -18,6 +18,7 @@ export interface DocumentsAnalyzeInput {
 }
 export interface DocumentsAnalyzeOutput {
   proposedRecords: Record<string, unknown>[];
+  warnings: string[];
 }
 export async function documentsAnalyze(input: DocumentsAnalyzeInput): Promise<DocumentsAnalyzeOutput> {
   // Matches the function's own timeoutSeconds: 300 — the client SDK's 70s default callable

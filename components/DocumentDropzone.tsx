@@ -11,7 +11,7 @@ export function DocumentDropzone({
   onAnalyzed,
 }: {
   companies: { id: string; name: string; tradeName?: string | null }[];
-  onAnalyzed: (proposedRecords: Record<string, unknown>[]) => void;
+  onAnalyzed: (proposedRecords: Record<string, unknown>[], warnings: string[]) => void;
 }) {
   const [isNewCompany, setIsNewCompany] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,13 +51,13 @@ export function DocumentDropzone({
           contentBase64: await readFileAsBase64(file),
         }))
       );
-      const { proposedRecords } = await documentsAnalyze(
+      const { proposedRecords, warnings } = await documentsAnalyze(
         isNewCompany
           ? { newCompanyName, files }
           : { companyId: String(form.get("companyId")), files }
       );
       setStatus(null);
-      onAnalyzed(proposedRecords);
+      onAnalyzed(proposedRecords, warnings);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed.");
       setStatus(null);

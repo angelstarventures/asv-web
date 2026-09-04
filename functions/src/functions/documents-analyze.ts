@@ -4,6 +4,8 @@ import { requireAdmin } from "../lib/auth";
 import { query } from "../lib/dataconnect-admin";
 import { generateContent, generateGroundedContent, createContextCache, type ContentPart } from "../lib/vertexAi";
 import { getPromptSetting } from "../lib/aiPrompts";
+import { fetchLedgerRecordsForCompany } from "../lib/legacyRecordShape";
+import { checkValuationGuardrails } from "../lib/valuationGuardrails";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
 
 // Phase 2 AI: admin uploads one or more documents straight from the browser (no Drive
@@ -28,12 +30,13 @@ export interface DocumentsAnalyzeInput {
 
 export interface DocumentsAnalyzeOutput {
   proposedRecords: Record<string, unknown>[];
+  warnings: string[];
 }
 
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25MB total across all files in one analysis call
 
 const DRAFTING_FORMAT_INSTRUCTIONS =
-  'Respond with a JSON array of record objects only — no prose, no markdown fences. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.';
+  'Respond with a single JSON object of the shape {"records": [...], "warnings": [...]} — no prose, no markdown fences. `records` is an array of record objects; `warnings` is an array of plain-language strings (empty if none) describing anything you found inconsistent with the ledger history you were given, anything you couldn\'t reconcile with the source document, or any figure you had to derive rather than read directly — see the self-verification instructions above. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.';
 
 // Module-level, reused across warm invocations of this function (Cloud Functions instance
 // reuse) — the schema + format instructions are ~200 lines and identical on every call
@@ -155,7 +158,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   // auto-creates the company row by name on commit, so analysis just needs a name to work
   // with; no DB lookup, and no existing-ledger history since none exists yet.
   let companyName: string;
-  let existingLedger: { date: string; type: string; scenario: string }[] = [];
+  let existingLedger: Record<string, unknown>[] = [];
   let memberAllocationTotals: { memberId: string; total: number }[] = [];
   if (companyId) {
     const companies = await query<{ name: string }>(`SELECT name FROM "company" WHERE id = $1`, [companyId]);
@@ -164,12 +167,13 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
       throw new HttpsError("not-found", `No company row for id "${companyId}".`);
     }
     companyName = company.name;
-    // This company's own history only — context, not a portfolio-wide data dump.
-    existingLedger = await query<{ date: string; type: string; scenario: string }>(
-      `SELECT le."event_date"::text AS "date", le.type, le.scenario
-       FROM "ledger_entry" le WHERE le."company_id" = $1 ORDER BY le."event_date" ASC`,
-      [companyId]
-    );
+    // This company's own history only — context, not a portfolio-wide data dump. Full detail
+    // (price-per-share, post-money valuations, every member's allocation/valuation dollars),
+    // not just date/type/scenario — the AI needs the real numbers to ground a new round's
+    // price-per-share or a new valuation mark against what actually happened before, not just
+    // know that "something happened" on a given date (see aiPrompts.ts's document_analysis
+    // prompt, which now requires the model self-check its own drafts against this history).
+    existingLedger = await fetchLedgerRecordsForCompany(companyId);
     // Each member's cumulative cash allocation into this company — the AI needs this to
     // compute member_valuations proportionally when drafting a Transaction_ValuationChange or
     // Internal_ValuationAssessment record (it has no other way to derive ownership share).
@@ -206,7 +210,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     `Company: ${companyName}`,
     `Member list (id, name, investing entity) — resolve any investor named in the document to the matching id:\n${JSON.stringify(members)}`,
     companyId
-      ? `This company's existing ledger entries (date/type/scenario only), for context:\n${JSON.stringify(existingLedger)}`
+      ? `This company's complete existing ledger history, full detail (round pricing, post-money valuations, every member's allocation/valuation dollars) — use this to ground any new price-per-share or valuation figure you draft, and to self-check your draft before responding:\n${JSON.stringify(existingLedger)}`
       : "This is a brand-new company ASV has no prior ledger history with — draft its first investment round record(s) from the document.",
     companyId
       ? `Each member's cumulative cash allocation into this company to date (memberId -> total dollars invested, balanced scenario, which equals every scenario since investment-round records never diverge by scenario). Use this to compute member_valuations proportionally whenever you draft a Transaction_ValuationChange or Internal_ValuationAssessment record for this company: member_valuations[memberId] = (that member's total here / sum of all totals here) * asv_total_fair_market_value:\n${JSON.stringify(memberAllocationTotals)}`
@@ -245,9 +249,24 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
       throw err;
     }
   }
-  if (!Array.isArray(parsed)) {
-    throw new HttpsError("internal", "Gemini did not return a JSON array.");
+
+  // Tolerate the model still returning a bare array despite the {records, warnings} instruction
+  // — treat it as "no warnings" rather than fail the whole analysis over a format slip.
+  let draftedRecords: unknown;
+  let aiWarnings: string[] = [];
+  if (Array.isArray(parsed)) {
+    draftedRecords = parsed;
+  } else if (parsed && typeof parsed === "object" && Array.isArray((parsed as Record<string, unknown>).records)) {
+    draftedRecords = (parsed as Record<string, unknown>).records;
+    const rawWarnings = (parsed as Record<string, unknown>).warnings;
+    if (Array.isArray(rawWarnings)) aiWarnings = rawWarnings.filter((w): w is string => typeof w === "string");
+  } else {
+    throw new HttpsError("internal", "Gemini did not return the expected {records, warnings} shape.");
   }
+  if (!Array.isArray(draftedRecords)) {
+    throw new HttpsError("internal", "Gemini did not return a JSON array of records.");
+  }
+  const parsedRecords = draftedRecords;
 
   // member_valuations is arithmetic the model gets wrong in practice (verified: it drafted
   // plausible-looking but fabricated numbers spread across the wrong members instead of using
@@ -259,7 +278,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   // The admin already told us definitively which company this document is about (at upload
   // time) — force it on every record rather than trusting whatever spelling the model used,
   // so a drafted record can never silently create a near-duplicate company row.
-  const proposedRecords: Record<string, unknown>[] = (parsed as Record<string, unknown>[]).map((record) => {
+  const proposedRecords: Record<string, unknown>[] = (parsedRecords as Record<string, unknown>[]).map((record) => {
     const withCompany = { ...record, company: companyName };
     const fmv = record.asv_total_fair_market_value;
     if (VALUATION_TYPES.has(record.type as string) && totalAllocated > 0 && typeof fmv === "number") {
@@ -295,5 +314,13 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     }
   }
 
-  return { proposedRecords };
+  // Programmatic guardrail, independent of whatever the model self-reported above — same checks
+  // that block a commit later (checkConsistency, importDiff.ts), run here too so the admin sees
+  // them immediately in review rather than only discovering them if/when they try to commit.
+  // Both severities are surfaced as warnings at this review stage (nothing is written to the
+  // database yet); only "error" severity actually blocks at commit time.
+  const guardrailFindings = await checkValuationGuardrails(proposedRecords);
+  const guardrailWarnings = guardrailFindings.map((f) => f.message);
+
+  return { proposedRecords, warnings: [...aiWarnings, ...guardrailWarnings] };
 }

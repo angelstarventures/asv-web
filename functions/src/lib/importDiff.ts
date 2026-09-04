@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { validateLedgerRecord } from "./schema-validate";
 import { query } from "./dataconnect-admin";
 import { LEDGER_TYPE_TO_ENUM, legacyTypeToEnum, type LegacyLedgerType } from "./enumMap";
+import { checkValuationGuardrails } from "./valuationGuardrails";
 
 // Tolerant of both shapes `record.type` can carry: the legacy JSON string
 // ("Participating_PricedRound", from the original schema) or the DB enum form directly
@@ -122,8 +123,20 @@ export async function checkConsistency(records: Record<string, unknown>[]): Prom
     }
   }
 
-  return records.map((record) => {
-    const errors: string[] = [];
+  // Mechanical price-per-share/fair-market-value sanity checks (see valuationGuardrails.ts) —
+  // only "error" severity blocks here; "warning" severity is surfaced earlier, at AI-drafting
+  // review time in documents-analyze.ts, where a human is already in the loop before this
+  // stricter commit-time gate runs.
+  const guardrailFindings = await checkValuationGuardrails(records);
+  const guardrailErrorsByIndex = new Map<number, string[]>();
+  for (const finding of guardrailFindings) {
+    if (finding.severity !== "error") continue;
+    if (!guardrailErrorsByIndex.has(finding.recordIndex)) guardrailErrorsByIndex.set(finding.recordIndex, []);
+    guardrailErrorsByIndex.get(finding.recordIndex)!.push(finding.message);
+  }
+
+  return records.map((record, index) => {
+    const errors: string[] = [...(guardrailErrorsByIndex.get(index) ?? [])];
     const type = normalizeTypeToEnum(String(record.type));
     const companyName = String(record.company ?? "");
 

@@ -268,6 +268,30 @@ export async function fetchAllLedgerRecords(scenario?: ScenarioEnum): Promise<Re
   );
 }
 
+// Every ledger entry for ONE company, full per-type detail (round pricing, post-money
+// valuations, every member's allocation/valuation dollar amounts) — used by documents-analyze.ts
+// to ground the AI's drafting in this company's actual pricing history, instead of the
+// date/type/scenario-only summary it used to receive (which gave it no way to check a new
+// round's price-per-share against the last one, and no way to compute member_valuations itself).
+export async function fetchLedgerRecordsForCompany(companyId: string): Promise<Record<string, unknown>[]> {
+  const entries = await query<LedgerEntryRow>(
+    `SELECT le.id, c.name AS "companyName", c.sector, c."logo_url" AS "logoUrl", le.scenario, le.type,
+            le."event_date"::text AS "eventDate", le."source_document" AS "sourceDocument"
+     FROM "ledger_entry" le
+     JOIN "company" c ON c.id = le."company_id"
+     WHERE le."company_id" = $1
+     ORDER BY le."event_date" ASC`,
+    [companyId]
+  );
+
+  return Promise.all(
+    entries.map(async (entry) => ({
+      ...buildBaseRecord(entry),
+      ...(await fetchDetailForEntry(entry.id, entry.type, entry.sector, undefined, entry.logoUrl)),
+    }))
+  );
+}
+
 // A member's own full-detail ledger records — held companies only ("invested in" means "has an
 // allocation," never a company merely valuated/updated, matching my-full-ledger's definition —
 // see app/api/ledger/my-full-ledger/route.ts on the Next.js side), across every scenario, with
