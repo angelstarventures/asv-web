@@ -27,6 +27,8 @@ export interface UpdateMemberInput {
   investingEntityName: string;
   membershipType: MembershipType;
   profileText?: string | null;
+  phoneNumber?: string | null;
+  expertiseKeywords?: string[] | null;
 }
 export async function updateMember(input: UpdateMemberInput): Promise<{ ok: true }> {
   const call = httpsCallable<UpdateMemberInput, { ok: true }>(functions, "updateMember");
@@ -60,19 +62,12 @@ export async function updatePhotoForMember(input: UpdatePhotoForMemberInput): Pr
   return res.data;
 }
 
-export interface AdminTriggerPasswordResetInput {
+export interface AdminSetTemporaryPasswordInput {
   memberId: string;
+  temporaryPassword: string;
 }
-export interface AdminTriggerPasswordResetOutput {
-  resetLink: string;
-}
-export async function adminTriggerPasswordReset(
-  input: AdminTriggerPasswordResetInput
-): Promise<AdminTriggerPasswordResetOutput> {
-  const call = httpsCallable<AdminTriggerPasswordResetInput, AdminTriggerPasswordResetOutput>(
-    functions,
-    "adminTriggerPasswordReset"
-  );
+export async function adminSetTemporaryPassword(input: AdminSetTemporaryPasswordInput): Promise<{ ok: true }> {
+  const call = httpsCallable<AdminSetTemporaryPasswordInput, { ok: true }>(functions, "adminSetTemporaryPassword");
   const res = await call(input);
   return res.data;
 }
@@ -89,7 +84,7 @@ export async function setMemberStatus(input: SetMemberStatusInput): Promise<{ ok
 
 export interface SetMemberRoleInput {
   memberId: string;
-  role: "admin" | "member";
+  role: "admin" | "member" | "site_admin";
 }
 export async function setMemberRole(input: SetMemberRoleInput): Promise<{ ok: true }> {
   const call = httpsCallable<SetMemberRoleInput, { ok: true }>(functions, "setMemberRole");

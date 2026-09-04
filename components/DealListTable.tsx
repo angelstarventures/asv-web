@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState, type DragEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteDeal, setDealRanks } from "@/lib/functions/deals";
+import { DealReviewMatchModal } from "@/components/DealReviewMatchModal";
 
 export interface DealRow {
   id: string;
@@ -113,6 +114,7 @@ export function DealListTable({
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+  const [reviewingDealId, setReviewingDealId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
@@ -487,6 +489,13 @@ export function DealListTable({
                       ))}
                     <button
                       type="button"
+                      onClick={() => setReviewingDealId(d.id)}
+                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium dark:border-zinc-700"
+                    >
+                      Send for review
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setConfirmingDeleteId(d.id)}
                       className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
                     >
@@ -615,6 +624,13 @@ export function DealListTable({
                           )}
                           <button
                             type="button"
+                            onClick={() => setReviewingDealId(d.id)}
+                            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium dark:border-zinc-700"
+                          >
+                            Send for review
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setConfirmingDeleteId(d.id)}
                             className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
                           >
@@ -675,6 +691,19 @@ export function DealListTable({
           </div>
         </div>
       )}
+
+      {reviewingDealId &&
+        (() => {
+          const reviewingDeal = deals.find((d) => d.id === reviewingDealId);
+          if (!reviewingDeal) return null;
+          return (
+            <DealReviewMatchModal
+              dealId={reviewingDeal.id}
+              companyName={reviewingDeal.companyName}
+              onClose={() => setReviewingDealId(null)}
+            />
+          );
+        })()}
     </div>
   );
 }

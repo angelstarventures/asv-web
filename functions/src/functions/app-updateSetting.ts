@@ -1,14 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { requireAdmin } from "../lib/auth";
+import { requireSiteAdmin } from "../lib/auth";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { APP_SETTING_KEYS, type AppSettingKey } from "../lib/appSettings";
 
-// The only write path for app_setting — backs the "Simplified member view" admin settings
-// form. Per-key value validation happens here rather than trusting the client to send
-// something sane, same posture as updateAiPromptSetting.
+// The only write path for app_setting — backs the Settings page, which is itself
+// site_admin-only (proxy.ts + app/admin/settings/page.tsx), so this is too. Per-key value
+// validation happens here rather than trusting the client to send something sane, same posture
+// as updateAiPromptSetting.
+const SCENARIO_LOCK_VALUES = ["", "optimistic", "balanced", "conservative"] as const;
 const VALID_VALUES: Record<AppSettingKey, readonly string[]> = {
   member_ai_chat_enabled: ["true", "false"],
-  member_locked_scenario: ["", "optimistic", "balanced", "conservative"],
+  site_admin_locked_scenario: SCENARIO_LOCK_VALUES,
+  admin_locked_scenario: SCENARIO_LOCK_VALUES,
+  member_locked_scenario: SCENARIO_LOCK_VALUES,
 };
 
 export interface UpdateAppSettingInput {
@@ -17,7 +21,7 @@ export interface UpdateAppSettingInput {
 }
 
 export const updateAppSetting = onCall<UpdateAppSettingInput, Promise<{ ok: true }>>(async (request) => {
-  const caller = await requireAdmin(request);
+  const caller = await requireSiteAdmin(request);
 
   const { key, value } = request.data;
   if (!APP_SETTING_KEYS.includes(key) || !VALID_VALUES[key]?.includes(value)) {

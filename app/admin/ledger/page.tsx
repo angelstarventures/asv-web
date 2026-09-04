@@ -6,6 +6,7 @@ const PRIMARY_ACTIONS = [
   { href: "/admin/ledger/manage", label: "Manage Ledger" },
   { href: "/admin/ledger/export", label: "Export Ledger" },
   { href: "/admin/ledger/import", label: "Import Ledger" },
+  { href: "/admin/ledger/audit", label: "Audit Ledger" },
 ];
 
 // Landing hub for the ledger write flows — not itself a wireframe, just somewhere to link to

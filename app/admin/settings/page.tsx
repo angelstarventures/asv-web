@@ -1,10 +1,17 @@
+import { redirect } from "next/navigation";
 import { listAiPromptSettings, listAppSettings } from "@/lib/dataconnect/client";
 import { AiPromptSettingsForm } from "@/components/AiPromptSettingsForm";
 import { AppSettingsForm } from "@/components/AppSettingsForm";
+import { getCurrentMember } from "@/lib/auth/currentMember";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
+  // Defense in depth — proxy.ts already gates /admin/settings to site_admin, but this page
+  // doesn't only trust the middleware, matching the pattern elsewhere in the admin surface.
+  const current = await getCurrentMember();
+  if (current?.role !== "site_admin") redirect("/admin/members");
+
   const [{ aiPromptSettings }, { appSettings }] = await Promise.all([listAiPromptSettings(), listAppSettings()]);
   const byKey = new Map(aiPromptSettings.map((s) => [s.key, s.prompt]));
   const appByKey = new Map(appSettings.map((s) => [s.key, s.value]));
@@ -15,7 +22,9 @@ export default async function AdminSettingsPage() {
 
       <AppSettingsForm
         aiChatEnabled={(appByKey.get("member_ai_chat_enabled") ?? "true") === "true"}
-        lockedScenario={appByKey.get("member_locked_scenario") ?? ""}
+        siteAdminLockedScenario={appByKey.get("site_admin_locked_scenario") ?? ""}
+        adminLockedScenario={appByKey.get("admin_locked_scenario") ?? ""}
+        memberLockedScenario={appByKey.get("member_locked_scenario") ?? ""}
       />
 
       <AiPromptSettingsForm

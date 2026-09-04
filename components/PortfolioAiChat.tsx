@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { aiPortfolioQuery, type ChatTurn } from "@/lib/functions/aiChat";
 
 // The schema/ledger/member-list context is seeded once per session as a Vertex AI context
@@ -54,7 +56,13 @@ export function PortfolioAiChat({ scope }: { scope: "mine" | "asv" }) {
                   : "self-start bg-zinc-100 text-foreground dark:bg-zinc-900"
               }`}
             >
-              {turn.text}
+              {turn.role === "model" ? (
+                <div className="chat-markdown flex flex-col gap-2 [&_a]:underline [&_code]:rounded [&_code]:bg-zinc-200 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs dark:[&_code]:bg-zinc-800 [&_h1]:text-base [&_h1]:font-semibold [&_h2]:text-sm [&_h2]:font-semibold [&_h3]:text-sm [&_h3]:font-medium [&_li]:ml-4 [&_ol]:list-decimal [&_strong]:font-semibold [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-zinc-300 [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:list-disc dark:[&_td]:border-zinc-700 dark:[&_th]:border-zinc-700">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{turn.text}</ReactMarkdown>
+                </div>
+              ) : (
+                turn.text
+              )}
             </div>
           ))}
         </div>

@@ -347,6 +347,8 @@ query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Used from 
     authUid
     photoUrl
     profileText
+    phoneNumber
+    expertiseKeywords
     membershipType
     createdAt
   }

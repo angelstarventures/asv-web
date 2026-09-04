@@ -3,21 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const ADMIN_TABS = [
+const BASE_ADMIN_TABS = [
   { href: "/admin/members", label: "Members" },
   { href: "/admin/companies", label: "Companies" },
   { href: "/admin/ledger", label: "Ledger" },
   { href: "/admin/deals", label: "Deals" },
   { href: "/admin/documents", label: "Document uploads" },
-  { href: "/admin/settings", label: "Settings" },
 ];
+const SETTINGS_TAB = { href: "/admin/settings", label: "Settings" };
 
-export function AdminSubNav() {
+export function AdminSubNav({ isSiteAdmin }: { isSiteAdmin: boolean }) {
   const pathname = usePathname();
+  const tabs = isSiteAdmin ? [...BASE_ADMIN_TABS, SETTINGS_TAB] : BASE_ADMIN_TABS;
 
   return (
     <nav className="flex flex-wrap gap-1 border-b border-zinc-200 px-4 py-3 text-sm sm:px-6">
-      {ADMIN_TABS.map((tab) => {
+      {tabs.map((tab) => {
         const active = pathname.startsWith(tab.href);
         return (
           <Link

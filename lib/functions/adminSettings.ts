@@ -17,7 +17,11 @@ export async function updateAiPromptSetting(input: UpdateAiPromptSettingInput): 
   return res.data;
 }
 
-export type AppSettingKey = "member_ai_chat_enabled" | "member_locked_scenario";
+export type AppSettingKey =
+  | "member_ai_chat_enabled"
+  | "site_admin_locked_scenario"
+  | "admin_locked_scenario"
+  | "member_locked_scenario";
 
 export interface UpdateAppSettingInput {
   key: AppSettingKey;

@@ -12,6 +12,7 @@
 enum Role {
   ADMIN
   MEMBER
+  SITE_ADMIN
 }
 
 enum MemberStatus {
@@ -153,6 +154,8 @@ type Member @table(key: "id") {
   authUid: String                      # nullable until the member's account is linked
   photoUrl: String        # data: URL (base64), self-uploaded via /member/settings; nullable
   profileText: String     # short bio, self-editable via /member/settings; nullable
+  phoneNumber: String     # for WhatsApp outreach (deal-review nudges, company-update shares) — free-form, digits-only normalized when building a wa.me link
+  expertiseKeywords: [String!] # resume-style skill/domain terms, self- or admin-editable — matched against Deal.keywords/sector to suggest reviewers
   membershipType: MembershipType! @default(value: MEMBER)
   role: Role!             @default(value: MEMBER)
   status: MemberStatus!   @default(value: ACTIVE)
@@ -170,6 +173,21 @@ type Company @table {
   currentHealth: CompanyHealth
   currentTrajectory: CompanyTrajectory
   status: CompanyStatus!          @default(value: ACTIVE)
+}
+
+# Durable, per-company Google Search-grounded market research — decoupled from the Vertex AI
+# context cache's own lifecycle (which is just a compiled snapshot of this + ledger data). A
+# request about one company can refresh just that company's row (fast, ~15-30s) without waiting
+# on the rest of the portfolio; the shared cache is rebuilt from whatever's currently in this
+# table, only re-researching companies whose row has gone stale (see
+# functions/src/lib/portfolioContextCache.ts). Staleness threshold is the admin-configurable
+# "portfolio_research_staleness_days" AppSetting, not a fixed value here.
+type CompanyMarketResearch @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  company: Company!         @unique
+  marketResearchGrounding: String!
+  sources: [String!]
+  researchedAt: Timestamp!  @default(expr: "request.time")
 }
 
 # Base ledger row — append-only, never updated in place. One row per (event, scenario).

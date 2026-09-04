@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid ID token." }, { status: 401 });
   }
 
-  const claims = decoded as { role?: "admin" | "member"; status?: "active" | "disabled" };
+  const claims = decoded as { role?: "admin" | "member" | "site_admin"; status?: "active" | "disabled" };
   if (!claims.role || !claims.status) {
     return NextResponse.json(
       { error: "Account is not fully provisioned. Contact an administrator." },

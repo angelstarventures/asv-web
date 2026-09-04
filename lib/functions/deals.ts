@@ -163,3 +163,18 @@ export async function setDealRanks(input: SetDealRanksInput): Promise<{ ok: true
   const res = await call(input);
   return res.data;
 }
+
+export interface FindReviewersInput {
+  dealId: string;
+}
+export interface ReviewerMatch {
+  memberId: string;
+  displayName: string;
+  phoneNumber: string | null;
+  reason: string;
+}
+export async function findReviewers(input: FindReviewersInput): Promise<{ matches: ReviewerMatch[] }> {
+  const call = httpsCallable<FindReviewersInput, { matches: ReviewerMatch[] }>(functions, "dealsFindReviewers");
+  const res = await call(input);
+  return res.data;
+}

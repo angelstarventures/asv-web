@@ -2,7 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { ApiError } from "@google/genai";
 import { requireCaller } from "../lib/auth";
 import { query } from "../lib/dataconnect-admin";
-import { createContextCache, generateChatReply, type ChatTurn } from "../lib/vertexAi";
+import { createContextCache, generateChatReply, generateGroundedContent, type ChatTurn } from "../lib/vertexAi";
 import { getPromptSetting } from "../lib/aiPrompts";
 import { fetchAllLedgerRecords, fetchOwnLedgerRecords } from "../lib/legacyRecordShape";
 import { fetchAggregateRollups } from "../lib/portfolioAggregates";
@@ -108,6 +108,38 @@ async function buildContext(scope: "mine" | "asv", memberId: string, isAdmin: bo
 // by Cloud Run with a 504, so this is set closer to callable functions' actual ceiling (3600s)
 // rather than a number picked without evidence. lib/functions/aiChat.ts's client-side
 // httpsCallable timeout must stay >= this value, or the browser gives up first.
+const NEEDS_RESEARCH_PREFIX = "NEEDS_RESEARCH:";
+
+// Vertex AI rejects combining `cachedContent` with a search tool on the same call (the same
+// constraint documents-analyze.ts's researchMarketContext already works around) — the cached
+// ledger-data chat call can't ground itself directly. Instead: if the model's own cached-content
+// reply says it needs external info (see the portfolio_chat prompt's NEEDS_RESEARCH contract),
+// run one grounded, tool-enabled call to gather real findings, then re-ask the SAME original
+// question against the SAME cache with those findings folded in as plain context — the client
+// only ever sees the final answer, never the intermediate detour, so its own history stays a
+// faithful transcript (no extra turns to desync on the next message).
+async function resolveNeedsResearch(reply: string, cacheName: string, history: ChatTurn[], message: string): Promise<string> {
+  const trimmed = reply.trim();
+  if (!trimmed.startsWith(NEEDS_RESEARCH_PREFIX)) return reply;
+
+  const searchQuery = trimmed.slice(NEEDS_RESEARCH_PREFIX.length).trim() || message;
+  const research = await generateGroundedContent({
+    systemPrompt: "You are a research analyst supporting a venture fund's portfolio questions.",
+    parts: [searchQuery],
+  });
+
+  const sourceLines = research.sources.map((s) => `- ${s.title ?? s.uri}: ${s.uri}`).join("\n");
+  const synthesisMessage = [
+    `Here is grounded, current research relevant to the question below:\n${research.text}`,
+    sourceLines ? `Sources:\n${sourceLines}` : "",
+    `Now answer this question, citing the sources above where relevant: ${message}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+
+  return generateChatReply({ cachedContentName: cacheName, history, message: synthesisMessage });
+}
+
 export const aiPortfolioQuery = onCall<AiPortfolioQueryInput, Promise<AiPortfolioQueryOutput>>(
   { timeoutSeconds: 540 },
   async (request) => {
@@ -119,7 +151,7 @@ export const aiPortfolioQuery = onCall<AiPortfolioQueryInput, Promise<AiPortfoli
 
     async function buildFreshCache(): Promise<string> {
       const [contextText, prompt] = await Promise.all([
-        buildContext(scope, caller.memberId, caller.role === "admin"),
+        buildContext(scope, caller.memberId, caller.role === "admin" || caller.role === "site_admin"),
         getPromptSetting("portfolio_chat"),
       ]);
       console.log(
@@ -144,6 +176,8 @@ export const aiPortfolioQuery = onCall<AiPortfolioQueryInput, Promise<AiPortfoli
         throw err;
       }
     }
+
+    reply = await resolveNeedsResearch(reply, cacheName, history ?? [], message);
 
     return { reply, cachedContentName: cacheName };
   }

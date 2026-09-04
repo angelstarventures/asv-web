@@ -43,11 +43,14 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
 
     // Custom claims are the sole enforcement input for proxy.ts (formerly middleware.ts) —
     // set them in the same call that links the auth account so there's never a window where
-    // an account exists without claims.
+    // an account exists without claims. mustChangePassword: true since the admin (not the
+    // member) chose this password — proxy.ts redirects to /change-password until they set
+    // their own, cleared by memberCompletePasswordChange below.
     await getAuth().setCustomUserClaims(userRecord.uid, {
       role,
       status: "active",
       memberId,
+      mustChangePassword: true,
     });
 
     await withTransaction(async (client) => {
@@ -121,6 +124,8 @@ export interface UpdateMemberInput {
   investingEntityName: string;
   membershipType: MembershipType;
   profileText?: string | null;
+  phoneNumber?: string | null;
+  expertiseKeywords?: string[] | null;
 }
 
 // Backs the "Edit member" form on app/admin/members/[memberId] — the only path that changes
@@ -130,7 +135,8 @@ export interface UpdateMemberInput {
 export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(async (request) => {
   await requireAdmin(request);
 
-  const { memberId, displayName, investingEntityName, membershipType, profileText } = request.data;
+  const { memberId, displayName, investingEntityName, membershipType, profileText, phoneNumber, expertiseKeywords } =
+    request.data;
   if (!memberId || !displayName?.trim() || !investingEntityName?.trim() || !membershipType) {
     throw new HttpsError(
       "invalid-argument",
@@ -148,8 +154,18 @@ export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(asy
 
   await withTransaction(async (client) => {
     await client.query(
-      `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "membership_type" = $3, "profile_text" = $4 WHERE id = $5`,
-      [displayName.trim(), investingEntityName.trim(), membershipType, profileText?.trim() || null, memberId]
+      `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "membership_type" = $3, "profile_text" = $4,
+              "phone_number" = $5, "expertise_keywords" = $6
+       WHERE id = $7`,
+      [
+        displayName.trim(),
+        investingEntityName.trim(),
+        membershipType,
+        profileText?.trim() || null,
+        phoneNumber?.trim() || null,
+        expertiseKeywords && expertiseKeywords.length > 0 ? expertiseKeywords : null,
+        memberId,
+      ]
     );
   });
 
@@ -160,6 +176,8 @@ export interface UpdateOwnProfileInput {
   displayName: string;
   investingEntityName: string;
   profileText?: string | null;
+  phoneNumber?: string | null;
+  expertiseKeywords?: string[] | null;
 }
 
 // Self-service analog of updateMember, for app/member/settings — memberId is never a
@@ -170,15 +188,24 @@ export interface UpdateOwnProfileInput {
 export const updateOwnProfile = onCall<UpdateOwnProfileInput, Promise<{ ok: true }>>(async (request) => {
   const caller = await requireCaller(request);
 
-  const { displayName, investingEntityName, profileText } = request.data;
+  const { displayName, investingEntityName, profileText, phoneNumber, expertiseKeywords } = request.data;
   if (!displayName?.trim() || !investingEntityName?.trim()) {
     throw new HttpsError("invalid-argument", "displayName and investingEntityName are required.");
   }
 
   await withTransaction(async (client) => {
     await client.query(
-      `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "profile_text" = $3 WHERE id = $4`,
-      [displayName.trim(), investingEntityName.trim(), profileText?.trim() || null, caller.memberId]
+      `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "profile_text" = $3,
+              "phone_number" = $4, "expertise_keywords" = $5
+       WHERE id = $6`,
+      [
+        displayName.trim(),
+        investingEntityName.trim(),
+        profileText?.trim() || null,
+        phoneNumber?.trim() || null,
+        expertiseKeywords && expertiseKeywords.length > 0 ? expertiseKeywords : null,
+        caller.memberId,
+      ]
     );
   });
 
@@ -268,28 +295,71 @@ export const updatePhotoForMember = onCall<UpdatePhotoForMemberInput, Promise<{ 
   return { ok: true };
 });
 
-export interface AdminTriggerPasswordResetInput {
+export interface AdminSetTemporaryPasswordInput {
   memberId: string;
+  temporaryPassword: string; // shown once to the admin to relay out-of-band
 }
 
-export const adminTriggerPasswordReset = onCall<AdminTriggerPasswordResetInput, Promise<{ resetLink: string }>>(
+// Replaces the old "generate a reset link" flow — the admin now sets the password directly
+// (getAuth().updateUser, same Admin SDK call provisionMember already uses to create one), and
+// mustChangePassword forces the member to pick their own on next login, same as provisionMember.
+// Revokes refresh tokens so a currently-active stale session can't keep using the old password's
+// session past this point (same reasoning as setMemberStatus's disable path).
+export const adminSetTemporaryPassword = onCall<AdminSetTemporaryPasswordInput, Promise<{ ok: true }>>(
   async (request) => {
     await requireAdmin(request);
 
-    const { memberId } = request.data;
-    const members = await query<{ email: string }>(`SELECT email FROM "member" WHERE id = $1`, [memberId]);
+    const { memberId, temporaryPassword } = request.data;
+    if (!memberId || !temporaryPassword || temporaryPassword.length < 8) {
+      throw new HttpsError(
+        "invalid-argument",
+        "memberId and a temporaryPassword of at least 8 characters are required."
+      );
+    }
+
+    const members = await query<{ authUid: string | null }>(
+      `SELECT "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
+      [memberId]
+    );
     if (members.length === 0) {
       throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
     }
+    const authUid = members[0].authUid;
+    if (!authUid) {
+      throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
+    }
 
-    const resetLink = await getAuth().generatePasswordResetLink(members[0].email);
-    return { resetLink };
+    await getAuth().updateUser(authUid, { password: temporaryPassword });
+
+    const user = await getAuth().getUser(authUid);
+    const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+    await getAuth().setCustomUserClaims(authUid, { ...existingClaims, mustChangePassword: true });
+    await getAuth().revokeRefreshTokens(authUid);
+
+    return { ok: true };
   }
 );
 
+// Self-service — called by the member themselves right after they successfully set their own
+// password on the forced /change-password screen, clearing the flag so proxy.ts stops
+// redirecting them there. No revokeRefreshTokens here (unlike setMemberStatus/setMemberRole):
+// the caller is actively completing this flow in their own current session, not being acted on
+// by someone else, so there's no stale-session window to close.
+export const memberCompletePasswordChange = onCall<Record<string, never>, Promise<{ ok: true }>>(async (request) => {
+  const caller = await requireCaller(request);
+
+  const user = await getAuth().getUser(caller.uid);
+  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+  const { mustChangePassword: _drop, ...rest } = existingClaims;
+  void _drop;
+  await getAuth().setCustomUserClaims(caller.uid, rest);
+
+  return { ok: true };
+});
+
 export interface SetMemberRoleInput {
   memberId: string;
-  role: "admin" | "member";
+  role: "admin" | "member" | "site_admin";
 }
 
 // Only meaningful for an already-provisioned member (authUid set) — provisionMember takes its
@@ -303,15 +373,18 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
   const caller = await requireAdmin(request);
 
   const { memberId, role } = request.data;
-  if (!memberId || (role !== "admin" && role !== "member")) {
-    throw new HttpsError("invalid-argument", "memberId and a valid role ('admin' or 'member') are required.");
+  if (!memberId || (role !== "admin" && role !== "member" && role !== "site_admin")) {
+    throw new HttpsError(
+      "invalid-argument",
+      "memberId and a valid role ('admin', 'member', or 'site_admin') are required."
+    );
   }
   if (memberId === caller.memberId) {
     throw new HttpsError("failed-precondition", "You cannot change your own role.");
   }
 
-  const members = await query<{ authUid: string | null }>(
-    `SELECT "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
+  const members = await query<{ authUid: string | null; role: string }>(
+    `SELECT "auth_uid" AS "authUid", role FROM "member" WHERE id = $1`,
     [memberId]
   );
   if (members.length === 0) {
@@ -320,6 +393,13 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
   const authUid = members[0].authUid;
   if (!authUid) {
     throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
+  }
+
+  // Granting OR revoking the top tier is site-admin-only — a plain admin can still toggle
+  // member<->admin freely (unchanged from before), but can't touch the site-admin tier at all.
+  const targetIsSiteAdmin = members[0].role === "SITE_ADMIN";
+  if ((role === "site_admin" || targetIsSiteAdmin) && caller.role !== "site_admin") {
+    throw new HttpsError("permission-denied", "Only a site-admin can grant or revoke the site-admin role.");
   }
 
   await withTransaction(async (client) => {

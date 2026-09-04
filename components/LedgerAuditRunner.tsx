@@ -1,0 +1,97 @@
+"use client";
+
+import { useState } from "react";
+import { ledgerAudit, type AuditFinding } from "@/lib/functions/ledgerAudit";
+
+const CATEGORY_LABELS: Record<AuditFinding["category"], string> = {
+  rollup: "Rollup accuracy",
+  cross_scenario: "Cross-scenario consistency",
+  member_valuation_sum: "Member-valuation sums",
+  price_continuity: "Price-per-share continuity",
+  fmv_plausibility: "Fair-market-value plausibility",
+};
+
+// Runs functions/src/lib/ledgerAudit.ts's four checks on demand — nothing here writes anything
+// except the rollup-cache refresh baked into the audit itself (the same safe, idempotent
+// operation the scheduled recompute already runs). Any real fix still goes through the ledger
+// manage/edit UI by hand, same as the Prosperous Brands correction that prompted this feature.
+export function LedgerAuditRunner() {
+  const [findings, setFindings] = useState<AuditFinding[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRun() {
+    setError(null);
+    setBusy(true);
+    setFindings(null);
+    try {
+      const result = await ledgerAudit();
+      setFindings(result.findings);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Audit failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const grouped = findings
+    ? (Object.keys(CATEGORY_LABELS) as AuditFinding["category"][])
+        .map((category) => ({ category, items: findings.filter((f) => f.category === category) }))
+        .filter((g) => g.items.length > 0)
+    : [];
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-zinc-600 dark:text-zinc-400">
+        Recomputes every company&apos;s rollups from scratch and checks: cross-scenario
+        allocation consistency, member-valuation sums against their recorded totals,
+        price-per-share continuity across rounds, and fair-market-value plausibility against
+        ownership percentage. This can take a while for a large ledger.
+      </p>
+
+      <button
+        type="button"
+        onClick={handleRun}
+        disabled={busy}
+        className="self-start rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
+      >
+        {busy ? "Running audit..." : "Run audit"}
+      </button>
+
+      {error && (
+        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
+          {error}
+        </p>
+      )}
+
+      {findings && (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-zinc-700 dark:text-zinc-300">
+            {findings.length === 0
+              ? "No issues found."
+              : `${findings.length} finding(s) across ${grouped.length} categor${grouped.length === 1 ? "y" : "ies"}.`}
+          </p>
+          {grouped.map((g) => (
+            <div key={g.category} className="flex flex-col gap-2">
+              <h3 className="text-sm font-medium">{CATEGORY_LABELS[g.category]}</h3>
+              <ul className="flex flex-col gap-2">
+                {g.items.map((f, i) => (
+                  <li
+                    key={i}
+                    className={`rounded-md border px-3 py-2 text-sm ${
+                      f.severity === "error"
+                        ? "border-red-300 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950 dark:text-red-200"
+                        : "border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                    }`}
+                  >
+                    {f.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

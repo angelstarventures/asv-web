@@ -12,14 +12,15 @@ export async function createSessionCookie(idToken: string): Promise<string> {
 }
 
 export type SessionClaims = DecodedIdToken & {
-  role?: "admin" | "member";
+  role?: "admin" | "member" | "site_admin";
   status?: "active" | "disabled";
   memberId?: string;
+  mustChangePassword?: boolean;
 };
 
 // checkRevoked=true is the whole point of a session cookie over a bare ID token here: it
-// makes `adminTriggerPasswordReset` / disabling a member take effect immediately rather than
-// waiting out the ID token's own expiry.
+// makes `adminSetTemporaryPassword` / `setMemberRole` / disabling a member take effect
+// immediately rather than waiting out the ID token's own expiry.
 export async function verifySessionCookie(
   cookie: string,
   checkRevoked = true

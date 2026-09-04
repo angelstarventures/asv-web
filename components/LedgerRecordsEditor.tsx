@@ -18,9 +18,18 @@ const EMPTY_RECORD_TEMPLATE = JSON.stringify(
 export function LedgerRecordsEditor({
   initialRecords,
   allowAddRemove = false,
+  recordLabels,
+  expandForSubmit,
 }: {
   initialRecords: Record<string, unknown>[];
   allowAddRemove?: boolean;
+  // One label per position in `initialRecords`, shown instead of "Record N" — used by the AI
+  // document-review flow to say which scenario(s) a given card covers.
+  recordLabels?: string[];
+  // Applied to the parsed, edited records right before diff/commit — the AI document-review
+  // flow uses this to expand each edited representative back into its full set of per-scenario
+  // copies and to silently splice in any scenario copies that were never shown for review.
+  expandForSubmit?: (records: Record<string, unknown>[]) => Record<string, unknown>[];
 }) {
   const [jsonTexts, setJsonTexts] = useState<string[]>(
     initialRecords.length > 0 ? initialRecords.map((r) => JSON.stringify(r, null, 2)) : [EMPTY_RECORD_TEMPLATE]
@@ -67,7 +76,7 @@ export function LedgerRecordsEditor({
     setResult(null);
     setBusy(true);
     try {
-      const { diff: diffResult } = await ledgerMassImportDiff(records);
+      const { diff: diffResult } = await ledgerMassImportDiff(expandForSubmit ? expandForSubmit(records) : records);
       setDiff(diffResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not check these records.");
@@ -82,7 +91,7 @@ export function LedgerRecordsEditor({
     setError(null);
     setBusy(true);
     try {
-      const commitResult = await ledgerMassImportCommit(records);
+      const commitResult = await ledgerMassImportCommit(expandForSubmit ? expandForSubmit(records) : records);
       setResult(commitResult);
       setDiff(null);
     } catch (err) {
@@ -106,7 +115,7 @@ export function LedgerRecordsEditor({
         {jsonTexts.map((text, i) => (
           <div key={i} className="flex flex-col gap-1">
             <div className="flex items-center justify-between text-sm">
-              <span>Record {i + 1}</span>
+              <span>{recordLabels?.[i] ?? `Record ${i + 1}`}</span>
               {allowAddRemove && jsonTexts.length > 1 && (
                 <button
                   type="button"

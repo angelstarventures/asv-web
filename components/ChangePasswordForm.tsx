@@ -8,7 +8,18 @@ import { auth } from "@/lib/firebase/client";
 // reauthenticating with the current password first (rather than only reacting to the
 // auth/requires-recent-login error) keeps this a single form submission instead of a
 // confusing two-step retry.
-export function ChangePasswordForm() {
+//
+// `onSuccess` lets the forced first-login flow (app/change-password/page.tsx) hook in its own
+// follow-up (clear mustChangePassword, refresh the session, redirect) without this component
+// needing to know about that — the voluntary /member/settings usage just omits it and shows the
+// default "Password updated." notice.
+export function ChangePasswordForm({
+  currentPasswordLabel = "Current password",
+  onSuccess,
+}: {
+  currentPasswordLabel?: string;
+  onSuccess?: () => void | Promise<void>;
+} = {}) {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -35,10 +46,14 @@ export function ChangePasswordForm() {
     try {
       await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, currentPassword));
       await updatePassword(user, newPassword);
-      setNotice("Password updated.");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      if (onSuccess) {
+        await onSuccess();
+      } else {
+        setNotice("Password updated.");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update password.");
     } finally {
@@ -50,7 +65,7 @@ export function ChangePasswordForm() {
     <form onSubmit={handleSubmit} className="flex max-w-sm flex-col gap-4">
       <h2 className="text-sm font-medium">Change password</h2>
       <label className="flex flex-col gap-1 text-sm">
-        Current password
+        {currentPasswordLabel}
         <input
           type="password"
           required

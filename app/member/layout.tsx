@@ -9,7 +9,7 @@ import { getMemberById } from "@/lib/dataconnect/client";
 // layout just needs to know whether to render the "Admin" tab.
 export default async function MemberLayout({ children }: { children: ReactNode }) {
   const current = await getCurrentMember();
-  const isAdmin = current?.role === "admin";
+  const isAdmin = current?.role === "admin" || current?.role === "site_admin";
   const { member } = current ? await getMemberById({ id: current.memberId }) : { member: undefined };
 
   return (

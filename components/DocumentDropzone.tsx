@@ -1,17 +1,29 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { documentsAnalyze } from "@/lib/functions/documents";
+import { documentsAnalyze, type RecordGroup } from "@/lib/functions/documents";
 import { readFileAsBase64 } from "@/lib/files";
 
 // Sends file(s) straight to documentsAnalyze for AI drafting — no Drive persistence yet
 // (deferred until real OAuth is set up for the personal-Gmail-owned Drive folder).
+export interface AnalyzedFile {
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+}
+
 export function DocumentDropzone({
   companies,
   onAnalyzed,
 }: {
   companies: { id: string; name: string; tradeName?: string | null }[];
-  onAnalyzed: (proposedRecords: Record<string, unknown>[], warnings: string[]) => void;
+  onAnalyzed: (
+    proposedRecords: Record<string, unknown>[],
+    warnings: string[],
+    groups: RecordGroup[],
+    companyId: string | null,
+    files: AnalyzedFile[]
+  ) => void;
 }) {
   const [isNewCompany, setIsNewCompany] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,13 +63,12 @@ export function DocumentDropzone({
           contentBase64: await readFileAsBase64(file),
         }))
       );
-      const { proposedRecords, warnings } = await documentsAnalyze(
-        isNewCompany
-          ? { newCompanyName, files }
-          : { companyId: String(form.get("companyId")), files }
+      const companyId = isNewCompany ? null : String(form.get("companyId"));
+      const { proposedRecords, warnings, groups } = await documentsAnalyze(
+        isNewCompany ? { newCompanyName, files } : { companyId: companyId!, files }
       );
       setStatus(null);
-      onAnalyzed(proposedRecords, warnings);
+      onAnalyzed(proposedRecords, warnings, groups, companyId, files);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed.");
       setStatus(null);

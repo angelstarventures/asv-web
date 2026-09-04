@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   provisionMember,
-  adminTriggerPasswordReset,
+  adminSetTemporaryPassword,
   setMemberStatus,
   setMemberRole,
 } from "@/lib/functions/adminMembers";
@@ -19,17 +19,20 @@ export function MemberActions({
   isLinked,
   status,
   role,
+  viewerIsSiteAdmin,
 }: {
   memberId: string;
   email: string;
   isLinked: boolean;
   status: "active" | "disabled";
-  role: "admin" | "member";
+  role: "admin" | "member" | "site_admin";
+  viewerIsSiteAdmin: boolean;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
 
   async function handleProvision(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,15 +56,18 @@ export function MemberActions({
     }
   }
 
-  async function handleReset() {
+  async function handleSetTemporaryPassword(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
     setError(null);
     setNotice(null);
     setBusy(true);
+    const form = new FormData(e.currentTarget);
     try {
-      const result = await adminTriggerPasswordReset({ memberId });
-      setNotice(`Reset link: ${result.resetLink}`);
+      await adminSetTemporaryPassword({ memberId, temporaryPassword: String(form.get("temporaryPassword")) });
+      setNotice("Temporary password set. The member will be asked to choose their own the next time they sign in.");
+      setSettingPassword(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate a reset link.");
+      setError(err instanceof Error ? err.message : "Could not set a temporary password.");
     } finally {
       setBusy(false);
     }
@@ -82,11 +88,10 @@ export function MemberActions({
     }
   }
 
-  async function handleToggleRole() {
+  async function handleSetRole(next: "member" | "admin" | "site_admin") {
     setError(null);
     setNotice(null);
     setBusy(true);
-    const next = role === "admin" ? "member" : "admin";
     try {
       await setMemberRole({ memberId, role: next });
       router.refresh();
@@ -149,31 +154,93 @@ export function MemberActions({
           </button>
         </form>
       ) : (
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleReset}
-            disabled={busy}
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
-            Send password reset
-          </button>
-          <button
-            type="button"
-            onClick={handleToggleStatus}
-            disabled={busy}
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
-            {status === "active" ? "Disable member" : "Re-activate member"}
-          </button>
-          <button
-            type="button"
-            onClick={handleToggleRole}
-            disabled={busy}
-            className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-          >
-            {role === "admin" ? "Demote to member" : "Promote to admin"}
-          </button>
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap gap-3">
+            {!settingPassword && (
+              <button
+                type="button"
+                onClick={() => setSettingPassword(true)}
+                disabled={busy}
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+              >
+                Set temporary password
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleToggleStatus}
+              disabled={busy}
+              className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+            >
+              {status === "active" ? "Disable member" : "Re-activate member"}
+            </button>
+            {viewerIsSiteAdmin ? (
+              <label className="flex items-center gap-2 text-sm">
+                Role
+                <select
+                  value={role}
+                  disabled={busy}
+                  onChange={(e) => handleSetRole(e.target.value as "member" | "admin" | "site_admin")}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
+                >
+                  <option value="member">Member</option>
+                  <option value="admin">Admin</option>
+                  <option value="site_admin">Site-admin</option>
+                </select>
+              </label>
+            ) : role === "site_admin" ? (
+              <p className="text-sm text-zinc-500">Site-admin — only a site-admin can change this.</p>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSetRole(role === "admin" ? "member" : "admin")}
+                disabled={busy}
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+              >
+                {role === "admin" ? "Demote to member" : "Promote to admin"}
+              </button>
+            )}
+          </div>
+
+          {settingPassword && (
+            <form
+              onSubmit={handleSetTemporaryPassword}
+              className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800"
+            >
+              <h2 className="text-sm font-medium">Set temporary password</h2>
+              <p className="text-sm text-zinc-500">
+                The member will be required to choose their own password the next time they sign in.
+              </p>
+              <label className="flex flex-col gap-1 text-sm">
+                Temporary password
+                <input
+                  type="text"
+                  name="temporaryPassword"
+                  required
+                  minLength={8}
+                  autoFocus
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+                />
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+                >
+                  {busy ? "Setting..." : "Set password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSettingPassword(false)}
+                  disabled={busy}
+                  className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       )}
     </div>

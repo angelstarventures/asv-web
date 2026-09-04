@@ -4,7 +4,7 @@ import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 export interface CallerContext {
   uid: string;
   memberId: string;
-  role: "admin" | "member";
+  role: "admin" | "member" | "site_admin";
   status: "active" | "disabled";
 }
 
@@ -31,15 +31,26 @@ export async function requireCaller(request: CallableRequest): Promise<CallerCon
   return {
     uid: user.uid,
     memberId: claims.memberId,
-    role: claims.role as "admin" | "member",
+    role: claims.role as "admin" | "member" | "site_admin",
     status: claims.status as "active" | "disabled",
   };
 }
 
+// site_admin is a strict superset of admin — every admin-gated function accepts it too, with
+// no per-call-site changes needed. requireSiteAdmin is the separate, stricter gate for the
+// handful of functions (Settings) that must stay site_admin-only.
 export async function requireAdmin(request: CallableRequest): Promise<CallerContext> {
   const caller = await requireCaller(request);
-  if (caller.role !== "admin") {
+  if (caller.role !== "admin" && caller.role !== "site_admin") {
     throw new HttpsError("permission-denied", "Admin role required.");
+  }
+  return caller;
+}
+
+export async function requireSiteAdmin(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== "site_admin") {
+    throw new HttpsError("permission-denied", "Site-admin role required.");
   }
   return caller;
 }

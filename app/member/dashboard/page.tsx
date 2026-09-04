@@ -24,7 +24,7 @@ import {
   type ListCompanyUpdatesForScenarioData,
   type Scenario as ScenarioType,
 } from "@/lib/dataconnect/generated";
-import { SCENARIOS, SCOPES, type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
+import { SCENARIOS, SCOPES, lockedScenarioSettingKeyForRole, type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { ScenarioScopeToggle } from "@/components/ScenarioScopeToggle";
@@ -72,13 +72,16 @@ export default async function MemberDashboardPage({
   const member = await getCurrentMember();
   if (!member) redirect("/login");
 
-  // Admin-controlled simplified view (app/admin/settings): a non-empty lockedScenario
+  // Site-admin-controlled simplified view (app/admin/settings): a non-empty lockedScenario
   // overrides whatever ?scenario= the URL carries — enforced here, server-side, not just by
-  // hiding the picker, since a member could otherwise still type the param into the URL.
+  // hiding the picker, since a member could otherwise still type the param into the URL. Which
+  // setting applies depends on the VIEWER's own role tier — an admin/site-admin viewing their
+  // own portfolio is bound by their own tier's lock, never the member tier's.
   const { appSettings } = await listAppSettings();
   const appSettingByKey = new Map(appSettings.map((s) => [s.key, s.value]));
   const aiChatEnabled = (appSettingByKey.get("member_ai_chat_enabled") ?? "true") === "true";
-  const lockedScenario = (appSettingByKey.get("member_locked_scenario") ?? "") as ScenarioParam | "";
+  const scenarioSettingKey = lockedScenarioSettingKeyForRole(member.role);
+  const lockedScenario = (appSettingByKey.get(scenarioSettingKey) ?? "") as ScenarioParam | "";
   const scenario = lockedScenario ? Scenario[lockedScenario.toUpperCase() as keyof typeof Scenario] : parseScenario(params.scenario);
 
   return (

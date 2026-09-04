@@ -36,12 +36,12 @@ export interface AccessCheckResult {
 // COMPANY_UPDATE_DOC require having held an allocation; SPA/ALLOCATION_SCHEDULE are
 // admin-only, unconditionally (plan §3).
 export async function checkDocumentAccess(
-  role: "admin" | "member",
+  role: "admin" | "member" | "site_admin",
   memberId: string,
   companyId: string,
   docType: DocumentType
 ): Promise<AccessCheckResult> {
-  if (role === "admin") {
+  if (role === "admin" || role === "site_admin") {
     return { granted: true, reason: "admin" };
   }
 

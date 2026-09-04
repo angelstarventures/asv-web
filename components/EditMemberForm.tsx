@@ -20,12 +20,16 @@ export function EditMemberForm({
   investingEntityName,
   membershipType,
   profileText,
+  phoneNumber,
+  expertiseKeywords,
 }: {
   memberId: string;
   displayName: string;
   investingEntityName: string;
   membershipType: MembershipType;
   profileText: string | null;
+  phoneNumber: string | null;
+  expertiseKeywords: string[] | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +49,11 @@ export function EditMemberForm({
         investingEntityName: String(form.get("investingEntityName")),
         membershipType: String(form.get("membershipType")) as MembershipType,
         profileText: String(form.get("profileText") ?? "").trim() || null,
+        phoneNumber: String(form.get("phoneNumber") ?? "").trim() || null,
+        expertiseKeywords: String(form.get("expertiseKeywords") ?? "")
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean),
       });
       setNotice("Saved.");
       router.refresh();
@@ -101,6 +110,26 @@ export function EditMemberForm({
             </option>
           ))}
         </select>
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Phone number
+        <input
+          type="tel"
+          name="phoneNumber"
+          placeholder="+1 555 123 4567"
+          defaultValue={phoneNumber ?? ""}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
+        Areas of expertise
+        <input
+          type="text"
+          name="expertiseKeywords"
+          placeholder="e.g. Machine Learning, Medical Devices, B2B SaaS Sales"
+          defaultValue={(expertiseKeywords ?? []).join(", ")}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         Profile text

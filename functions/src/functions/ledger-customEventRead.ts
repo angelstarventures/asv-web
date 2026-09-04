@@ -27,7 +27,7 @@ export const ledgerCustomEventRead = onCall<CustomEventReadInput, Promise<{ entr
       throw new HttpsError("invalid-argument", "companyId and scenario are required.");
     }
 
-    if (caller.role !== "admin") {
+    if (caller.role !== "admin" && caller.role !== "site_admin") {
       const held = await hasHeldAllocation(caller.memberId, companyId);
       if (!held) {
         throw new HttpsError("permission-denied", "Member never held an allocation in this company.");

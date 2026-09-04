@@ -19,17 +19,22 @@ export interface GuardrailFinding {
   message: string;
 }
 
-interface PricePoint {
+export interface PricePoint {
   eventDate: string;
   pricePerShare: number;
   postMoneyValuation: number;
   asvNewMoney: number;
+  roundName: string | null;
+  notes: string | null;
 }
 
-async function fetchPriceHistory(companyName: string): Promise<PricePoint[]> {
+// Exported for ledgerAudit.ts's retroactive, whole-ledger walk (same data, same math — just run
+// over a company's complete history instead of "new record vs. what's already committed").
+export async function fetchPriceHistory(companyName: string): Promise<PricePoint[]> {
   const priced = await query<PricePoint>(
     `SELECT le."event_date"::text AS "eventDate", prd."price_per_share" AS "pricePerShare",
-            prd."post_money_valuation" AS "postMoneyValuation", prd."asv_total" AS "asvNewMoney"
+            prd."post_money_valuation" AS "postMoneyValuation", prd."asv_total" AS "asvNewMoney",
+            prd."round_name" AS "roundName", NULL AS "notes"
      FROM "priced_round_detail" prd
      JOIN "ledger_entry" le ON le.id = prd."ledger_entry_id"
      JOIN "company" c ON c.id = le."company_id"
@@ -38,7 +43,8 @@ async function fetchPriceHistory(companyName: string): Promise<PricePoint[]> {
   );
   const nonParticipating = await query<PricePoint>(
     `SELECT le."event_date"::text AS "eventDate", nprd."new_price_per_share" AS "pricePerShare",
-            nprd."new_post_money_valuation" AS "postMoneyValuation", 0 AS "asvNewMoney"
+            nprd."new_post_money_valuation" AS "postMoneyValuation", 0 AS "asvNewMoney",
+            nprd."round_name" AS "roundName", nprd.notes AS "notes"
      FROM "non_participating_round_detail" nprd
      JOIN "ledger_entry" le ON le.id = nprd."ledger_entry_id"
      JOIN "company" c ON c.id = le."company_id"
@@ -54,7 +60,7 @@ async function fetchPriceHistory(companyName: string): Promise<PricePoint[]> {
 // share count that appears to shrink between rounds signals something this simple model doesn't
 // understand (a buyback, a real split already reflected inconsistently, etc.) — better to skip
 // the check than risk a false positive on real money.
-function deriveOwnership(history: PricePoint[]): { asvShares: number; totalShares: number } | null {
+export function deriveOwnership(history: PricePoint[]): { asvShares: number; totalShares: number } | null {
   if (history.length === 0) return null;
   let asvShares = 0;
   let totalShares = 0;
@@ -73,11 +79,15 @@ const PRICE_FIELD_BY_TYPE: Record<string, string> = {
   NonParticipating_Round: "new_price_per_share",
 };
 
-const EXTREME_RATIO = 15;
+export const EXTREME_RATIO = 15;
+
+export function textMentionsSplit(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("split") || lower.includes("recapitaliz");
+}
 
 function mentionsSplit(record: Record<string, unknown>): boolean {
-  const text = `${record.notes ?? ""} ${record.assessment_rationale ?? ""}`.toLowerCase();
-  return text.includes("split") || text.includes("recapitaliz");
+  return textMentionsSplit(`${record.notes ?? ""} ${record.assessment_rationale ?? ""}`);
 }
 
 export async function checkValuationGuardrails(records: Record<string, unknown>[]): Promise<GuardrailFinding[]> {

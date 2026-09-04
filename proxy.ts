@@ -5,7 +5,7 @@ import { SESSION_COOKIE_NAME, verifySessionCookie } from "@/lib/firebase/session
 // only (spinners, conditional nav), never a security boundary. API routes are NOT covered
 // by this matcher and must independently re-verify the session cookie (plan §4).
 export const config = {
-  matcher: ["/member/:path*", "/admin/:path*"],
+  matcher: ["/member/:path*", "/admin/:path*", "/change-password"],
 };
 
 export async function proxy(request: NextRequest) {
@@ -25,8 +25,21 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (request.nextUrl.pathname.startsWith("/admin") && claims.role !== "admin") {
+  const onChangePasswordPage = request.nextUrl.pathname === "/change-password";
+  if (claims.mustChangePassword && !onChangePasswordPage) {
+    return NextResponse.redirect(new URL("/change-password", request.url));
+  }
+  if (!claims.mustChangePassword && onChangePasswordPage) {
+    // Already changed (or never required) — nothing to do here.
     return NextResponse.redirect(new URL("/member/dashboard", request.url));
+  }
+
+  const isAdminTier = claims.role === "admin" || claims.role === "site_admin";
+  if (request.nextUrl.pathname.startsWith("/admin") && !isAdminTier) {
+    return NextResponse.redirect(new URL("/member/dashboard", request.url));
+  }
+  if (request.nextUrl.pathname.startsWith("/admin/settings") && claims.role !== "site_admin") {
+    return NextResponse.redirect(new URL("/admin/members", request.url));
   }
 
   return NextResponse.next();

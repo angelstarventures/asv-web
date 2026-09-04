@@ -107,6 +107,7 @@ export enum MembershipType {
 export enum Role {
   ADMIN = "ADMIN",
   MEMBER = "MEMBER",
+  SITE_ADMIN = "SITE_ADMIN",
 };
 
 export enum Scenario {
@@ -142,6 +143,11 @@ export interface Allocation_Key {
 export interface AppSetting_Key {
   key: string;
   __typename?: 'AppSetting_Key';
+}
+
+export interface CompanyMarketResearch_Key {
+  id: UUIDString;
+  __typename?: 'CompanyMarketResearch_Key';
 }
 
 export interface CompanyUpdateDetail_Key {
@@ -278,6 +284,8 @@ export interface GetMemberByIdData {
     authUid?: string | null;
     photoUrl?: string | null;
     profileText?: string | null;
+    phoneNumber?: string | null;
+    expertiseKeywords?: string[] | null;
     membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key;

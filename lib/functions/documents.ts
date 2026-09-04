@@ -16,9 +16,15 @@ export interface DocumentsAnalyzeInput {
   newCompanyName?: string;
   files: DocumentsAnalyzeFile[];
 }
+export interface RecordGroup {
+  scenarios: string[];
+  recordIndexes: number[];
+  visible: boolean;
+}
 export interface DocumentsAnalyzeOutput {
   proposedRecords: Record<string, unknown>[];
   warnings: string[];
+  groups: RecordGroup[];
 }
 export async function documentsAnalyze(input: DocumentsAnalyzeInput): Promise<DocumentsAnalyzeOutput> {
   // Matches the function's own timeoutSeconds: 300 — the client SDK's 70s default callable
@@ -26,6 +32,30 @@ export async function documentsAnalyze(input: DocumentsAnalyzeInput): Promise<Do
   const call = httpsCallable<DocumentsAnalyzeInput, DocumentsAnalyzeOutput>(functions, "documentsAnalyze", {
     timeout: 300000,
   });
+  const res = await call(input);
+  return res.data;
+}
+
+export interface DocumentsShareCompanyUpdateFile {
+  filename: string;
+  mimeType: string;
+  contentBase64: string;
+}
+export interface DocumentsShareCompanyUpdateInput {
+  companyId: string;
+  files: DocumentsShareCompanyUpdateFile[];
+}
+export interface DocumentsShareCompanyUpdateOutput {
+  driveUrls: string[];
+}
+export async function documentsShareCompanyUpdate(
+  input: DocumentsShareCompanyUpdateInput
+): Promise<DocumentsShareCompanyUpdateOutput> {
+  const call = httpsCallable<DocumentsShareCompanyUpdateInput, DocumentsShareCompanyUpdateOutput>(
+    functions,
+    "documentsShareCompanyUpdate",
+    { timeout: 120000 }
+  );
   const res = await call(input);
   return res.data;
 }

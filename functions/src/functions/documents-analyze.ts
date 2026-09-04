@@ -6,6 +6,7 @@ import { generateContent, generateGroundedContent, createContextCache, type Cont
 import { getPromptSetting } from "../lib/aiPrompts";
 import { fetchLedgerRecordsForCompany } from "../lib/legacyRecordShape";
 import { checkValuationGuardrails } from "../lib/valuationGuardrails";
+import { getAppSetting, lockedScenarioSettingKeyForRole } from "../lib/appSettings";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
 
 // Phase 2 AI: admin uploads one or more documents straight from the browser (no Drive
@@ -28,9 +29,52 @@ export interface DocumentsAnalyzeInput {
   files: DocumentsAnalyzeFile[];
 }
 
+export interface RecordGroup {
+  scenarios: string[]; // lowercase, e.g. ["optimistic", "balanced"]
+  recordIndexes: number[]; // into proposedRecords, aligned 1:1 with `scenarios`
+  visible: boolean; // per the reviewing user's own role-tier scenario setting
+}
+
 export interface DocumentsAnalyzeOutput {
   proposedRecords: Record<string, unknown>[];
   warnings: string[];
+  groups: RecordGroup[];
+}
+
+// Investment-round records are always drafted as 3 identical copies (DRAFTING_FORMAT_INSTRUCTIONS
+// below); other types may or may not actually differ by scenario. Rather than showing the
+// reviewer three near-duplicate cards (part of how the House of Biryan bug went unnoticed), group
+// records for the same logical event — matched by (date, company, type), same natural-key fields
+// importDiff.ts already uses for diffing — by deep content equality *ignoring* the `scenario`
+// field, so identical drafts collapse into one group covering every scenario they match, and only
+// genuinely-scenario-specific drafts (e.g. a valuation narrative that differs by scenario) get
+// their own group.
+function groupRecordsByContent(records: Record<string, unknown>[]): Omit<RecordGroup, "visible">[] {
+  const buckets = new Map<string, number[]>(); // natural key (no scenario) -> record indexes
+  records.forEach((record, i) => {
+    const key = `${record.date}::${record.company}::${record.type}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key)!.push(i);
+  });
+
+  const groups: Omit<RecordGroup, "visible">[] = [];
+  for (const indexes of buckets.values()) {
+    const contentGroups = new Map<string, number[]>(); // content signature (no scenario) -> record indexes
+    for (const i of indexes) {
+      const { scenario: _drop, ...contentOnly } = records[i];
+      void _drop;
+      const signature = JSON.stringify(contentOnly, Object.keys(contentOnly).sort());
+      if (!contentGroups.has(signature)) contentGroups.set(signature, []);
+      contentGroups.get(signature)!.push(i);
+    }
+    for (const groupIndexes of contentGroups.values()) {
+      groups.push({
+        scenarios: groupIndexes.map((i) => String(records[i].scenario ?? "").toLowerCase()),
+        recordIndexes: groupIndexes,
+      });
+    }
+  }
+  return groups;
 }
 
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25MB total across all files in one analysis call
@@ -140,7 +184,7 @@ export const documentsAnalyze = onCall<DocumentsAnalyzeInput, Promise<DocumentsA
 );
 
 async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInput>): Promise<DocumentsAnalyzeOutput> {
-  await requireAdmin(request);
+  const caller = await requireAdmin(request);
 
   const { companyId, newCompanyName, files } = request.data;
   if ((!companyId && !newCompanyName) || !Array.isArray(files) || files.length === 0) {
@@ -322,5 +366,15 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   const guardrailFindings = await checkValuationGuardrails(proposedRecords);
   const guardrailWarnings = guardrailFindings.map((f) => f.message);
 
-  return { proposedRecords, warnings: [...aiWarnings, ...guardrailWarnings] };
+  // Consolidation + silent-add (plan §3): group identical-content scenario copies into one
+  // reviewable unit, then mark each group visible/hidden per the REVIEWER's own role-tier
+  // scenario setting — a site-admin locked to "balanced" only reviews groups covering balanced;
+  // everything else is still returned (so it can be committed unedited), just not for display.
+  const lockedScenario = await getAppSetting(lockedScenarioSettingKeyForRole(caller.role));
+  const groups: RecordGroup[] = groupRecordsByContent(proposedRecords).map((g) => ({
+    ...g,
+    visible: !lockedScenario || g.scenarios.includes(lockedScenario),
+  }));
+
+  return { proposedRecords, warnings: [...aiWarnings, ...guardrailWarnings], groups };
 }

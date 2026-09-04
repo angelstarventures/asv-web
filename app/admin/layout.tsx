@@ -14,7 +14,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <AppHeader isAdmin displayName={member?.displayName} photoUrl={member?.photoUrl} />
-      <AdminSubNav />
+      <AdminSubNav isSiteAdmin={current?.role === "site_admin"} />
       <main className="flex flex-1 flex-col">{children}</main>
     </div>
   );

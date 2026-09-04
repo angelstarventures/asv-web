@@ -2415,6 +2415,8 @@ export interface GetMemberByIdData {
     authUid?: string | null;
     photoUrl?: string | null;
     profileText?: string | null;
+    phoneNumber?: string | null;
+    expertiseKeywords?: string[] | null;
     membershipType: MembershipType;
     createdAt: TimestampString;
   } & Member_Key;

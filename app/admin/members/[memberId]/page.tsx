@@ -4,6 +4,7 @@ import { getMemberById } from "@/lib/dataconnect/client";
 import { MemberActions } from "@/components/MemberActions";
 import { EditMemberForm } from "@/components/EditMemberForm";
 import { AdminPhotoUpload } from "@/components/AdminPhotoUpload";
+import { getCurrentMember } from "@/lib/auth/currentMember";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,7 @@ export default async function AdminMemberDetailPage({
   params: Promise<{ memberId: string }>;
 }) {
   const { memberId } = await params;
-  const { member } = await getMemberById({ id: memberId });
+  const [{ member }, viewer] = await Promise.all([getMemberById({ id: memberId }), getCurrentMember()]);
   if (!member) notFound();
 
   return (
@@ -63,6 +64,8 @@ export default async function AdminMemberDetailPage({
         investingEntityName={member.investingEntityName}
         membershipType={member.membershipType}
         profileText={member.profileText ?? null}
+        phoneNumber={member.phoneNumber ?? null}
+        expertiseKeywords={member.expertiseKeywords ?? null}
       />
 
       <MemberActions
@@ -70,7 +73,8 @@ export default async function AdminMemberDetailPage({
         email={member.email}
         isLinked={Boolean(member.authUid)}
         status={member.status === "ACTIVE" ? "active" : "disabled"}
-        role={member.role === "ADMIN" ? "admin" : "member"}
+        role={member.role === "SITE_ADMIN" ? "site_admin" : member.role === "ADMIN" ? "admin" : "member"}
+        viewerIsSiteAdmin={viewer?.role === "site_admin"}
       />
     </div>
   );
