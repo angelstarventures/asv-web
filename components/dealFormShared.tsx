@@ -88,6 +88,91 @@ export function CurrencySelect({
   );
 }
 
+export interface FundingHistoryRow {
+  key: string;
+  round: FundingRound;
+  amount: string;
+  currency: string;
+  customCurrency: string;
+}
+
+export function emptyFundingHistoryRow(): FundingHistoryRow {
+  return {
+    key: Math.random().toString(36).slice(2),
+    round: "SEED",
+    amount: "",
+    currency: "USD",
+    customCurrency: "",
+  };
+}
+
+// Shared by PitchForm (entrepreneur, creating) and EditDealForm (admin, editing an existing
+// deal) — a repeatable list of prior-round rows, each with its own round/amount/currency.
+export function FundingHistoryEditor({ rows, onChange }: { rows: FundingHistoryRow[]; onChange: (rows: FundingHistoryRow[]) => void }) {
+  function updateRow(i: number, patch: Partial<FundingHistoryRow>) {
+    onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  }
+
+  return (
+    <>
+      {rows.map((row, i) => (
+        <div key={row.key} className="grid gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800 sm:grid-cols-4">
+          <label className="flex flex-col gap-1 text-sm">
+            Round
+            <select
+              className={inputClass()}
+              value={row.round}
+              onChange={(e) => updateRow(i, { round: e.target.value as FundingRound })}
+            >
+              {ROUND_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Amount
+            <input
+              type="number"
+              min={0}
+              step="any"
+              className={inputClass()}
+              value={row.amount}
+              onChange={(e) => updateRow(i, { amount: e.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            Currency
+            <CurrencySelect
+              value={row.currency}
+              onChange={(v) => updateRow(i, { currency: v })}
+              customValue={row.customCurrency}
+              onCustomChange={(v) => updateRow(i, { customCurrency: v })}
+            />
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => onChange(rows.filter((_, j) => j !== i))}
+              className="rounded-full border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 dark:border-red-900 dark:text-red-400"
+            >
+              Remove
+            </button>
+          </div>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => onChange([...rows, emptyFundingHistoryRow()])}
+        className="w-fit rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
+      >
+        Add a prior round
+      </button>
+    </>
+  );
+}
+
 export function YesNoField({
   label,
   value,

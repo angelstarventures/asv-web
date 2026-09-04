@@ -1,15 +1,17 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction } from "../lib/dataconnect-admin";
-import { assertValidDealCoreFields, type DealCoreFields } from "../lib/dealFields";
+import { assertValidDealCoreFields, assertValidFundingHistory, type DealCoreFields, type DealFundingRoundEntryInput } from "../lib/dealFields";
 
 // Lets an admin correct anything an entrepreneur got wrong (or an AI mis-detected — sector/
 // keywords/companyLocation are editable here too) after the pitch is already in. Deliberately
 // separate from dealsSubmitPitch: no file uploads, no Drive folder, no AI re-detection — just an
-// update of the same core fields, admin-gated. Funding history stays entrepreneur-only/immutable
-// (a deliberate earlier decision), so it's not part of this input.
+// update of the same core fields, admin-gated. fundingHistory is a full replace (delete every
+// existing row, insert this list) rather than a diff — matches how the edit form always submits
+// its complete current state for every other field, and keeps this function simple.
 export interface DealsUpdateFieldsInput extends DealCoreFields {
   dealId: string;
+  fundingHistory: DealFundingRoundEntryInput[];
 }
 
 export const dealsUpdateFields = onCall<DealsUpdateFieldsInput, Promise<{ ok: true }>>(async (request) => {
@@ -20,6 +22,7 @@ export const dealsUpdateFields = onCall<DealsUpdateFieldsInput, Promise<{ ok: tr
     throw new HttpsError("invalid-argument", "dealId is required.");
   }
   assertValidDealCoreFields(input);
+  const fundingHistory = assertValidFundingHistory(input.fundingHistory);
 
   const isSafe = input.securityType === "SAFE";
   await withTransaction(async (client) => {
@@ -83,6 +86,15 @@ export const dealsUpdateFields = onCall<DealsUpdateFieldsInput, Promise<{ ok: tr
     );
     if (rowCount === 0) {
       throw new HttpsError("not-found", "Deal not found.");
+    }
+
+    await client.query(`DELETE FROM "deal_funding_round_entry" WHERE "deal_id" = $1`, [input.dealId]);
+    for (const entry of fundingHistory) {
+      await client.query(
+        `INSERT INTO "deal_funding_round_entry" ("deal_id", "round", "amount", "currency", "created_at")
+         VALUES ($1, $2, $3, $4, now())`,
+        [input.dealId, entry.round, entry.amount, entry.currency.trim().toUpperCase()]
+      );
     }
   });
 

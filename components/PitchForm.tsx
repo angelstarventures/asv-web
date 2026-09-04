@@ -3,25 +3,16 @@
 import { useState, type FormEvent } from "react";
 import { readFileAsBase64 } from "@/lib/files";
 import { submitPitch, type FundingRound, type SecurityType } from "@/lib/functions/deals";
-import { ROUND_OPTIONS, SECURITY_TYPE_OPTIONS, CurrencySelect, YesNoField, inputClass, resolveCurrency } from "@/components/dealFormShared";
-
-interface FundingHistoryRow {
-  key: string;
-  round: FundingRound;
-  amount: string;
-  currency: string;
-  customCurrency: string;
-}
-
-function emptyFundingHistoryRow(): FundingHistoryRow {
-  return {
-    key: Math.random().toString(36).slice(2),
-    round: "SEED",
-    amount: "",
-    currency: "USD",
-    customCurrency: "",
-  };
-}
+import {
+  ROUND_OPTIONS,
+  SECURITY_TYPE_OPTIONS,
+  CurrencySelect,
+  YesNoField,
+  inputClass,
+  resolveCurrency,
+  FundingHistoryEditor,
+  type FundingHistoryRow,
+} from "@/components/dealFormShared";
 
 interface FormState {
   companyName: string;
@@ -470,80 +461,7 @@ export function PitchForm() {
       <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
         <h2 className="text-sm font-semibold">Funding History (optional)</h2>
         <p className="text-sm text-zinc-500">Any prior rounds this company has raised, if applicable.</p>
-        {form.fundingHistory.map((row, i) => (
-          <div key={row.key} className="grid gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800 sm:grid-cols-4">
-            <label className="flex flex-col gap-1 text-sm">
-              Round
-              <select
-                className={inputClass()}
-                value={row.round}
-                onChange={(e) =>
-                  set(
-                    "fundingHistory",
-                    form.fundingHistory.map((r, j) => (j === i ? { ...r, round: e.target.value as FundingRound } : r))
-                  )
-                }
-              >
-                {ROUND_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Amount
-              <input
-                type="number"
-                min={0}
-                step="any"
-                className={inputClass()}
-                value={row.amount}
-                onChange={(e) =>
-                  set(
-                    "fundingHistory",
-                    form.fundingHistory.map((r, j) => (j === i ? { ...r, amount: e.target.value } : r))
-                  )
-                }
-              />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Currency
-              <CurrencySelect
-                value={row.currency}
-                onChange={(v) =>
-                  set(
-                    "fundingHistory",
-                    form.fundingHistory.map((r, j) => (j === i ? { ...r, currency: v } : r))
-                  )
-                }
-                customValue={row.customCurrency}
-                onCustomChange={(v) =>
-                  set(
-                    "fundingHistory",
-                    form.fundingHistory.map((r, j) => (j === i ? { ...r, customCurrency: v } : r))
-                  )
-                }
-              />
-            </label>
-            <div className="flex items-end">
-              <button
-                type="button"
-                onClick={() => set("fundingHistory", form.fundingHistory.filter((_, j) => j !== i))}
-                className="rounded-full border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600 dark:border-red-900 dark:text-red-400"
-              >
-                Remove
-              </button>
-            </div>
-          </div>
-        ))}
-        <button
-          type="button"
-          onClick={() => set("fundingHistory", [...form.fundingHistory, emptyFundingHistoryRow()])}
-          className="w-fit rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
-        >
-          Add a prior round
-        </button>
+        <FundingHistoryEditor rows={form.fundingHistory} onChange={(rows) => set("fundingHistory", rows)} />
       </section>
 
       <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">

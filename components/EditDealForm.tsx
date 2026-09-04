@@ -10,8 +10,10 @@ import {
   inputClass,
   resolveCurrency,
   currencyToSelectState,
+  FundingHistoryEditor,
+  type FundingHistoryRow,
 } from "@/components/dealFormShared";
-import type { DealDetail } from "@/components/DealDetailView";
+import type { DealDetail, DealFundingRoundRow } from "@/components/DealDetailView";
 
 interface FormState {
   companyName: string;
@@ -40,13 +42,19 @@ interface FormState {
   sector: string;
   keywords: string;
   companyLocation: string;
+  fundingHistory: FundingHistoryRow[];
 }
 
 function yesNoOf(v: boolean): "yes" | "no" {
   return v ? "yes" : "no";
 }
 
-function initialStateFrom(deal: DealDetail): FormState {
+function fundingHistoryRowFrom(f: DealFundingRoundRow): FundingHistoryRow {
+  const { value: currency, custom: customCurrency } = currencyToSelectState(f.currency);
+  return { key: f.id, round: f.round as FundingRound, amount: String(f.amount), currency, customCurrency };
+}
+
+function initialStateFrom(deal: DealDetail, fundingHistory: DealFundingRoundRow[]): FormState {
   const { value: currency, custom: customCurrency } = currencyToSelectState(deal.currency);
   return {
     companyName: deal.companyName,
@@ -75,23 +83,25 @@ function initialStateFrom(deal: DealDetail): FormState {
     sector: deal.sector ?? "",
     keywords: deal.keywords?.join(", ") ?? "",
     companyLocation: deal.companyLocation ?? "",
+    fundingHistory: fundingHistory.map(fundingHistoryRowFrom),
   };
 }
 
-// Full-field admin edit, mirroring PitchForm's Overview/Financials/Additional Questions
-// sections (same shared building blocks — dealFormShared.tsx) but with no Documents section
-// (no re-upload here) and no Funding History section (entrepreneur-only, immutable per an
-// earlier decision). Replaces DealDetailView's tabbed read view while active.
+// Full-field admin edit, mirroring PitchForm's Overview/Financials/Additional Questions/Funding
+// History sections (same shared building blocks — dealFormShared.tsx) but with no Documents
+// section (no re-upload here). Replaces DealDetailView's tabbed read view while active.
 export function EditDealForm({
   deal,
+  fundingHistory,
   onSaved,
   onCancel,
 }: {
   deal: DealDetail;
+  fundingHistory: DealFundingRoundRow[];
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [form, setForm] = useState<FormState>(() => initialStateFrom(deal));
+  const [form, setForm] = useState<FormState>(() => initialStateFrom(deal, fundingHistory));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -168,6 +178,21 @@ export function EditDealForm({
       ? form.companyUrl.trim()
       : `https://${form.companyUrl.trim()}`;
 
+    const fundingHistory: { round: FundingRound; amount: number; currency: string }[] = [];
+    for (const row of form.fundingHistory) {
+      const amount = Number(row.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        setError("Each funding history round needs a valid amount, or remove the row.");
+        return;
+      }
+      const rowCurrency = resolveCurrency(row.currency, row.customCurrency);
+      if (rowCurrency.length < 3 || rowCurrency.length > 10) {
+        setError("Please enter a valid currency code for each funding history round.");
+        return;
+      }
+      fundingHistory.push({ round: row.round, amount, currency: rowCurrency });
+    }
+
     setBusy(true);
     try {
       await updateDealFields({
@@ -202,6 +227,7 @@ export function EditDealForm({
               .filter(Boolean)
           : undefined,
         companyLocation: form.companyLocation.trim() || undefined,
+        fundingHistory,
       });
       onSaved();
     } catch (err) {
@@ -387,6 +413,12 @@ export function EditDealForm({
             </label>
           )}
         </div>
+      </section>
+
+      <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
+        <h2 className="text-sm font-semibold">Funding History (optional)</h2>
+        <p className="text-sm text-zinc-500">Any prior rounds this company has raised.</p>
+        <FundingHistoryEditor rows={form.fundingHistory} onChange={(rows) => set("fundingHistory", rows)} />
       </section>
 
       <section className="flex flex-col gap-4 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">

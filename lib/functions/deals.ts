@@ -60,9 +60,9 @@ export async function submitPitch(input: SubmitPitchInput): Promise<{ dealId: st
 }
 
 // Same core fields as SubmitPitchInput, minus the file/upload-only concerns (no Drive folder or
-// document upload here) and minus fundingHistory (entrepreneur-only, immutable after
-// submission). Admins can also correct sector/keywords/companyLocation here — those are
-// AI-derived at submission time and occasionally wrong.
+// document upload here). Admins can also correct sector/keywords/companyLocation here — those
+// are AI-derived at submission time and occasionally wrong. fundingHistory is a full replace
+// (send the complete current list every time, not a diff) — the server deletes and re-inserts.
 export interface UpdateDealFieldsInput {
   dealId: string;
   companyName: string;
@@ -90,6 +90,7 @@ export interface UpdateDealFieldsInput {
   sector?: string;
   keywords?: string[];
   companyLocation?: string;
+  fundingHistory: SubmitPitchFundingRoundEntry[];
 }
 export async function updateDealFields(input: UpdateDealFieldsInput): Promise<{ ok: true }> {
   const call = httpsCallable<UpdateDealFieldsInput, { ok: true }>(functions, "dealsUpdateFields");

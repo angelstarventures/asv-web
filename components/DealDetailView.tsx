@@ -171,6 +171,7 @@ export function DealDetailView({
       {editing ? (
         <EditDealForm
           deal={deal}
+          fundingHistory={fundingHistory}
           onCancel={() => setEditing(false)}
           onSaved={() => {
             setEditing(false);
