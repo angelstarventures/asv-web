@@ -82,8 +82,14 @@ async function detectCompanyProfile(
       systemPrompt:
         "You classify early-stage startup companies from their website's raw HTML. Respond with ONLY a JSON object " +
         'of the exact shape {"sector": string, "keywords": string[], "location": string|null} — sector is a short ' +
-        '(1-4 word) industry classification (e.g. "Biotech", "Medical Devices", "CPG", "IT/Software"), keywords is ' +
-        "3-8 short phrases describing the company's specific technology/product, location is the company's " +
+        '(1-4 word) industry classification (e.g. "Biotech", "Medical Devices", "CPG", "IT/Software"). keywords is ' +
+        "3-8 professional skill/expertise-area terms relevant to this company's specific domain and technology — " +
+        "these are used to match this deal against fund members who might have that skill or expertise, so phrase " +
+        "each one the way a person would list it as a skill on their own resume or LinkedIn profile (e.g. " +
+        '"Machine Learning", "Synthetic Biology", "Medical Device Regulatory Affairs", "Supply Chain Management", ' +
+        '"B2B SaaS Sales", "Embedded Systems Engineering"), NOT product/marketing buzzwords describing the company ' +
+        "itself (avoid things like \"AI-powered\" or \"next-generation platform\") — every keyword should read as " +
+        "something a qualified person could plausibly claim as their own expertise. location is the company's " +
         'headquarters city and state/country (e.g. "San Francisco, CA" or "London, UK") if it can be determined ' +
         "from the page, otherwise null. No prose, no markdown, just the JSON object.",
       parts: [`Company website HTML:\n\n${html}`],

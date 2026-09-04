@@ -111,15 +111,20 @@ export async function generateGroundedContent(input: GenerateGroundedContentInpu
 // once per chat session as a Vertex AI context cache, instead of being re-sent (and re-billed
 // as input tokens) on every message — the cache is created once, its resource name handed back
 // to the browser, and reused for follow-up messages in the same session via
-// generateChatReply's `cachedContentName`. A 1-hour TTL comfortably covers a chat session;
-// ai-portfolioQuery.ts falls back to rebuilding the cache once if a reused name has expired.
+// generateChatReply's `cachedContentName`. Also used by documents-analyze.ts to cache its
+// (much longer-lived, rarely-changing) schema+prompt payload across every admin's analysis
+// calls. A 1-week TTL keeps both cheap to keep warm; both callers already handle a reused name
+// failing (rebuild-and-retry on Vertex AI ApiError), so a longer TTL only reduces call volume,
+// it doesn't introduce a new failure mode.
+const CACHE_TTL_SECONDS = 7 * 24 * 60 * 60; // 1 week
+
 export async function createContextCache(input: { systemPrompt: string; contextText: string }): Promise<string> {
   const cache = await getClient().caches.create({
     model: MODEL,
     config: {
       contents: [{ role: "user", parts: [{ text: input.contextText }] }],
       systemInstruction: input.systemPrompt,
-      ttl: "3600s",
+      ttl: `${CACHE_TTL_SECONDS}s`,
     },
   });
   if (!cache.name) {
