@@ -2,6 +2,8 @@ import { listAllMembers } from "@/lib/dataconnect/client";
 import { NewMemberForm } from "@/components/NewMemberForm";
 import { MembersTable } from "@/components/MembersTable";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
+import { getCurrentMember } from "@/lib/auth/currentMember";
+import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 
 // Wireframe 5's members table. Provisioning a login/reset/status live on the per-member
 // detail page (app/admin/members/[memberId]) since those each act on one existing Member row
@@ -9,7 +11,8 @@ import { WelcomeBanner } from "@/components/WelcomeBanner";
 export const dynamic = "force-dynamic";
 
 export default async function AdminMembersPage() {
-  const { members } = await listAllMembers();
+  const [{ members }, current] = await Promise.all([listAllMembers(), getCurrentMember()]);
+  const siteAdminModeOn = isSiteAdminModeOn(current?.role, current?.siteAdminMode);
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
@@ -19,7 +22,7 @@ export default async function AdminMembersPage() {
 
       <NewMemberForm />
 
-      <MembersTable members={members} />
+      <MembersTable members={members} siteAdminModeOn={siteAdminModeOn} />
     </div>
   );
 }

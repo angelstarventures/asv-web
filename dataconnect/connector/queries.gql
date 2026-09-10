@@ -25,6 +25,40 @@ query ListCompanies @auth(level: PUBLIC, insecureReason: "Matches the (public) l
   }
 }
 
+# Backs the company detail page's header/Overview tab — a lean single-company read instead of
+# pulling all ~34 companies via ListCompanies just to find one. ceoName/ceoContact excluded from
+# the public ListCompanies above deliberately (admin-entered contact info, not for the public
+# landing page).
+query GetCompanyById($id: UUID!) @auth(level: USER, insecureReason: "Same posture as ListCompanies — no per-member scoping, every member sees every company's profile.") {
+  company(key: { id: $id }) {
+    id
+    name
+    tradeName
+    tagline
+    sector
+    website
+    logoUrl
+    status
+    ceoName
+    ceoContact
+  }
+}
+
+# Separate from ListCompanies (public) so a DD lead's identity never reaches the public landing
+# page — same flat-list-reduced-client-side shape as ListDealTagAssignments/ListDealRatings.
+# Only ever called from the admin-gated companies page.
+query ListCompanyDdLeads @auth(level: USER, insecureReason: "Only called from app/admin/companies, gated by proxy.ts's role=admin check.") {
+  companies(limit: 1000) {
+    id
+    ceoName
+    ceoContact
+    ddLead {
+      id
+      displayName
+    }
+  }
+}
+
 # Excludes "00000" (System Migration) — a synthetic, role=ADMIN account that only exists as
 # the created_by/audit-trail author for migrated ledger rows (plan §5), never a real board
 # member. It must stay role=ADMIN for that audit purpose, so the exclusion belongs here
@@ -47,6 +81,7 @@ query GetPortfolioRollup($scenario: Scenario!) @auth(level: USER, insecureReason
     moic
     unrealizedValue
     realizedValue
+    irr
     computedAt
   }
 }
@@ -64,6 +99,7 @@ query ListCompanyRollups($scenario: Scenario!) @auth(level: USER, insecureReason
       name
       tradeName
       sector
+      status
     }
   }
 }
@@ -106,6 +142,9 @@ query ListAllocationsForScenario($scenario: Scenario!) @auth(level: USER, insecu
   allocations(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 1000) {
     amount
     ledgerEntry {
+      id
+      eventDate
+      type
       company {
         id
       }
@@ -144,6 +183,7 @@ query ListPricedRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER,
     companyUrl
     docLink
     asvTotal
+    totalRoundSize
     roundName
     pricePerShare
     postMoneyValuation
@@ -158,6 +198,7 @@ query ListSafeRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER, i
     companyUrl
     docLink
     asvTotal
+    totalRoundSize
     postMoneyValCap
     discount
     warrantShares
@@ -177,6 +218,7 @@ query ListNonParticipatingRoundDetailsForScenario($scenario: Scenario!) @auth(le
     roundName
     newPricePerShare
     newPostMoneyValuation
+    totalRoundSize
     docLink
     notes
   }
@@ -237,11 +279,13 @@ query ListMemberAllocations($scenario: Scenario!) @auth(level: USER, insecureRea
     ledgerEntry {
       id
       eventDate
+      type
       company {
         id
         name
         tradeName
         sector
+        status
       }
     }
   }
@@ -259,6 +303,7 @@ query ListMemberValuations($scenario: Scenario!) @auth(level: USER, insecureReas
         name
         tradeName
         sector
+        status
       }
     }
   }
@@ -301,11 +346,63 @@ query ListMemberValuationsAllScenarios @auth(level: USER, insecureReason: "Same 
 query ListAllDocuments @auth(level: USER, insecureReason: "The role+allocation visibility check happens in application code (canViewDocument, plan §3/§4), not here — every caller of this query re-derives that decision, never trusting a client-supplied one.") {
   documents(limit: 1000) {
     id
+    filename
     docType
+    uploadedAt
     company {
       id
       name
       tradeName
+    }
+  }
+}
+
+query GetDocumentById($id: UUID!) @auth(level: USER, insecureReason: "Backs /api/documents/[id] — the role+allocation visibility check happens in application code (canViewDocument) after this read, same posture as ListAllDocuments.") {
+  document(key: { id: $id }) {
+    id
+    driveFileId
+    filename
+    docType
+    company {
+      id
+    }
+  }
+}
+
+# Admin Tax Documents tab — every tax document, grouped by member client-side. Never called from
+# the member-facing page (see ListTaxDocumentsByMember below) — tax documents must never be
+# visible across members, unlike Document's fund-wide visibility.
+query ListAllTaxDocuments @auth(level: USER, insecureReason: "Only called from app/admin/documents, gated by proxy.ts's role=admin check.") {
+  taxDocuments(orderBy: { uploadedAt: DESC }, limit: 1000) {
+    id
+    filename
+    taxYear
+    uploadedAt
+    member {
+      id
+      displayName
+    }
+  }
+}
+
+# Member's own Tax Documents tab — always called with the server-derived caller's own memberId
+# (never a client-supplied one), same Data Isolation posture as GetMemberById's member-facing use.
+query ListTaxDocumentsByMember($memberId: String!) @auth(level: USER, insecureReason: "memberId is always the server-derived caller's own id, or an admin explicitly viewing one member's docs — see the file header.") {
+  taxDocuments(where: { member: { id: { eq: $memberId } } }, orderBy: { uploadedAt: DESC }, limit: 200) {
+    id
+    filename
+    taxYear
+    uploadedAt
+  }
+}
+
+query GetTaxDocumentById($id: UUID!) @auth(level: USER, insecureReason: "Backs /api/tax-documents/[id] — the own-member-or-admin check happens in application code after this read, same posture as GetDocumentById.") {
+  taxDocument(key: { id: $id }) {
+    id
+    driveFileId
+    filename
+    member {
+      id
     }
   }
 }
@@ -332,6 +429,10 @@ query ListAllMembers @auth(level: USER, insecureReason: "Gated by proxy.ts's rol
     status
     authUid
     membershipType
+    phoneNumber
+    aiChatEnabled
+    lockedScenario
+    duesSentForYear
     createdAt
   }
 }
@@ -348,8 +449,13 @@ query GetMemberById($id: String!) @auth(level: USER, insecureReason: "Used from 
     photoUrl
     profileText
     phoneNumber
-    expertiseKeywords
+    professionalProfileUrl
+    interests
+    expertise
     membershipType
+    aiChatEnabled
+    lockedScenario
+    duesSentForYear
     createdAt
   }
 }
@@ -379,6 +485,17 @@ query ListAiPromptSettings @auth(level: USER, insecureReason: "Gated by proxy.ts
   aiPromptSettings(orderBy: { key: ASC }, limit: 10) {
     key
     prompt
+    updatedAt
+  }
+}
+
+query ListAiProviderSettings @auth(level: USER, insecureReason: "Gated by proxy.ts's role=admin check on every /admin/* route; the Settings page itself further restricts to site-admin root mode.") {
+  aiProviderSettings(orderBy: { key: ASC }, limit: 10) {
+    key
+    provider
+    openrouterModel
+    openrouterProviderSlug
+    searchBackend
     updatedAt
   }
 }
@@ -507,6 +624,47 @@ query ListDealRatingsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "
       id
       displayName
     }
+  }
+}
+
+query ListDealRatings @auth(level: USER, insecureReason: "Backs the deal-list rating column — every rating, reduced client-side per deal, same posture as ListDealTagAssignments.") {
+  dealRatings(limit: 5000) {
+    deal {
+      id
+    }
+    rating
+  }
+}
+
+query ListDealReviewerMatches @auth(level: USER, insecureReason: "Backs the deal-list reviewer WhatsApp buttons — every match, reduced client-side per deal, same posture as ListDealTagAssignments/ListDealRatings.") {
+  dealReviewerMatches(limit: 5000) {
+    deal {
+      id
+    }
+    member {
+      id
+      displayName
+      phoneNumber
+    }
+    reason
+  }
+}
+
+query ListDealPitchDecks @auth(level: USER, insecureReason: "Backs the deal-list WhatsApp message text (pitch deck link) — every pitch deck document, reduced client-side per deal, same posture as ListDealTagAssignments/ListDealRatings.") {
+  dealDocuments(where: { docType: { eq: PITCH_DECK } }, limit: 5000) {
+    deal {
+      id
+    }
+    driveUrl
+  }
+}
+
+query ListDealPublicReviewsByDeal($dealId: UUID!) @auth(level: USER, insecureReason: "Admin-only \"External feedback\" section on the deal detail page — gated in the UI/page layer, not the connector, same posture as every other deal query.") {
+  dealPublicReviews(where: { deal: { id: { eq: $dealId } } }, orderBy: { createdAt: DESC }, limit: 200) {
+    reviewerName
+    reviewerContact
+    comment
+    createdAt
   }
 }
 

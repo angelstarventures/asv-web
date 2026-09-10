@@ -16,6 +16,7 @@ export type SessionClaims = DecodedIdToken & {
   status?: "active" | "disabled";
   memberId?: string;
   mustChangePassword?: boolean;
+  siteAdminMode?: boolean;
 };
 
 // checkRevoked=true is the whole point of a session cookie over a bare ID token here: it

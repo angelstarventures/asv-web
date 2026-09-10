@@ -7,10 +7,18 @@ import { HttpsError } from "firebase-functions/v2/https";
 // never a bare `=== undefined` (a real bug caught here once already — see deals-submitPitch's
 // git history for the fundingHistory incident).
 
-export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
+export type FundingRound = "FAMILY_AND_FRIENDS" | "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
 
-export const FUNDING_ROUNDS: readonly FundingRound[] = ["PRE_SEED", "SEED", "SERIES_A", "SERIES_B", "SERIES_C", "OTHER"];
+export const FUNDING_ROUNDS: readonly FundingRound[] = [
+  "FAMILY_AND_FRIENDS",
+  "PRE_SEED",
+  "SEED",
+  "SERIES_A",
+  "SERIES_B",
+  "SERIES_C",
+  "OTHER",
+];
 export const SECURITY_TYPES: readonly SecurityType[] = ["PRICED_ROUND", "SAFE", "CONVERTIBLE_NOTE", "OTHER"];
 
 export interface DealFundingRoundEntryInput {

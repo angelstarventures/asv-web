@@ -1,5 +1,4 @@
 import { formatCurrencyCompact } from "@/components/StatTile";
-import type { CompanyEventDetailField } from "@/components/CompanyEventsModal";
 import type {
   ListCompanyUpdatesForScenarioData,
   ListComplianceFlagDetailsForScenarioData,
@@ -9,6 +8,11 @@ import type {
   ListSafeRoundDetailsForScenarioData,
   ListValuationAssessmentDetailsForScenarioData,
 } from "@/lib/dataconnect/generated";
+
+export interface CompanyEventDetailField {
+  label: string;
+  value: string;
+}
 
 function humanize(value: string): string {
   const lower = value.toLowerCase().replaceAll("_", " ");

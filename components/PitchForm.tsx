@@ -167,7 +167,8 @@ export function PitchForm() {
 
     // The website field accepts a bare domain (e.g. "faunabio.com") for entrepreneurs who
     // don't type the scheme — normalize to an absolute https:// URL so it's both a valid
-    // clickable link later and a URL the backend's own fetch() (for sector detection) can use.
+    // clickable link later and a URL an admin's later "Send for review" click (keyword
+    // generation, deals-findReviewers.ts) can fetch.
     const companyUrl = /^https?:\/\//i.test(form.companyUrl.trim())
       ? form.companyUrl.trim()
       : `https://${form.companyUrl.trim()}`;

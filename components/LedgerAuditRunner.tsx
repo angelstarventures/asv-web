@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ledgerAudit, type AuditFinding } from "@/lib/functions/ledgerAudit";
+import Link from "next/link";
+import { ledgerAudit, rebalanceMemberValuations, type AuditFinding } from "@/lib/functions/ledgerAudit";
 
 const CATEGORY_LABELS: Record<AuditFinding["category"], string> = {
   rollup: "Rollup accuracy",
@@ -11,10 +12,61 @@ const CATEGORY_LABELS: Record<AuditFinding["category"], string> = {
   fmv_plausibility: "Fair-market-value plausibility",
 };
 
-// Runs functions/src/lib/ledgerAudit.ts's four checks on demand — nothing here writes anything
-// except the rollup-cache refresh baked into the audit itself (the same safe, idempotent
-// operation the scheduled recompute already runs). Any real fix still goes through the ledger
-// manage/edit UI by hand, same as the Prosperous Brands correction that prompted this feature.
+function FindingActions({ finding }: { finding: AuditFinding }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [fixed, setFixed] = useState(false);
+
+  if (fixed) {
+    return <p className="mt-1 text-xs font-medium">Rebalanced.</p>;
+  }
+
+  if (finding.canAutoFix && finding.ledgerEntryId) {
+    return (
+      <div className="mt-2 flex flex-col gap-1">
+        <button
+          type="button"
+          onClick={async () => {
+            setError(null);
+            setBusy(true);
+            try {
+              await rebalanceMemberValuations(finding.ledgerEntryId!);
+              setFixed(true);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Rebalance failed.");
+            } finally {
+              setBusy(false);
+            }
+          }}
+          disabled={busy}
+          className="self-start rounded-full border border-current px-3 py-1 text-xs font-medium disabled:opacity-50"
+        >
+          {busy ? "Rebalancing..." : "Rebalance member valuations"}
+        </button>
+        {error && <p className="text-xs">{error}</p>}
+      </div>
+    );
+  }
+
+  if (finding.ledgerEntryId) {
+    return (
+      <Link
+        href={`/admin/ledger/manage?ledgerEntryId=${finding.ledgerEntryId}`}
+        className="mt-2 inline-block text-xs font-medium underline underline-offset-2"
+      >
+        Fix in Manage Ledger
+      </Link>
+    );
+  }
+
+  return null;
+}
+
+// Runs functions/src/lib/ledgerAudit.ts's four checks on demand. member_valuation_sum findings
+// are a pure arithmetic bug (the split is exactly reproducible from already-recorded data) and
+// get a one-click "Rebalance" fix; everything else that traces to a specific ledger entry
+// (price_continuity/fmv_plausibility) needs a human judgment call, same as the Prosperous Brands
+// correction, so it links straight to that entry in Manage Ledger instead of auto-fixing.
 export function LedgerAuditRunner() {
   const [findings, setFindings] = useState<AuditFinding[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -85,6 +137,7 @@ export function LedgerAuditRunner() {
                     }`}
                   >
                     {f.message}
+                    <FindingActions finding={f} />
                   </li>
                 ))}
               </ul>

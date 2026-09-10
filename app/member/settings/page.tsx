@@ -25,7 +25,7 @@ export default async function MemberSettingsPage() {
         investingEntityName={profile.investingEntityName}
         profileText={profile.profileText ?? null}
         phoneNumber={profile.phoneNumber ?? null}
-        expertiseKeywords={profile.expertiseKeywords ?? null}
+        expertise={profile.expertise ?? null}
       />
 
       <ChangePasswordForm />

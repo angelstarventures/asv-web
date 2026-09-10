@@ -4,6 +4,8 @@ import { adminApp } from "@/lib/firebase/admin";
 import {
   connectorConfig,
   listCompaniesRef,
+  getCompanyByIdRef,
+  listCompanyDdLeadsRef,
   listMemberProfilesRef,
   getPortfolioRollupRef,
   listCompanyRollupsRef,
@@ -25,7 +27,9 @@ import {
   listMemberAllocationsAllScenariosRef,
   listMemberValuationsAllScenariosRef,
   listAllDocumentsRef,
+  getDocumentByIdRef,
   listAiPromptSettingsRef,
+  listAiProviderSettingsRef,
   listAppSettingsRef,
   getDealByIdRef,
   listDealsRef,
@@ -33,8 +37,18 @@ import {
   listDealTagAssignmentsRef,
   listDealDocumentsByDealRef,
   listDealRatingsByDealRef,
+  listDealRatingsRef,
+  listDealReviewerMatchesRef,
+  listDealPitchDecksRef,
+  listDealPublicReviewsByDealRef,
   listDealFundingRoundsByDealRef,
+  listAllTaxDocumentsRef,
+  listTaxDocumentsByMemberRef,
+  getTaxDocumentByIdRef,
   type ListCompaniesData,
+  type GetCompanyByIdData,
+  type GetCompanyByIdVariables,
+  type ListCompanyDdLeadsData,
   type ListMemberProfilesData,
   type GetPortfolioRollupData,
   type GetPortfolioRollupVariables,
@@ -71,7 +85,10 @@ import {
   type ListMemberAllocationsAllScenariosData,
   type ListMemberValuationsAllScenariosData,
   type ListAllDocumentsData,
+  type GetDocumentByIdData,
+  type GetDocumentByIdVariables,
   type ListAiPromptSettingsData,
+  type ListAiProviderSettingsData,
   type ListAppSettingsData,
   type GetDealByIdData,
   type GetDealByIdVariables,
@@ -82,8 +99,18 @@ import {
   type ListDealDocumentsByDealVariables,
   type ListDealRatingsByDealData,
   type ListDealRatingsByDealVariables,
+  type ListDealRatingsData,
+  type ListDealReviewerMatchesData,
+  type ListDealPitchDecksData,
+  type ListDealPublicReviewsByDealData,
+  type ListDealPublicReviewsByDealVariables,
   type ListDealFundingRoundsByDealData,
   type ListDealFundingRoundsByDealVariables,
+  type ListAllTaxDocumentsData,
+  type ListTaxDocumentsByMemberData,
+  type ListTaxDocumentsByMemberVariables,
+  type GetTaxDocumentByIdData,
+  type GetTaxDocumentByIdVariables,
 } from "./generated";
 
 // Every read path below runs server-side via firebase-admin/data-connect, which executes
@@ -119,6 +146,39 @@ function impersonate(authUid: string): OperationOptions {
 
 export async function listCompanies(): Promise<ListCompaniesData> {
   const res = await dc().executeQuery<ListCompaniesData>(listCompaniesRef.operationName);
+  return res.data;
+}
+
+export async function getCompanyById(vars: GetCompanyByIdVariables): Promise<GetCompanyByIdData> {
+  const res = await dc().executeQuery<GetCompanyByIdData, GetCompanyByIdVariables>(getCompanyByIdRef.operationName, vars);
+  return res.data;
+}
+
+export async function listCompanyDdLeads(): Promise<ListCompanyDdLeadsData> {
+  const res = await dc().executeQuery<ListCompanyDdLeadsData>(listCompanyDdLeadsRef.operationName);
+  return res.data;
+}
+
+export async function listAllTaxDocuments(): Promise<ListAllTaxDocumentsData> {
+  const res = await dc().executeQuery<ListAllTaxDocumentsData>(listAllTaxDocumentsRef.operationName);
+  return res.data;
+}
+
+export async function listTaxDocumentsByMember(
+  vars: ListTaxDocumentsByMemberVariables
+): Promise<ListTaxDocumentsByMemberData> {
+  const res = await dc().executeQuery<ListTaxDocumentsByMemberData, ListTaxDocumentsByMemberVariables>(
+    listTaxDocumentsByMemberRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function getTaxDocumentById(vars: GetTaxDocumentByIdVariables): Promise<GetTaxDocumentByIdData> {
+  const res = await dc().executeQuery<GetTaxDocumentByIdData, GetTaxDocumentByIdVariables>(
+    getTaxDocumentByIdRef.operationName,
+    vars
+  );
   return res.data;
 }
 
@@ -316,6 +376,14 @@ export async function listMemberValuationsAllScenarios(
   return res.data;
 }
 
+export async function getDocumentById(vars: GetDocumentByIdVariables): Promise<GetDocumentByIdData> {
+  const res = await dc().executeQuery<GetDocumentByIdData, GetDocumentByIdVariables>(
+    getDocumentByIdRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
 export async function listAllDocuments(): Promise<ListAllDocumentsData> {
   const res = await dc().executeQuery<ListAllDocumentsData>(listAllDocumentsRef.operationName);
   return res.data;
@@ -323,6 +391,11 @@ export async function listAllDocuments(): Promise<ListAllDocumentsData> {
 
 export async function listAiPromptSettings(): Promise<ListAiPromptSettingsData> {
   const res = await dc().executeQuery<ListAiPromptSettingsData>(listAiPromptSettingsRef.operationName);
+  return res.data;
+}
+
+export async function listAiProviderSettings(): Promise<ListAiProviderSettingsData> {
+  const res = await dc().executeQuery<ListAiProviderSettingsData>(listAiProviderSettingsRef.operationName);
   return res.data;
 }
 
@@ -369,6 +442,31 @@ export async function listDealRatingsByDeal(
 ): Promise<ListDealRatingsByDealData> {
   const res = await dc().executeQuery<ListDealRatingsByDealData, ListDealRatingsByDealVariables>(
     listDealRatingsByDealRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listDealRatings(): Promise<ListDealRatingsData> {
+  const res = await dc().executeQuery<ListDealRatingsData>(listDealRatingsRef.operationName);
+  return res.data;
+}
+
+export async function listDealReviewerMatches(): Promise<ListDealReviewerMatchesData> {
+  const res = await dc().executeQuery<ListDealReviewerMatchesData>(listDealReviewerMatchesRef.operationName);
+  return res.data;
+}
+
+export async function listDealPitchDecks(): Promise<ListDealPitchDecksData> {
+  const res = await dc().executeQuery<ListDealPitchDecksData>(listDealPitchDecksRef.operationName);
+  return res.data;
+}
+
+export async function listDealPublicReviewsByDeal(
+  vars: ListDealPublicReviewsByDealVariables
+): Promise<ListDealPublicReviewsByDealData> {
+  const res = await dc().executeQuery<ListDealPublicReviewsByDealData, ListDealPublicReviewsByDealVariables>(
+    listDealPublicReviewsByDealRef.operationName,
     vars
   );
   return res.data;

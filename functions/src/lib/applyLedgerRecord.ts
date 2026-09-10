@@ -78,6 +78,7 @@ async function insertDetailForType(
         companyUrl: record.company_url as string,
         docLink: record.doc_link as string,
         asvTotal: Number(record.asv_total),
+        totalRoundSize: record.total_round_size != null ? Number(record.total_round_size) : undefined,
         roundName: String(record.round_name),
         pricePerShare: Number(record.price_per_share),
         postMoneyValuation: Number(record.post_money_valuation),
@@ -90,6 +91,7 @@ async function insertDetailForType(
         companyUrl: record.company_url as string,
         docLink: record.doc_link as string,
         asvTotal: Number(record.asv_total),
+        totalRoundSize: record.total_round_size != null ? Number(record.total_round_size) : undefined,
         postMoneyValCap: Number(record.post_money_val_cap),
         discount: Number(record.discount),
         warrantShares: warrants.shares as number | undefined,
@@ -107,6 +109,7 @@ async function insertDetailForType(
         roundName: String(record.round_name),
         newPricePerShare: Number(record.new_price_per_share),
         newPostMoneyValuation: Number(record.new_post_money_valuation),
+        totalRoundSize: record.total_round_size != null ? Number(record.total_round_size) : undefined,
         docLink: record.doc_link as string | undefined,
         notes: record.notes as string | undefined,
       });

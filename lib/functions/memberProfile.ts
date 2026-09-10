@@ -12,7 +12,7 @@ export interface UpdateOwnProfileInput {
   investingEntityName: string;
   profileText?: string | null;
   phoneNumber?: string | null;
-  expertiseKeywords?: string[] | null;
+  expertise?: string[] | null;
 }
 export async function updateOwnProfile(input: UpdateOwnProfileInput): Promise<{ ok: true }> {
   const call = httpsCallable<UpdateOwnProfileInput, { ok: true }>(functions, "updateOwnProfile");

@@ -65,7 +65,10 @@ export default async function AdminMemberDetailPage({
         membershipType={member.membershipType}
         profileText={member.profileText ?? null}
         phoneNumber={member.phoneNumber ?? null}
-        expertiseKeywords={member.expertiseKeywords ?? null}
+        email={member.email}
+        professionalProfileUrl={member.professionalProfileUrl ?? null}
+        interests={member.interests ?? null}
+        expertise={member.expertise ?? null}
       />
 
       <MemberActions

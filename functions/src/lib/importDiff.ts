@@ -3,6 +3,7 @@ import { validateLedgerRecord } from "./schema-validate";
 import { query } from "./dataconnect-admin";
 import { LEDGER_TYPE_TO_ENUM, legacyTypeToEnum, type LegacyLedgerType } from "./enumMap";
 import { checkValuationGuardrails } from "./valuationGuardrails";
+import { fetchAllMemberIds, findUnknownMemberReferences } from "./memberIds";
 
 // Tolerant of both shapes `record.type` can carry: the legacy JSON string
 // ("Participating_PricedRound", from the original schema) or the DB enum form directly
@@ -135,8 +136,23 @@ export async function checkConsistency(records: Record<string, unknown>[]): Prom
     guardrailErrorsByIndex.get(finding.recordIndex)!.push(finding.message);
   }
 
+  // A dict key that isn't a real Member.id would otherwise only surface as a raw foreign-key
+  // violation at commit time — check it here instead, with an actionable message (this is also
+  // surfaced earlier and more specifically at AI-drafting review time, in documents-analyze.ts).
+  const knownMemberIds = await fetchAllMemberIds();
+  const unknownMemberRefs = findUnknownMemberReferences(records, knownMemberIds);
+  const unknownMemberErrorsByIndex = new Map<number, string[]>();
+  for (const ref of unknownMemberRefs) {
+    if (!unknownMemberErrorsByIndex.has(ref.recordIndex)) unknownMemberErrorsByIndex.set(ref.recordIndex, []);
+    unknownMemberErrorsByIndex
+      .get(ref.recordIndex)!
+      .push(
+        `${ref.field} references "${ref.reference}", which doesn't match any existing member ID. If this is a new investor, add them under Admin > Members first, then retry; if they should already exist, double-check their name was resolved correctly.`
+      );
+  }
+
   return records.map((record, index) => {
-    const errors: string[] = [...(guardrailErrorsByIndex.get(index) ?? [])];
+    const errors: string[] = [...(guardrailErrorsByIndex.get(index) ?? []), ...(unknownMemberErrorsByIndex.get(index) ?? [])];
     const type = normalizeTypeToEnum(String(record.type));
     const companyName = String(record.company ?? "");
 

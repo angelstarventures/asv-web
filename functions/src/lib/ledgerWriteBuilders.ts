@@ -72,6 +72,9 @@ export interface PricedRoundDetailInput {
   companyUrl?: string;
   docLink?: string;
   asvTotal: number;
+  // The company's full raise across every investor, not just ASV — genuinely new data (no
+  // historical source), null for any round entered before this field existed.
+  totalRoundSize?: number;
   roundName: string;
   pricePerShare: number;
   postMoneyValuation: number;
@@ -84,9 +87,18 @@ export async function insertPricedRoundDetail(
 ): Promise<void> {
   await client.query(
     `INSERT INTO "priced_round_detail"
-       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "round_name", "price_per_share", "post_money_valuation")
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [ledgerEntryId, d.companyUrl ?? null, d.docLink ?? null, d.asvTotal, d.roundName, d.pricePerShare, d.postMoneyValuation]
+       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "total_round_size", "round_name", "price_per_share", "post_money_valuation")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      ledgerEntryId,
+      d.companyUrl ?? null,
+      d.docLink ?? null,
+      d.asvTotal,
+      d.totalRoundSize ?? null,
+      d.roundName,
+      d.pricePerShare,
+      d.postMoneyValuation,
+    ]
   );
 }
 
@@ -94,6 +106,7 @@ export interface SafeRoundDetailInput {
   companyUrl?: string;
   docLink?: string;
   asvTotal: number;
+  totalRoundSize?: number;
   postMoneyValCap: number;
   discount: number;
   warrantShares?: number;
@@ -111,14 +124,15 @@ export async function insertSafeRoundDetail(
 ): Promise<void> {
   await client.query(
     `INSERT INTO "safe_round_detail"
-       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "post_money_val_cap", discount,
+       ("ledger_entry_id", "company_url", "doc_link", "asv_total", "total_round_size", "post_money_val_cap", discount,
         "warrant_shares", "warrant_share_class", "warrant_exercise_price", "warrant_expiration_years", "warrant_vesting_terms", notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
     [
       ledgerEntryId,
       d.companyUrl ?? null,
       d.docLink ?? null,
       d.asvTotal,
+      d.totalRoundSize ?? null,
       d.postMoneyValCap,
       d.discount,
       d.warrantShares ?? null,
@@ -135,6 +149,7 @@ export interface NonParticipatingRoundDetailInput {
   roundName: string;
   newPricePerShare: number;
   newPostMoneyValuation: number;
+  totalRoundSize?: number;
   docLink?: string;
   notes?: string;
 }
@@ -146,9 +161,17 @@ export async function insertNonParticipatingRoundDetail(
 ): Promise<void> {
   await client.query(
     `INSERT INTO "non_participating_round_detail"
-       ("ledger_entry_id", "round_name", "new_price_per_share", "new_post_money_valuation", "doc_link", notes)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [ledgerEntryId, d.roundName, d.newPricePerShare, d.newPostMoneyValuation, d.docLink ?? null, d.notes ?? null]
+       ("ledger_entry_id", "round_name", "new_price_per_share", "new_post_money_valuation", "total_round_size", "doc_link", notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      ledgerEntryId,
+      d.roundName,
+      d.newPricePerShare,
+      d.newPostMoneyValuation,
+      d.totalRoundSize ?? null,
+      d.docLink ?? null,
+      d.notes ?? null,
+    ]
   );
 }
 

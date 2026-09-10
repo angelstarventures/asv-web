@@ -9,6 +9,7 @@ export interface CreateMemberInput {
   displayName: string;
   email: string;
   role: "admin" | "member";
+  membershipType?: MembershipType;
 }
 export interface CreateMemberOutput {
   memberId: string;
@@ -28,10 +29,52 @@ export interface UpdateMemberInput {
   membershipType: MembershipType;
   profileText?: string | null;
   phoneNumber?: string | null;
-  expertiseKeywords?: string[] | null;
+  email?: string | null;
+  professionalProfileUrl?: string | null;
+  interests?: string[] | null;
+  expertise?: string[] | null;
 }
 export async function updateMember(input: UpdateMemberInput): Promise<{ ok: true }> {
   const call = httpsCallable<UpdateMemberInput, { ok: true }>(functions, "updateMember");
+  const res = await call(input);
+  return res.data;
+}
+
+export type ScenarioLockValue = "" | "optimistic" | "balanced" | "conservative";
+
+export interface UpdateMemberAiSettingsInput {
+  memberId: string;
+  aiChatEnabled: boolean;
+  lockedScenario: ScenarioLockValue;
+}
+export async function updateMemberAiSettings(input: UpdateMemberAiSettingsInput): Promise<{ ok: true }> {
+  const call = httpsCallable<UpdateMemberAiSettingsInput, { ok: true }>(functions, "updateMemberAiSettings");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface MembersSendDuesReminderInput {
+  memberId: string;
+  channel: "whatsapp" | "email";
+}
+export interface MembersSendDuesReminderOutput {
+  message: string;
+}
+export async function sendDuesReminder(input: MembersSendDuesReminderInput): Promise<MembersSendDuesReminderOutput> {
+  const call = httpsCallable<MembersSendDuesReminderInput, MembersSendDuesReminderOutput>(
+    functions,
+    "membersSendDuesReminder"
+  );
+  const res = await call(input);
+  return res.data;
+}
+
+export interface UpdateMemberDuesStatusInput {
+  memberId: string;
+  sent: boolean;
+}
+export async function updateMemberDuesStatus(input: UpdateMemberDuesStatusInput): Promise<{ ok: true }> {
+  const call = httpsCallable<UpdateMemberDuesStatusInput, { ok: true }>(functions, "updateMemberDuesStatus");
   const res = await call(input);
   return res.data;
 }
@@ -88,6 +131,15 @@ export interface SetMemberRoleInput {
 }
 export async function setMemberRole(input: SetMemberRoleInput): Promise<{ ok: true }> {
   const call = httpsCallable<SetMemberRoleInput, { ok: true }>(functions, "setMemberRole");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface SetSiteAdminModeInput {
+  on: boolean;
+}
+export async function setSiteAdminMode(input: SetSiteAdminModeInput): Promise<{ ok: true }> {
+  const call = httpsCallable<SetSiteAdminModeInput, { ok: true }>(functions, "setSiteAdminMode");
   const res = await call(input);
   return res.data;
 }

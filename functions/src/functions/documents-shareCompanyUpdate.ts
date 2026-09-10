@@ -57,20 +57,24 @@ export const documentsShareCompanyUpdate = onCall<
     throw new HttpsError("not-found", `No company row for id "${companyId}".`);
   }
 
+  // Every row this function writes is COMPANY_UPDATE_DOC, so it always lands in the company's
+  // "Updates" subfolder (Investments/{Company}/Updates/), not loose in the company folder root.
   const companyFolderId = await findOrCreateFolder(rootFolderId, company.name);
+  const updatesFolderId = await findOrCreateFolder(companyFolderId, "Updates");
 
   // Uploads (external, slow) happen before opening the transaction — a DB transaction should
   // never sit open across network round-trips to another service.
   const uploaded = await Promise.all(
-    files.map((f, i) => uploadDealFile(companyFolderId, f.filename, f.mimeType, fileBuffers[i]))
+    files.map((f, i) => uploadDealFile(updatesFolderId, f.filename, f.mimeType, fileBuffers[i]))
   );
 
   await withTransaction(async (client) => {
-    for (const { driveFileId, driveUrl } of uploaded) {
+    for (let i = 0; i < uploaded.length; i++) {
+      const { driveFileId, driveUrl } = uploaded[i];
       await client.query(
-        `INSERT INTO "document" ("drive_file_id", "drive_url", "doc_type", "company_id", "uploaded_by_id", "uploaded_at")
-         VALUES ($1, $2, 'COMPANY_UPDATE_DOC', $3, $4, now())`,
-        [driveFileId, driveUrl, companyId, caller.memberId]
+        `INSERT INTO "document" ("drive_file_id", "drive_url", filename, "doc_type", "company_id", "uploaded_by_id", "uploaded_at")
+         VALUES ($1, $2, $3, 'COMPANY_UPDATE_DOC', $4, $5, now())`,
+        [driveFileId, driveUrl, files[i].filename, companyId, caller.memberId]
       );
     }
   });

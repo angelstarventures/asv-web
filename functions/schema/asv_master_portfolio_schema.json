@@ -59,6 +59,7 @@
           "logo_url": { "type": "string", "format": "uri", "description": "Company logo image URL — set on the company record, same as sector." },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "asv_total": { "type": "number", "minimum": 0 },
+          "total_round_size": { "type": "number", "minimum": 0, "description": "The company's full raise across every investor in this round, not just ASV's own contribution. Optional — omit if not stated in the source document." },
           "round_name": { "type": "string", "placeholder": "Series Seed, Series A, Series B" },
           "price_per_share": { "type": "number", "minimum": 0 },
           "post_money_valuation": { "type": "number", "minimum": 0 },
@@ -80,6 +81,7 @@
           "logo_url": { "type": "string", "format": "uri", "description": "Company logo image URL — set on the company record, same as sector." },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "asv_total": { "type": "number", "minimum": 0 },
+          "total_round_size": { "type": "number", "minimum": 0, "description": "The company's full raise across every investor in this round, not just ASV's own contribution. Optional — omit if not stated in the source document." },
           "post_money_val_cap": { "type": "number", "minimum": 0 },
           "discount": { "type": "number", "minimum": 0, "maximum": 100 },
           "allocations": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } },
@@ -105,6 +107,7 @@
           "round_name": { "type": "string" },
           "new_price_per_share": { "type": "number", "minimum": 0 },
           "new_post_money_valuation": { "type": "number", "minimum": 0 },
+          "total_round_size": { "type": "number", "minimum": 0, "description": "The company's full raise across every investor in this round. Optional — omit if not stated in the source document." },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
           "notes": { "type": "string" }
         }

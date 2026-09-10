@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ledgerMassExport, ledgerDeleteRecord } from "@/lib/functions/massIO";
 import { LedgerRecordEditModal } from "@/components/LedgerRecordEditModal";
+import type { Scenario as ScenarioParam } from "@/lib/scenarioTypes";
 
 type LedgerRow = Record<string, unknown> & {
   id: string;
@@ -29,11 +31,24 @@ const COLUMNS: { key: SortKey; label: string }[] = [
 // Reuses ledgerMassExport (the same call /admin/ledger/export downloads) as the data source —
 // each returned record already carries the full legacy-schema shape plus `id`, which is
 // exactly what an edit popup needs to pre-fill, with no separate per-row fetch.
-export function ManageLedgerTable() {
+export function ManageLedgerTable({ lockedScenario }: { lockedScenario?: ScenarioParam }) {
+  const searchParams = useSearchParams();
+  const highlightId = searchParams.get("ledgerEntryId");
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [editing, setEditing] = useState<LedgerRow | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "date", dir: "asc" });
+  const [appliedHighlightId, setAppliedHighlightId] = useState<string | null>(null);
+
+  // Deep link from the Audit Ledger page ("Fix in Manage Ledger") — auto-opens the specific
+  // entry's edit modal once the full export has loaded, instead of making the admin hunt for it
+  // in a potentially very long list. Adjusted directly during render (guarded by
+  // appliedHighlightId so it only fires once per highlightId) rather than in an effect.
+  if (state.status === "ready" && highlightId && highlightId !== appliedHighlightId) {
+    setAppliedHighlightId(highlightId);
+    const match = state.records.find((r) => r.id === highlightId);
+    if (match) setEditing(match);
+  }
 
   const sortedRecords = useMemo(() => {
     if (state.status !== "ready") return [];
@@ -53,7 +68,7 @@ export function ManageLedgerTable() {
 
   async function load() {
     try {
-      const { records } = await ledgerMassExport();
+      const { records } = await ledgerMassExport(lockedScenario);
       setState({ status: "ready", records: records as LedgerRow[] });
     } catch (err) {
       setState({ status: "error", message: err instanceof Error ? err.message : "Could not load the ledger." });
@@ -62,7 +77,7 @@ export function ManageLedgerTable() {
 
   useEffect(() => {
     let cancelled = false;
-    ledgerMassExport()
+    ledgerMassExport(lockedScenario)
       .then(({ records }) => {
         if (!cancelled) setState({ status: "ready", records: records as LedgerRow[] });
       })
@@ -74,7 +89,7 @@ export function ManageLedgerTable() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [lockedScenario]);
 
   async function handleDelete(row: LedgerRow) {
     if (!confirm(`Delete this ${row.type} entry for ${row.company} (${row.date}, ${row.scenario})? This cannot be undone.`)) {

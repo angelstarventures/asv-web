@@ -8,6 +8,7 @@ import type { FundingRound, SecurityType } from "@/lib/functions/deals";
 // same risk here.
 
 export const ROUND_OPTIONS: { value: FundingRound; label: string }[] = [
+  { value: "FAMILY_AND_FRIENDS", label: "Family & Friends" },
   { value: "PRE_SEED", label: "Pre-seed" },
   { value: "SEED", label: "Seed" },
   { value: "SERIES_A", label: "Series A" },

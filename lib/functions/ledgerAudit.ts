@@ -7,6 +7,8 @@ export interface AuditFinding {
   category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility";
   severity: "error" | "warning";
   message: string;
+  ledgerEntryId?: string;
+  canAutoFix?: boolean;
 }
 
 export async function ledgerAudit(): Promise<{ findings: AuditFinding[] }> {
@@ -16,5 +18,14 @@ export async function ledgerAudit(): Promise<{ findings: AuditFinding[] }> {
     timeout: 300000,
   });
   const res = await call({});
+  return res.data;
+}
+
+export async function rebalanceMemberValuations(ledgerEntryId: string): Promise<{ ok: true; newTotal: number }> {
+  const call = httpsCallable<{ ledgerEntryId: string }, { ok: true; newTotal: number }>(
+    functions,
+    "ledgerRebalanceMemberValuations"
+  );
+  const res = await call({ ledgerEntryId });
   return res.data;
 }

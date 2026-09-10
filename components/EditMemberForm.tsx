@@ -14,6 +14,19 @@ const MEMBERSHIP_TYPE_OPTIONS: { value: MembershipType; label: string }[] = [
 // Backs the "Manage" -> edit flow on app/admin/members/[memberId] — the only path that
 // changes an existing Member row's name/investing-entity/membership-type/profile-text fields
 // after creation. membershipType is an admin-only org classification, distinct from Role.
+const INTEREST_OPTIONS = [
+  "Healthcare",
+  "Medical Device",
+  "Bio/Pharma",
+  "Media/Pubs",
+  "Financial",
+  "Telecom",
+  "CPG/retail",
+  "Mfg",
+  "IT",
+  "Energy/Env",
+];
+
 export function EditMemberForm({
   memberId,
   displayName,
@@ -21,7 +34,10 @@ export function EditMemberForm({
   membershipType,
   profileText,
   phoneNumber,
-  expertiseKeywords,
+  email,
+  professionalProfileUrl,
+  interests,
+  expertise,
 }: {
   memberId: string;
   displayName: string;
@@ -29,7 +45,10 @@ export function EditMemberForm({
   membershipType: MembershipType;
   profileText: string | null;
   phoneNumber: string | null;
-  expertiseKeywords: string[] | null;
+  email: string;
+  professionalProfileUrl: string | null;
+  interests: string[] | null;
+  expertise: string[] | null;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -50,7 +69,10 @@ export function EditMemberForm({
         membershipType: String(form.get("membershipType")) as MembershipType,
         profileText: String(form.get("profileText") ?? "").trim() || null,
         phoneNumber: String(form.get("phoneNumber") ?? "").trim() || null,
-        expertiseKeywords: String(form.get("expertiseKeywords") ?? "")
+        email: String(form.get("email") ?? "").trim() || null,
+        professionalProfileUrl: String(form.get("professionalProfileUrl") ?? "").trim() || null,
+        interests: form.getAll("interests").map(String),
+        expertise: String(form.get("expertise") ?? "")
           .split(",")
           .map((k) => k.trim())
           .filter(Boolean),
@@ -112,6 +134,16 @@ export function EditMemberForm({
         </select>
       </label>
       <label className="flex flex-col gap-1 text-sm">
+        Email
+        <input
+          type="email"
+          name="email"
+          required
+          defaultValue={email}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <label className="flex flex-col gap-1 text-sm">
         Phone number
         <input
           type="tel"
@@ -122,12 +154,33 @@ export function EditMemberForm({
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Areas of expertise
+        Professional profile (e.g. LinkedIn)
+        <input
+          type="url"
+          name="professionalProfileUrl"
+          placeholder="https://www.linkedin.com/in/..."
+          defaultValue={professionalProfileUrl ?? ""}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        />
+      </label>
+      <fieldset className="flex flex-col gap-1.5 text-sm">
+        <legend>Interests</legend>
+        <div className="grid grid-cols-2 gap-1">
+          {INTEREST_OPTIONS.map((opt) => (
+            <label key={opt} className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="interests" value={opt} defaultChecked={(interests ?? []).includes(opt)} />
+              {opt}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <label className="flex flex-col gap-1 text-sm">
+        Expertise
         <input
           type="text"
-          name="expertiseKeywords"
+          name="expertise"
           placeholder="e.g. Machine Learning, Medical Devices, B2B SaaS Sales"
-          defaultValue={(expertiseKeywords ?? []).join(", ")}
+          defaultValue={(expertise ?? []).join(", ")}
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
       </label>

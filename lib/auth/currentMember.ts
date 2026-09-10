@@ -8,6 +8,7 @@ export interface CurrentMember {
   role: "admin" | "member" | "site_admin";
   status: "active" | "disabled";
   mustChangePassword: boolean;
+  siteAdminMode: boolean;
 }
 
 // proxy.ts already guarantees any /member/* or /admin/* request has a valid, active session
@@ -36,5 +37,6 @@ export async function getCurrentMember(): Promise<CurrentMember | null> {
     role: claims.role,
     status: claims.status,
     mustChangePassword: claims.mustChangePassword ?? false,
+    siteAdminMode: claims.siteAdminMode ?? false,
   };
 }

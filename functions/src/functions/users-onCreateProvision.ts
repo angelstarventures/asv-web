@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
-import { requireAdmin, requireCaller } from "../lib/auth";
+import { requireAdmin, requireCaller, requireSiteAdmin } from "../lib/auth";
 import { query, withTransaction } from "../lib/dataconnect-admin";
 
 // The ONLY path that ever sets role/status custom claims (plan §3/§4). Backs the admin
@@ -64,10 +64,17 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
   }
 );
 
+const MEMBERSHIP_TYPES = ["BOARD_MEMBER", "MEMBER", "ASSOCIATE", "EMERITUS"] as const;
+type MembershipType = (typeof MEMBERSHIP_TYPES)[number];
+
 export interface CreateMemberInput {
   displayName: string;
   email: string;
   role: "admin" | "member";
+  // Defaults to MEMBER (matching the schema's own default) when omitted — most new members
+  // created via the admin UI are regular members; this only needs to be set explicitly for a
+  // batch/import path adding an Associate or Emeritus member directly.
+  membershipType?: MembershipType;
 }
 
 export interface CreateMemberOutput {
@@ -81,15 +88,23 @@ export interface CreateMemberOutput {
 export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput>>(async (request) => {
   await requireAdmin(request);
 
-  const { displayName, email, role } = request.data;
+  const { displayName, email, role, membershipType } = request.data;
   if (!displayName?.trim() || !email?.trim() || !role) {
     throw new HttpsError("invalid-argument", "displayName, email, and role are required.");
+  }
+  if (membershipType && !MEMBERSHIP_TYPES.includes(membershipType)) {
+    throw new HttpsError("invalid-argument", `membershipType must be one of: ${MEMBERSHIP_TYPES.join(", ")}.`);
   }
 
   const memberId = await withTransaction(async (client) => {
     // Member.id is a zero-padded 5-digit string (plan §2) with gaps from the legacy import —
     // max+1 rather than a sequence, since this only ever runs one at a time from the admin UI.
-    const { rows } = await client.query<{ max: string | null }>(`SELECT MAX(id) AS max FROM "member"`);
+    // Cast to int before MAX: id is a varchar column, and a PLAIN string MAX is lexicographic —
+    // a throwaway test row like "99998" would sort above every real id and get returned as the
+    // "max" even though it's numerically nowhere near the real sequence, corrupting every
+    // subsequent id allocation (confirmed: produced id "99999" for a real new member, then
+    // "100000" — too long for the column — on the next).
+    const { rows } = await client.query<{ max: string | null }>(`SELECT MAX(id::int) AS max FROM "member"`);
     const nextId = (Number(rows[0]?.max ?? "0") + 1).toString().padStart(5, "0");
 
     try {
@@ -97,9 +112,9 @@ export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput
       // separate input for it on the "new member" form yet, since it's meant to be edited
       // independently later rather than collected up front.
       await client.query(
-        `INSERT INTO "member" (id, "display_name", "investing_entity_name", email, role, status, "created_at")
-         VALUES ($1, $2, $2, $3, $4, 'ACTIVE', now())`,
-        [nextId, displayName.trim(), email.trim(), role.toUpperCase()]
+        `INSERT INTO "member" (id, "display_name", "investing_entity_name", email, role, "membership_type", status, "created_at")
+         VALUES ($1, $2, $2, $3, $4, $5, 'ACTIVE', now())`,
+        [nextId, displayName.trim(), email.trim(), role.toUpperCase(), membershipType ?? "MEMBER"]
       );
     } catch (err) {
       const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
@@ -115,9 +130,6 @@ export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput
   return { memberId };
 });
 
-const MEMBERSHIP_TYPES = ["BOARD_MEMBER", "MEMBER", "ASSOCIATE", "EMERITUS"] as const;
-type MembershipType = (typeof MEMBERSHIP_TYPES)[number];
-
 export interface UpdateMemberInput {
   memberId: string;
   displayName: string;
@@ -125,7 +137,10 @@ export interface UpdateMemberInput {
   membershipType: MembershipType;
   profileText?: string | null;
   phoneNumber?: string | null;
-  expertiseKeywords?: string[] | null;
+  email?: string | null;
+  professionalProfileUrl?: string | null;
+  interests?: string[] | null;
+  expertise?: string[] | null;
 }
 
 // Backs the "Edit member" form on app/admin/members/[memberId] — the only path that changes
@@ -135,8 +150,18 @@ export interface UpdateMemberInput {
 export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(async (request) => {
   await requireAdmin(request);
 
-  const { memberId, displayName, investingEntityName, membershipType, profileText, phoneNumber, expertiseKeywords } =
-    request.data;
+  const {
+    memberId,
+    displayName,
+    investingEntityName,
+    membershipType,
+    profileText,
+    phoneNumber,
+    email,
+    professionalProfileUrl,
+    interests,
+    expertise,
+  } = request.data;
   if (!memberId || !displayName?.trim() || !investingEntityName?.trim() || !membershipType) {
     throw new HttpsError(
       "invalid-argument",
@@ -153,31 +178,84 @@ export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(asy
   }
 
   await withTransaction(async (client) => {
-    await client.query(
-      `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "membership_type" = $3, "profile_text" = $4,
-              "phone_number" = $5, "expertise_keywords" = $6
-       WHERE id = $7`,
-      [
-        displayName.trim(),
-        investingEntityName.trim(),
-        membershipType,
-        profileText?.trim() || null,
-        phoneNumber?.trim() || null,
-        expertiseKeywords && expertiseKeywords.length > 0 ? expertiseKeywords : null,
-        memberId,
-      ]
-    );
+    try {
+      await client.query(
+        `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "membership_type" = $3, "profile_text" = $4,
+                "phone_number" = $5, "email" = COALESCE($6, "email"),
+                "professional_profile_url" = $7, "interests" = $8, "expertise" = $9
+         WHERE id = $10`,
+        [
+          displayName.trim(),
+          investingEntityName.trim(),
+          membershipType,
+          profileText?.trim() || null,
+          phoneNumber?.trim() || null,
+          email?.trim() || null,
+          professionalProfileUrl?.trim() || null,
+          interests && interests.length > 0 ? interests : null,
+          expertise && expertise.length > 0 ? expertise : null,
+          memberId,
+        ]
+      );
+    } catch (err) {
+      const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
+      if (code === "23505") {
+        throw new HttpsError("already-exists", `Email "${email}" is already in use.`);
+      }
+      throw err;
+    }
   });
 
   return { ok: true };
 });
+
+const SCENARIO_LOCK_VALUES = ["", "optimistic", "balanced", "conservative"] as const;
+type ScenarioLockValue = (typeof SCENARIO_LOCK_VALUES)[number];
+
+export interface UpdateMemberAiSettingsInput {
+  memberId: string;
+  aiChatEnabled: boolean;
+  lockedScenario: ScenarioLockValue; // "" = unlocked
+}
+
+// Per-member AI-chat/scenario-lock settings (replaces the old per-role-tier app_setting pair) —
+// root-only: only a genuine site_admin may change how ANY member's dashboard/document-review
+// behaves, matching this feature's "site-admin as root" posture. Backs the members table's
+// root-mode-only controls (components/MembersTable.tsx), not a separate form.
+export const updateMemberAiSettings = onCall<UpdateMemberAiSettingsInput, Promise<{ ok: true }>>(
+  async (request) => {
+    await requireSiteAdmin(request);
+
+    const { memberId, aiChatEnabled, lockedScenario } = request.data;
+    if (!memberId || typeof aiChatEnabled !== "boolean" || !SCENARIO_LOCK_VALUES.includes(lockedScenario)) {
+      throw new HttpsError(
+        "invalid-argument",
+        `memberId and aiChatEnabled are required; lockedScenario must be one of: ${SCENARIO_LOCK_VALUES.join(", ")}.`
+      );
+    }
+
+    const members = await query<{ id: string }>(`SELECT id FROM "member" WHERE id = $1`, [memberId]);
+    if (members.length === 0) {
+      throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
+    }
+
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE "member" SET "ai_chat_enabled" = $1, "locked_scenario" = $2 WHERE id = $3`,
+        [aiChatEnabled, lockedScenario ? lockedScenario.toUpperCase() : null, memberId]
+      );
+    });
+
+    return { ok: true };
+  }
+);
 
 export interface UpdateOwnProfileInput {
   displayName: string;
   investingEntityName: string;
   profileText?: string | null;
   phoneNumber?: string | null;
-  expertiseKeywords?: string[] | null;
+  expertise?: string[] | null;
 }
 
 // Self-service analog of updateMember, for app/member/settings — memberId is never a
@@ -188,7 +266,7 @@ export interface UpdateOwnProfileInput {
 export const updateOwnProfile = onCall<UpdateOwnProfileInput, Promise<{ ok: true }>>(async (request) => {
   const caller = await requireCaller(request);
 
-  const { displayName, investingEntityName, profileText, phoneNumber, expertiseKeywords } = request.data;
+  const { displayName, investingEntityName, profileText, phoneNumber, expertise } = request.data;
   if (!displayName?.trim() || !investingEntityName?.trim()) {
     throw new HttpsError("invalid-argument", "displayName and investingEntityName are required.");
   }
@@ -196,14 +274,14 @@ export const updateOwnProfile = onCall<UpdateOwnProfileInput, Promise<{ ok: true
   await withTransaction(async (client) => {
     await client.query(
       `UPDATE "member" SET "display_name" = $1, "investing_entity_name" = $2, "profile_text" = $3,
-              "phone_number" = $4, "expertise_keywords" = $5
+              "phone_number" = $4, "expertise" = $5
        WHERE id = $6`,
       [
         displayName.trim(),
         investingEntityName.trim(),
         profileText?.trim() || null,
         phoneNumber?.trim() || null,
-        expertiseKeywords && expertiseKeywords.length > 0 ? expertiseKeywords : null,
+        expertise && expertise.length > 0 ? expertise : null,
         caller.memberId,
       ]
     );
@@ -353,6 +431,37 @@ export const memberCompletePasswordChange = onCall<Record<string, never>, Promis
   const { mustChangePassword: _drop, ...rest } = existingClaims;
   void _drop;
   await getAuth().setCustomUserClaims(caller.uid, rest);
+
+  return { ok: true };
+});
+
+export interface SetSiteAdminModeInput {
+  on: boolean;
+}
+
+// Self-service, site_admin-only: toggles the "root mode" claim that reveals the extra
+// site-admin-only surfaces (Settings, per-member AI/scenario editing, viewing another member's
+// portfolio) — see lib/siteAdminMode.ts's own header comment for why this is a pure UI-visibility
+// gate, never a security boundary by itself. Stored as a custom claim (not a second cookie)
+// because Firebase Hosting only ever forwards the `__session` cookie to the SSR backend —
+// confirmed in lib/firebase/session.ts's own header comment — so any other cookie a client sets
+// is silently dropped before it reaches proxy.ts or any server component. The client must force
+// a fresh ID token and re-mint its session cookie after this call for the new claim to take
+// effect, same pattern as ForcedPasswordChangeScreen's mustChangePassword clear.
+export const setSiteAdminMode = onCall<SetSiteAdminModeInput, Promise<{ ok: true }>>(async (request) => {
+  const caller = await requireCaller(request);
+  if (caller.role !== "site_admin") {
+    throw new HttpsError("permission-denied", "Site-admin role required.");
+  }
+
+  const { on } = request.data;
+  if (typeof on !== "boolean") {
+    throw new HttpsError("invalid-argument", "on (boolean) is required.");
+  }
+
+  const user = await getAuth().getUser(caller.uid);
+  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+  await getAuth().setCustomUserClaims(caller.uid, { ...existingClaims, siteAdminMode: on });
 
   return { ok: true };
 });

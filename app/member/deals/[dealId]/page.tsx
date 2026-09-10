@@ -7,6 +7,7 @@ import {
   listDealFundingRoundsByDeal,
   listDealTags,
   listDealTagAssignments,
+  listDealPublicReviewsByDeal,
 } from "@/lib/dataconnect/client";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { DealDetailView } from "@/components/DealDetailView";
@@ -33,6 +34,7 @@ export default async function MemberDealDetailPage({ params }: { params: Promise
   const dealTags = isAdmin ? (await listDealTags()).dealTags : [];
   const dealTagAssignments = isAdmin ? (await listDealTagAssignments()).dealTagAssignments : [];
   const assignedTagIds = dealTagAssignments.filter((a) => a.deal.id === dealId).map((a) => a.tag.id);
+  const publicReviews = isAdmin ? (await listDealPublicReviewsByDeal({ dealId })).dealPublicReviews : [];
 
   return (
     <>
@@ -50,6 +52,7 @@ export default async function MemberDealDetailPage({ params }: { params: Promise
         isAdmin={isAdmin}
         allTags={dealTags}
         assignedTagIds={assignedTagIds}
+        publicReviews={publicReviews}
       />
     </>
   );

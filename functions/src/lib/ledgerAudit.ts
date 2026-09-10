@@ -1,6 +1,6 @@
 import { query } from "./dataconnect-admin";
 import { recomputeAllRollupsAndCheckInvariants } from "./rollups";
-import { fetchPriceHistory, deriveOwnership, EXTREME_RATIO, textMentionsSplit, type PricePoint } from "./valuationGuardrails";
+import { fetchPriceHistory, deriveOwnership, hasSafeRoundHistory, EXTREME_RATIO, textMentionsSplit, type PricePoint } from "./valuationGuardrails";
 
 // Four independent, read-only (except the rollup-cache refresh, already a safe idempotent
 // operation run on a schedule anyway) checks over the WHOLE existing ledger, not just new
@@ -12,7 +12,20 @@ export interface AuditFinding {
   category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility";
   severity: "error" | "warning";
   message: string;
+  // Present when the finding traces to one specific ledger entry — lets the UI either offer a
+  // one-click mechanical fix (member_valuation_sum, via ledgerRebalanceMemberValuations) or a
+  // "fix in Manage Ledger" deep link (price_continuity/fmv_plausibility, which need a human
+  // judgment call — see the Prosperous Brands correction). cross_scenario/rollup findings never
+  // trace to a single entry (they're about divergence across several, or already self-healed).
+  ledgerEntryId?: string;
+  canAutoFix?: boolean;
 }
+
+// Below this, a mismatch is treated as ordinary per-member penny-rounding drift (splitting a
+// dollar total across many members via round-to-cent inevitably leaves the sum a few cents off
+// the original — see the Prosperous Brands fix, which itself has a $0.05 residual), not a real
+// data problem worth flagging.
+const MEMBER_VALUATION_SUM_TOLERANCE = 50;
 
 interface RollupSnapshotRow {
   companyKey: string;
@@ -105,11 +118,13 @@ async function auditMemberValuationSums(): Promise<AuditFinding[]> {
   const findings: AuditFinding[] = [];
   for (const row of rows) {
     const deviation = Math.abs(row.authoritativeTotal - row.memberValuationSum);
-    if (deviation > 0.01) {
+    if (deviation >= MEMBER_VALUATION_SUM_TOLERANCE) {
       findings.push({
         category: "member_valuation_sum",
         severity: "error",
         message: `"${row.companyName}" (${row.type}, ${row.eventDate}, ${row.scenario}): member_valuation rows sum to $${row.memberValuationSum.toLocaleString()}, which doesn't match the recorded total of $${row.authoritativeTotal.toLocaleString()} (off by $${deviation.toLocaleString()}).`,
+        ledgerEntryId: row.ledgerEntryId,
+        canAutoFix: true,
       });
     }
   }
@@ -117,6 +132,7 @@ async function auditMemberValuationSums(): Promise<AuditFinding[]> {
 }
 
 interface ValuationPoint {
+  ledgerEntryId: string;
   eventDate: string;
   fmv: number;
   impliedPostMoney: number | null;
@@ -124,7 +140,8 @@ interface ValuationPoint {
 
 async function fetchValuationHistory(companyName: string): Promise<ValuationPoint[]> {
   const rows = await query<ValuationPoint>(
-    `SELECT le."event_date"::text AS "eventDate", vad."asv_total_fair_market_value" AS "fmv",
+    `SELECT le.id AS "ledgerEntryId", le."event_date"::text AS "eventDate",
+            vad."asv_total_fair_market_value" AS "fmv",
             vad."implied_enterprise_value" AS "impliedPostMoney"
      FROM "valuation_assessment_detail" vad
      JOIN "ledger_entry" le ON le.id = vad."ledger_entry_id"
@@ -157,12 +174,15 @@ async function auditCompanyPriceContinuityAndFmv(companyName: string): Promise<A
         message: `"${companyName}": price-per-share jumped from $${prior.pricePerShare.toLocaleString()}/share (${prior.roundName ?? "prior round"}, ${prior.eventDate}) to $${current.pricePerShare.toLocaleString()}/share (${current.roundName ?? "this round"}, ${current.eventDate}) — a ${
           ratio >= 1 ? `${ratio.toFixed(1)}x increase` : `${(1 / ratio).toFixed(1)}x drop`
         } with no stock split/recapitalization noted.`,
+        ledgerEntryId: current.ledgerEntryId,
       });
     }
   }
 
   const valuationHistory = await fetchValuationHistory(companyName);
+  const skipFmvCheck = valuationHistory.length > 0 && (await hasSafeRoundHistory(companyName));
   for (const point of valuationHistory) {
+    if (skipFmvCheck) continue;
     if (point.impliedPostMoney == null || !(point.impliedPostMoney > 0)) continue;
     const historyAsOf = priceHistory.filter((p: PricePoint) => p.eventDate <= point.eventDate);
     const ownership = deriveOwnership(historyAsOf);
@@ -178,6 +198,7 @@ async function auditCompanyPriceContinuityAndFmv(companyName: string): Promise<A
         message: `"${companyName}" (${point.eventDate}): recorded fair-market-value $${point.fmv.toLocaleString()} differs substantially from a rough ownership-based estimate $${Math.round(
           expectedFmv
         ).toLocaleString()} (~${(ownershipPct * 100).toFixed(2)}% stake at that point in the company's priced-round history against a $${point.impliedPostMoney.toLocaleString()} valuation).`,
+        ledgerEntryId: point.ledgerEntryId,
       });
     }
   }

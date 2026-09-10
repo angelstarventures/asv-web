@@ -12,3 +12,24 @@ export async function updateCompanyLogo(input: UpdateCompanyLogoInput): Promise<
   const res = await call(input);
   return res.data;
 }
+
+export interface CompaniesSetDdLeadInput {
+  companyId: string;
+  memberId: string | null;
+}
+export async function setDdLead(input: CompaniesSetDdLeadInput): Promise<{ ok: true }> {
+  const call = httpsCallable<CompaniesSetDdLeadInput, { ok: true }>(functions, "companiesSetDdLead");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface CompaniesSetCeoInfoInput {
+  companyId: string;
+  ceoName: string | null;
+  ceoContact: string | null;
+}
+export async function setCeoInfo(input: CompaniesSetCeoInfoInput): Promise<{ ok: true }> {
+  const call = httpsCallable<CompaniesSetCeoInfoInput, { ok: true }>(functions, "companiesSetCeoInfo");
+  const res = await call(input);
+  return res.data;
+}

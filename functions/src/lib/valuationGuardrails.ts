@@ -20,6 +20,7 @@ export interface GuardrailFinding {
 }
 
 export interface PricePoint {
+  ledgerEntryId: string;
   eventDate: string;
   pricePerShare: number;
   postMoneyValuation: number;
@@ -32,7 +33,8 @@ export interface PricePoint {
 // over a company's complete history instead of "new record vs. what's already committed").
 export async function fetchPriceHistory(companyName: string): Promise<PricePoint[]> {
   const priced = await query<PricePoint>(
-    `SELECT le."event_date"::text AS "eventDate", prd."price_per_share" AS "pricePerShare",
+    `SELECT le.id AS "ledgerEntryId", le."event_date"::text AS "eventDate",
+            prd."price_per_share" AS "pricePerShare",
             prd."post_money_valuation" AS "postMoneyValuation", prd."asv_total" AS "asvNewMoney",
             prd."round_name" AS "roundName", NULL AS "notes"
      FROM "priced_round_detail" prd
@@ -42,7 +44,8 @@ export async function fetchPriceHistory(companyName: string): Promise<PricePoint
     [companyName]
   );
   const nonParticipating = await query<PricePoint>(
-    `SELECT le."event_date"::text AS "eventDate", nprd."new_price_per_share" AS "pricePerShare",
+    `SELECT le.id AS "ledgerEntryId", le."event_date"::text AS "eventDate",
+            nprd."new_price_per_share" AS "pricePerShare",
             nprd."new_post_money_valuation" AS "postMoneyValuation", 0 AS "asvNewMoney",
             nprd."round_name" AS "roundName", nprd.notes AS "notes"
      FROM "non_participating_round_detail" nprd
@@ -52,6 +55,29 @@ export async function fetchPriceHistory(companyName: string): Promise<PricePoint
     [companyName]
   );
   return [...priced, ...nonParticipating].sort((a, b) => (a.eventDate < b.eventDate ? -1 : 1));
+}
+
+// True if this company has ever raised a SAFE (functions/src/functions/documents-analyze.ts's
+// Participating_SAFERound) — deriveOwnership only counts money from PRICED rounds
+// (fetchPriceHistory never selects safe_round_detail at all, deliberately: an unconverted SAFE
+// has no price-per-share to reason from), so once a company has taken SAFE money, its true
+// ownership/FMV includes value this model has no way to see — the SAFE still contributes real
+// economic ownership once ANY later priced round happens, it's just invisible here. Confirmed
+// against real data: Nocira's actual recorded FMV was correct; the "rough estimate" was wrong
+// because it silently ignored two real SAFE rounds that predated the priced round. Skip the
+// FMV-plausibility comparison entirely rather than flag a number this heuristic can't actually
+// evaluate — same "skip rather than false-positive" posture as deriveOwnership's own null
+// returns below.
+export async function hasSafeRoundHistory(companyName: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `SELECT srd.id FROM "safe_round_detail" srd
+     JOIN "ledger_entry" le ON le.id = srd."ledger_entry_id"
+     JOIN "company" c ON c.id = le."company_id"
+     WHERE c.name = $1 AND le.scenario = 'BALANCED'
+     LIMIT 1`,
+    [companyName]
+  );
+  return rows.length > 0;
 }
 
 // Cumulative ASV shares and total shares outstanding, walking the company's priced-round
@@ -129,7 +155,7 @@ export async function checkValuationGuardrails(records: Record<string, unknown>[
       if (typeof fmv === "number" && typeof impliedPostMoney === "number" && impliedPostMoney > 0) {
         const history = await historyFor(company);
         const ownership = deriveOwnership(history);
-        if (ownership && ownership.totalShares > 0) {
+        if (ownership && ownership.totalShares > 0 && !(await hasSafeRoundHistory(company))) {
           const ownershipPct = ownership.asvShares / ownership.totalShares;
           const expectedFmv = ownershipPct * impliedPostMoney;
           if (expectedFmv > 0) {

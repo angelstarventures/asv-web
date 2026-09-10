@@ -2,9 +2,10 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { assertValidDealCoreFields, assertValidFundingHistory, type DealCoreFields, type DealFundingRoundEntryInput } from "../lib/dealFields";
+import { syncAutoTagsForDeal } from "../lib/dealAutoTags";
 
-// Lets an admin correct anything an entrepreneur got wrong (or an AI mis-detected — sector/
-// keywords/companyLocation are editable here too) after the pitch is already in. Deliberately
+// Lets an admin correct anything an entrepreneur got wrong (sector/keywords/companyLocation are
+// editable here too) after the pitch is already in. Deliberately
 // separate from dealsSubmitPitch: no file uploads, no Drive folder, no AI re-detection — just an
 // update of the same core fields, admin-gated. fundingHistory is a full replace (delete every
 // existing row, insert this list) rather than a diff — matches how the edit form always submits
@@ -96,6 +97,12 @@ export const dealsUpdateFields = onCall<DealsUpdateFieldsInput, Promise<{ ok: tr
         [input.dealId, entry.round, entry.amount, entry.currency.trim().toUpperCase()]
       );
     }
+
+    await syncAutoTagsForDeal(client, input.dealId, {
+      hasLeadInvestor: input.hasLeadInvestor,
+      willHaveInterestBearingDebtAfterClose: input.willHaveInterestBearingDebtAfterClose,
+      hasRestrictedBusinessLines: input.hasRestrictedBusinessLines,
+    });
   });
 
   return { ok: true };

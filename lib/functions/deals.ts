@@ -4,7 +4,7 @@ import { functions } from "@/lib/firebase/client";
 // Mirrors functions/src/functions/deals-*.ts exactly — same duplicated-boundary-contract
 // reasoning as the other lib/functions/*.ts wrappers.
 
-export type FundingRound = "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
+export type FundingRound = "FAMILY_AND_FRIENDS" | "PRE_SEED" | "SEED" | "SERIES_A" | "SERIES_B" | "SERIES_C" | "OTHER";
 export type SecurityType = "PRICED_ROUND" | "SAFE" | "CONVERTIBLE_NOTE" | "OTHER";
 export type DealStage = "NEW" | "PRESENTING" | "OLD" | "PASSED" | "ARCHIVED";
 
@@ -60,9 +60,10 @@ export async function submitPitch(input: SubmitPitchInput): Promise<{ dealId: st
 }
 
 // Same core fields as SubmitPitchInput, minus the file/upload-only concerns (no Drive folder or
-// document upload here). Admins can also correct sector/keywords/companyLocation here — those
-// are AI-derived at submission time and occasionally wrong. fundingHistory is a full replace
-// (send the complete current list every time, not a diff) — the server deletes and re-inserts.
+// document upload here). Admins can also correct sector (entrepreneur-answered) or set
+// keywords/companyLocation here directly — keywords are otherwise only AI-generated on "Send
+// for review" (deals-findReviewers.ts) if still empty. fundingHistory is a full replace (send
+// the complete current list every time, not a diff) — the server deletes and re-inserts.
 export interface UpdateDealFieldsInput {
   dealId: string;
   companyName: string;
@@ -173,8 +174,31 @@ export interface ReviewerMatch {
   phoneNumber: string | null;
   reason: string;
 }
-export async function findReviewers(input: FindReviewersInput): Promise<{ matches: ReviewerMatch[] }> {
-  const call = httpsCallable<FindReviewersInput, { matches: ReviewerMatch[] }>(functions, "dealsFindReviewers");
+export interface FindReviewersOutput {
+  matches: ReviewerMatch[];
+  companyBlurb: string | null;
+  pitchDeckUrl: string | null;
+}
+export async function findReviewers(input: FindReviewersInput): Promise<FindReviewersOutput> {
+  // Matches dealsFindReviewers' own timeoutSeconds: 180 — either AI call inside it can be
+  // routed through OpenRouter, where a random-model router (e.g. openrouter/free) varies a lot
+  // in latency per call; the SDK's ~70s default was giving up client-side before the server
+  // finished, surfacing as an opaque "internal" error with no real HTTP status.
+  const call = httpsCallable<FindReviewersInput, FindReviewersOutput>(functions, "dealsFindReviewers", {
+    timeout: 200000,
+  });
+  const res = await call(input);
+  return res.data;
+}
+
+export interface SubmitPublicReviewInput {
+  dealId: string;
+  reviewerName: string;
+  reviewerContact: string;
+  comment: string;
+}
+export async function submitPublicReview(input: SubmitPublicReviewInput): Promise<{ ok: true }> {
+  const call = httpsCallable<SubmitPublicReviewInput, { ok: true }>(functions, "dealsSubmitPublicReview");
   const res = await call(input);
   return res.data;
 }

@@ -1,17 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
-import { withTransaction } from "../lib/dataconnect-admin";
-import { uploadToDrive } from "../lib/drive";
+import { withTransaction, query } from "../lib/dataconnect-admin";
+import { uploadDealFile, findOrCreateFolder, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 import type { DocumentType } from "../lib/accessMatrix";
 
-// Backs DocumentDropzone.tsx (app/admin/ledger/* intake pages) — the frontend never touches
-// Drive credentials; it posts file bytes here and this Function does the upload + Document
-// row creation in one step (plan §4). Manual per-company admin upload pass, not automated
-// (plan §5: "the PRD's intake flow is deliberately manual in V1").
+// Manual company-document upload — backs the "Company Documents/Updates" tab's upload form. Same
+// OAuth-delegated Drive client + per-company-subfolder pattern as documents-shareCompanyUpdate.ts
+// (a bare service account has no Drive storage quota of its own, confirmed empirically), rather
+// than a caller-supplied driveFolderId — the company's subfolder under
+// COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is resolved/created here, same root every company-update
+// document already lands in.
 
 export interface DocumentsOnDriveUploadInput {
   companyId: string;
-  driveFolderId: string; // the fixed ASV Drive folder for this company (PRD §8.5 structure)
   docType: DocumentType;
   filename: string;
   mimeType: string;
@@ -26,12 +27,13 @@ export interface DocumentsOnDriveUploadOutput {
 const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25MB — generous for SPAs/decks, not for video
 
 export const documentsOnDriveUpload = onCall<DocumentsOnDriveUploadInput, Promise<DocumentsOnDriveUploadOutput>>(
+  { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
   async (request) => {
     const caller = await requireAdmin(request);
     const input = request.data;
 
-    if (!input.companyId || !input.driveFolderId || !input.docType || !input.filename || !input.contentBase64) {
-      throw new HttpsError("invalid-argument", "companyId, driveFolderId, docType, filename, and contentBase64 are required.");
+    if (!input.companyId || !input.docType || !input.filename || !input.contentBase64) {
+      throw new HttpsError("invalid-argument", "companyId, docType, filename, and contentBase64 are required.");
     }
 
     const content = Buffer.from(input.contentBase64, "base64");
@@ -39,20 +41,30 @@ export const documentsOnDriveUpload = onCall<DocumentsOnDriveUploadInput, Promis
       throw new HttpsError("invalid-argument", `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit.`);
     }
 
-    const { driveFileId, driveUrl } = await uploadToDrive(
-      input.driveFolderId,
-      input.filename,
-      input.mimeType,
-      content
-    );
+    const rootFolderId = process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID;
+    if (!rootFolderId) {
+      throw new HttpsError("failed-precondition", "COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is not configured.");
+    }
+
+    const companies = await query<{ name: string }>(`SELECT name FROM "company" WHERE id = $1`, [input.companyId]);
+    const company = companies[0];
+    if (!company) {
+      throw new HttpsError("not-found", `No company row for id "${input.companyId}".`);
+    }
+
+    // Company updates land in Investments/{Company}/Updates/, same as documentsShareCompanyUpdate.ts;
+    // every other doc type (SPA, data room, etc.) stays directly in the company folder root.
+    const companyFolderId = await findOrCreateFolder(rootFolderId, company.name);
+    const targetFolderId =
+      input.docType === "COMPANY_UPDATE_DOC" ? await findOrCreateFolder(companyFolderId, "Updates") : companyFolderId;
+    const { driveFileId, driveUrl } = await uploadDealFile(targetFolderId, input.filename, input.mimeType, content);
 
     const documentId = await withTransaction(async (client) => {
-      // uploaded_at has no real Postgres-level default — see the note in ledgerWriteBuilders.ts.
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO "document" ("drive_file_id", "drive_url", "doc_type", "company_id", "uploaded_by_id", "uploaded_at")
-         VALUES ($1, $2, $3, $4, $5, now())
+        `INSERT INTO "document" ("drive_file_id", "drive_url", filename, "doc_type", "company_id", "uploaded_by_id", "uploaded_at")
+         VALUES ($1, $2, $3, $4, $5, $6, now())
          RETURNING id`,
-        [driveFileId, driveUrl, input.docType, input.companyId, caller.memberId]
+        [driveFileId, driveUrl, input.filename, input.docType, input.companyId, caller.memberId]
       );
       return rows[0].id;
     });

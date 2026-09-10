@@ -20,6 +20,8 @@ export function LedgerRecordsEditor({
   allowAddRemove = false,
   recordLabels,
   expandForSubmit,
+  onCommitted,
+  onDiffResult,
 }: {
   initialRecords: Record<string, unknown>[];
   allowAddRemove?: boolean;
@@ -30,6 +32,18 @@ export function LedgerRecordsEditor({
   // flow uses this to expand each edited representative back into its full set of per-scenario
   // copies and to silently splice in any scenario copies that were never shown for review.
   expandForSubmit?: (records: Record<string, unknown>[]) => Record<string, unknown>[];
+  // Called after a successful commit — the AI document-review flow uses this to reset back to a
+  // clean upload screen rather than leaving stale, already-committed JSON sitting in the editor
+  // (a caller that re-analyzes a second document without discarding first would otherwise keep
+  // checking/committing against whatever was here from the prior analysis, since this
+  // component's own state only initializes once per mount, not on every `initialRecords` change —
+  // callers should also remount this component, e.g. via a changing `key`, when starting a
+  // genuinely new review rather than relying on this callback alone).
+  onCommitted?: () => void;
+  // Called with the flattened validation errors after every Check — the AI document-review
+  // flow's "ask for a change" box feeds these back to the model verbatim on the next
+  // regeneration, so it sees the exact validation failure rather than the admin's own paraphrase.
+  onDiffResult?: (errors: string[]) => void;
 }) {
   const [jsonTexts, setJsonTexts] = useState<string[]>(
     initialRecords.length > 0 ? initialRecords.map((r) => JSON.stringify(r, null, 2)) : [EMPTY_RECORD_TEMPLATE]
@@ -78,6 +92,10 @@ export function LedgerRecordsEditor({
     try {
       const { diff: diffResult } = await ledgerMassImportDiff(expandForSubmit ? expandForSubmit(records) : records);
       setDiff(diffResult);
+      const errors = diffResult
+        .filter((d) => d.classification !== "UNCHANGED")
+        .flatMap((d) => d.validationErrors);
+      onDiffResult?.(errors);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not check these records.");
     } finally {
@@ -94,6 +112,7 @@ export function LedgerRecordsEditor({
       const commitResult = await ledgerMassImportCommit(expandForSubmit ? expandForSubmit(records) : records);
       setResult(commitResult);
       setDiff(null);
+      onCommitted?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Commit failed.");
     } finally {

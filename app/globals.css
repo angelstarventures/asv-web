@@ -68,6 +68,25 @@
   --viz-text-secondary: #6b5d4a;
   --viz-muted: #8a7860;
   --viz-gridline: #ecdfc2;
+  /* Categorical (identity) palette for the Reports tab's by-company/by-industry/by-year
+     breakdowns — the dataviz skill's reference 8-hue order, validated as-is against this
+     app's actual surface (#fdfbf7): CVD ΔE 9.1 worst adjacent, normal-vision ΔE 19.6 worst
+     adjacent, both clear the floors. 3 slots fall below 3:1 surface contrast (a documented,
+     accepted tradeoff of this exact order) — mitigated by always pairing a slice/bar with a
+     visible text label, never color alone, per every chart in components/charts/. */
+  --viz-cat-1: #2a78d6;
+  --viz-cat-2: #eb6834;
+  --viz-cat-3: #1baf7a;
+  --viz-cat-4: #eda100;
+  --viz-cat-5: #e87ba4;
+  --viz-cat-6: #008300;
+  --viz-cat-7: #4a3aa7;
+  --viz-cat-8: #e34948;
+  /* Added to keep "Other" under ~40% on long-tail breakdowns (34+ portfolio companies) without
+     more real categories than the 7-real-slots-+-Other cap would otherwise allow — re-validated
+     as a 10-slot set via scripts/validate_palette.js (dataviz skill), same light-mode surface. */
+  --viz-cat-9: #00a3a3;
+  --viz-cat-10: #a05a2c;
 }
 
 /* Bumps every Tailwind text-* utility (all rem-based) up together site-wide, so both the

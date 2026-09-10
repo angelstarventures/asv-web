@@ -97,6 +97,45 @@ export async function findOrCreateFolder(parentFolderId: string, folderName: str
   return created.data.id;
 }
 
+// Read-only lookup — unlike findOrCreateFolder, never creates the folder if it's missing.
+// Used by the "sync from Drive" flow, where a company with no folder yet simply has nothing
+// to sync rather than getting an empty folder created for it.
+export async function findFolder(parentFolderId: string, folderName: string): Promise<string | null> {
+  const drive = getDealsDriveClient();
+  const escapedName = folderName.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const existing = await drive.files.list({
+    q: `'${parentFolderId}' in parents and name = '${escapedName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: "files(id)",
+    pageSize: 1,
+  });
+  return existing.data.files?.[0]?.id ?? null;
+}
+
+export interface DriveFileListing {
+  driveFileId: string;
+  name: string;
+  mimeType: string;
+  webViewLink: string;
+}
+
+// Direct (non-folder) file children of a folder — backs the "sync from Drive" flow, which
+// reconciles whatever's actually sitting in each company's folder against the `document` table
+// rather than only ever knowing about files uploaded through the app itself.
+export async function listFilesInFolder(folderId: string): Promise<DriveFileListing[]> {
+  const drive = getDealsDriveClient();
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: "files(id, name, mimeType, webViewLink)",
+    pageSize: 200,
+  });
+  return (res.data.files ?? []).map((f) => ({
+    driveFileId: f.id!,
+    name: f.name ?? "Untitled",
+    mimeType: f.mimeType ?? "application/octet-stream",
+    webViewLink: f.webViewLink ?? "",
+  }));
+}
+
 export async function deleteDealFolder(driveFolderId: string): Promise<void> {
   const drive = getDealsDriveClient();
   await drive.files.delete({ fileId: driveFolderId });

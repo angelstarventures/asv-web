@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { formatCurrencyCompact, MoicBadge } from "./StatTile";
 import { HealthDot } from "./HealthDot";
-import { CompanyEventsModal, type CompanyEventRow } from "./CompanyEventsModal";
 import { CompanyHealth } from "@/lib/dataconnect/generated";
+import type { Scenario as ScenarioParam } from "@/lib/scenarioTypes";
 
 export interface CompanyRollupRow {
   companyKey: string;
@@ -16,7 +17,6 @@ export interface CompanyRollupRow {
   moic: number;
   unrealizedValue: number;
   realizedValue: number;
-  events: CompanyEventRow[];
 }
 
 // Worst-first ordering for the Health column — sorting by the enum name alphabetically would
@@ -57,11 +57,28 @@ function sortValue(row: CompanyRollupRow, key: SortKey): string | number {
 
 // Per-company breakdown table — shared by the member dashboard's `asv` scope and the admin
 // dashboard (plan §4, wireframes 3 and 5). Client-rendered so column headers can drive sort
-// state; the caller does all the Map-lookup joining (health/investment year/events come from
-// separate queries) since a plain array of rows is what can actually cross the server/client
-// boundary as props — Map instances can't.
-export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
+// state; the caller does all the Map-lookup joining (health/investment year come from separate
+// queries) since a plain array of rows is what can actually cross the server/client boundary
+// as props — Map instances can't. "Details" links to a dedicated page (not a popup) — events
+// aren't fetched here at all anymore, the detail page fetches its own via getCompanyEvents.
+export function CompanyRollupTable({
+  rows,
+  detailHrefBase,
+  scenarioParam,
+  extraQuery,
+}: {
+  rows: CompanyRollupRow[];
+  detailHrefBase: string;
+  scenarioParam: ScenarioParam;
+  // Carries forward context the caller needs on the way back (e.g. admin's ?memberId=) — not
+  // needed to render the detail page itself, just for its "back" link.
+  extraQuery?: string;
+}) {
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "name", dir: "asc" });
+
+  function detailHref(r: CompanyRollupRow): string {
+    return `${detailHrefBase}/${r.companyKey}?scenario=${scenarioParam}&name=${encodeURIComponent(r.name)}${extraQuery ?? ""}`;
+  }
 
   const sortedRows = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -115,7 +132,9 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
         <div key={r.companyKey} className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
           <div className="flex items-start justify-between gap-2">
             <div>
-              <p className="font-medium">{r.name}</p>
+              <Link href={detailHref(r)} className="font-medium underline underline-offset-2">
+                {r.name}
+              </Link>
               <p className="text-xs text-zinc-500">{r.sector ?? "—"}</p>
             </div>
             <HealthDot health={r.health} />
@@ -144,9 +163,6 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
               <dd className="tabular-nums">{formatCurrencyCompact(r.realizedValue)}</dd>
             </div>
           </dl>
-          <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-            <CompanyEventsModal companyName={r.name} events={r.events} />
-          </div>
         </div>
       ))}
     </div>
@@ -178,13 +194,16 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
               </th>
             );
           })}
-          <th className="py-2 pl-8 font-medium">Details</th>
         </tr>
       </thead>
       <tbody>
         {sortedRows.map((r) => (
           <tr key={r.companyKey} className="border-b border-zinc-100 dark:border-zinc-900">
-            <td className="py-2">{r.name}</td>
+            <td className="py-2">
+              <Link href={detailHref(r)} className="underline underline-offset-2">
+                {r.name}
+              </Link>
+            </td>
             <td className="py-2">
               <HealthDot health={r.health} />
             </td>
@@ -200,9 +219,6 @@ export function CompanyRollupTable({ rows }: { rows: CompanyRollupRow[] }) {
             </td>
             <td className="py-2 text-right tabular-nums">{formatCurrencyCompact(r.unrealizedValue)}</td>
             <td className="py-2 text-right tabular-nums">{formatCurrencyCompact(r.realizedValue)}</td>
-            <td className="py-2 pl-8">
-              <CompanyEventsModal companyName={r.name} events={r.events} />
-            </td>
           </tr>
         ))}
       </tbody>

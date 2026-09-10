@@ -117,6 +117,7 @@ enum DealStage {
 }
 
 enum FundingRound {
+  FAMILY_AND_FRIENDS
   PRE_SEED
   SEED
   SERIES_A
@@ -155,10 +156,15 @@ type Member @table(key: "id") {
   photoUrl: String        # data: URL (base64), self-uploaded via /member/settings; nullable
   profileText: String     # short bio, self-editable via /member/settings; nullable
   phoneNumber: String     # for WhatsApp outreach (deal-review nudges, company-update shares) — free-form, digits-only normalized when building a wa.me link
-  expertiseKeywords: [String!] # resume-style skill/domain terms, self- or admin-editable — matched against Deal.keywords/sector to suggest reviewers
+  professionalProfileUrl: String # e.g. LinkedIn — public profile link, admin-editable
+  interests: [String!]    # sector/topic interest tags (e.g. Healthcare, Medical Device, IT) — distinct from expertise: self-declared areas of *interest*, not necessarily expertise
+  expertise: [String!]    # resume-style skill/domain terms, self- or admin-editable — matched against Deal.keywords/sector to suggest reviewers. Merged from the former separate free-text `expertise` + `expertiseKeywords` fields; deduped case-insensitively.
   membershipType: MembershipType! @default(value: MEMBER)
   role: Role!             @default(value: MEMBER)
   status: MemberStatus!   @default(value: ACTIVE)
+  aiChatEnabled: Boolean! @default(value: false)  # per-member (replaces the old per-role app_setting), site-admin-root-mode-editable only
+  lockedScenario: Scenario @default(value: OPTIMISTIC)  # null = this member picks freely among all 3; site-admin-root-mode-editable only
+  duesSentForYear: Int    # calendar year annual dues were last marked sent (e.g. 2026); null = not yet this cycle
   createdAt: Timestamp!   @default(expr: "request.time")
 }
 
@@ -170,9 +176,12 @@ type Company @table {
   sector: String
   website: String                                # set from the first investment-round record (company_url), same pattern as sector
   logoUrl: String                 # set from the first investment-round record (logo_url), same pattern as sector
+  ceoName: String                                # admin-editable, no other source — null until an admin fills it in
+  ceoContact: String                             # free-text (email or phone) — same posture as ceoName
   currentHealth: CompanyHealth
   currentTrajectory: CompanyTrajectory
   status: CompanyStatus!          @default(value: ACTIVE)
+  ddLead: Member                                 # the member who ran due diligence on this investment — admin-editable, nullable
 }
 
 # Durable, per-company Google Search-grounded market research — decoupled from the Vertex AI
@@ -216,6 +225,7 @@ type PricedRoundDetail @table {
   companyUrl: String
   docLink: String
   asvTotal: Float!
+  totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   roundName: String!
   pricePerShare: Float!
   postMoneyValuation: Float!
@@ -227,6 +237,7 @@ type SafeRoundDetail @table {
   companyUrl: String
   docLink: String
   asvTotal: Float!
+  totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   postMoneyValCap: Float!
   discount: Float!                   # CHECK 0..100 — see post_migrations/001
   warrantShares: Float
@@ -243,6 +254,7 @@ type NonParticipatingRoundDetail @table {
   roundName: String!
   newPricePerShare: Float!
   newPostMoneyValuation: Float!
+  totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   docLink: String
   notes: String
 }
@@ -323,6 +335,7 @@ type Document @table {
   id: UUID!            @default(expr: "uuidV4()")
   driveFileId: String! @unique
   driveUrl: String!
+  filename: String     # the real uploaded filename — nullable only for rows predating this field, backfilled from Drive's own file metadata
   docType: DocumentType!
   company: Company!
   uploadedBy: Member!
@@ -336,6 +349,21 @@ type DocumentAccessLog @table {
   accessedAt: Timestamp!  @default(expr: "request.time")
   decision: DocumentAccessDecision!
   reason: String!
+}
+
+# Per-member (NOT per-company) confidential document, e.g. a K-1 — deliberately a separate table
+# from Document rather than a nullable company/added member FK there: the access rule is
+# fundamentally different (only that one member + admins, vs. Document's fund-wide/allocation-
+# based visibility), so reusing Document's access-matrix machinery would be the wrong fit.
+type TaxDocument @table {
+  id: UUID!              @default(expr: "uuidV4()")
+  member: Member!                    # whose tax document this is — the confidentiality boundary
+  taxYear: Int
+  driveFileId: String!   @unique
+  driveUrl: String!
+  filename: String!
+  uploadedBy: Member!                 # the admin who uploaded it
+  uploadedAt: Timestamp! @default(expr: "request.time")
 }
 
 # --- Event-type registry (FR-10a) ---
@@ -382,6 +410,10 @@ type RollupCache @table(
   moic: Float!
   unrealizedValue: Float!
   realizedValue: Float!
+  # Mark-to-market "IRR to date" — only ever set on the single portfolio-level row (dated
+  # capital-call outflows + any real distribution inflows + current unrealizedValue as one
+  # terminal inflow "now"). Null on every per-company row (not computed there).
+  irr: Float
   computedAt: Timestamp! @default(expr: "request.time")
 }
 
@@ -406,6 +438,33 @@ type AppSetting @table(key: "key") {
   value: String!
   updatedAt: Timestamp! @default(expr: "request.time")
   updatedBy: Member!
+}
+
+# Per-feature AI provider routing, site-admin-controlled (/admin/settings) — lets a site-admin
+# move any single AI-calling feature onto OpenRouter (a cheaper/free-tier alternative model) or
+# back to Vertex AI without a deploy. Fixed set of feature keys ("deal_keyword_generation",
+# "deal_reviewer_matching", "document_analysis", "portfolio_chat"); a feature with no row yet
+# defaults to Vertex (functions/src/lib/aiProviderSettings.ts's fallback) — same "works before
+# an admin ever visits Settings" posture as AiPromptSetting.
+type AiProviderSetting @table(key: "key") {
+  key: String!
+  provider: String!      @default(value: "vertex")  # "vertex" | "openrouter"
+  openrouterModel: String                            # required in practice when provider = "openrouter"; free-text since OpenRouter's model catalog is large and changes often
+  openrouterProviderSlug: String                     # optional — pins OpenRouter's own upstream routing to one named reseller (e.g. "deepinfra") via the request-level provider.order + allow_fallbacks:false, instead of letting OpenRouter pick/rotate between whichever resellers serve openrouterModel. Blank means no pin (OpenRouter's own default routing).
+  searchBackend: String! @default(value: "vertex")   # "vertex" | "serper" — only meaningful for document_analysis (market-research grounding) and portfolio_chat (NEEDS_RESEARCH); ignored by the other 2 keys, which never do a live web search. "vertex" uses Vertex AI's own Google Search grounding tool; "serper" fetches raw results from Serper.dev and synthesizes them via that feature's own AiProviderSetting.provider instead — cheaper, and lets a feature fully avoid Vertex.
+  updatedAt: Timestamp!  @default(expr: "request.time")
+  updatedBy: Member!
+}
+
+# Serper.dev has no balance/credits API (unlike OpenRouter's /api/v1/key) — this is a
+# self-tracked running counter, incremented once per serperSearch() call (functions/src/lib/
+# serper.ts), backing the site-admin Costs page's Serper tile with an estimate (count * list
+# price per query) rather than a true remaining-balance figure, which only Serper's own
+# dashboard actually knows.
+type SerperUsageCounter @table(key: "key") {
+  key: String!            # fixed to "total" — a single row, not one per feature
+  queryCount: Int!        @default(value: 0)
+  updatedAt: Timestamp!   @default(expr: "request.time")
 }
 
 # ---------------------------------------------------------------------------
@@ -526,4 +585,31 @@ type DealRating @table {
   rating: Int!
   review: String
   updatedAt: Timestamp! @default(expr: "request.time")
+}
+
+# Persisted result of "Find Reviewers" (functions/src/functions/deals-findReviewers.ts) — the
+# whole point of persisting (rather than the fully ephemeral, recompute-every-open behavior this
+# replaced) is so the deals list can show a "message this reviewer" WhatsApp button per match
+# without recomputing. A regular admin can only populate this once per deal (the Cloud Function
+# rejects re-running once rows exist); a site-admin's re-run replaces every row for that deal
+# (delete-then-insert, same full-replace posture as DealFundingRoundEntry on a deal edit).
+type DealReviewerMatch @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  deal: Deal!
+  member: Member!
+  reason: String!
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# A non-member's comment on a deal, submitted from the public /review/[dealId] page (a link an
+# admin shares directly, outside any WhatsApp/email flow). Deliberately not a DealRating variant:
+# there's no numeric 1-5 score, no Member! FK (the submitter has no account), and it's visible to
+# admins only, not surfaced anywhere a regular member reads.
+type DealPublicReview @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  deal: Deal!
+  reviewerName: String!
+  reviewerContact: String!
+  comment: String!
+  createdAt: Timestamp! @default(expr: "request.time")
 }

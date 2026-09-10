@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionCookie } from "@/lib/firebase/session";
+import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 
 // The only real enforcement point in the app — `useAuth` (client context) is UI polish
 // only (spinners, conditional nav), never a security boundary. API routes are NOT covered
@@ -38,7 +39,11 @@ export async function proxy(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith("/admin") && !isAdminTier) {
     return NextResponse.redirect(new URL("/member/dashboard", request.url));
   }
-  if (request.nextUrl.pathname.startsWith("/admin/settings") && claims.role !== "site_admin") {
+  const rootSurfaces = ["/admin/settings", "/admin/portfolios", "/admin/costs"];
+  if (
+    rootSurfaces.some((p) => request.nextUrl.pathname.startsWith(p)) &&
+    !isSiteAdminModeOn(claims.role, claims.siteAdminMode)
+  ) {
     return NextResponse.redirect(new URL("/admin/members", request.url));
   }
 

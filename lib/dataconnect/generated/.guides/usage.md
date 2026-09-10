@@ -14,7 +14,7 @@ If a user is not using a supported framework, they can use the generated SDK dir
 Here's an example of how to use it with the first 5 operations:
 
 ```js
-import { insertCompany, listCompanies, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listAllocationsForScenario, listLedgerEntriesForScenario, listPricedRoundDetailsForScenario, listSafeRoundDetailsForScenario } from '@asv/dataconnect-generated';
+import { insertCompany, listCompanies, getCompanyById, listCompanyDdLeads, listMemberProfiles, getPortfolioRollup, listCompanyRollups, listCompanyUpdatesForScenario, listAllocationsForScenario, listLedgerEntriesForScenario } from '@asv/dataconnect-generated';
 
 
 // Operation InsertCompany:  For variables, look at type InsertCompanyVars in ../index.d.ts
@@ -22,6 +22,12 @@ const { data } = await InsertCompany(dataConnect, insertCompanyVars);
 
 // Operation ListCompanies: 
 const { data } = await ListCompanies(dataConnect);
+
+// Operation GetCompanyById:  For variables, look at type GetCompanyByIdVars in ../index.d.ts
+const { data } = await GetCompanyById(dataConnect, getCompanyByIdVars);
+
+// Operation ListCompanyDdLeads: 
+const { data } = await ListCompanyDdLeads(dataConnect);
 
 // Operation ListMemberProfiles: 
 const { data } = await ListMemberProfiles(dataConnect);
@@ -40,12 +46,6 @@ const { data } = await ListAllocationsForScenario(dataConnect, listAllocationsFo
 
 // Operation ListLedgerEntriesForScenario:  For variables, look at type ListLedgerEntriesForScenarioVars in ../index.d.ts
 const { data } = await ListLedgerEntriesForScenario(dataConnect, listLedgerEntriesForScenarioVars);
-
-// Operation ListPricedRoundDetailsForScenario:  For variables, look at type ListPricedRoundDetailsForScenarioVars in ../index.d.ts
-const { data } = await ListPricedRoundDetailsForScenario(dataConnect, listPricedRoundDetailsForScenarioVars);
-
-// Operation ListSafeRoundDetailsForScenario:  For variables, look at type ListSafeRoundDetailsForScenarioVars in ../index.d.ts
-const { data } = await ListSafeRoundDetailsForScenario(dataConnect, listSafeRoundDetailsForScenarioVars);
 
 
 ```

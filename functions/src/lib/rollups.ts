@@ -1,4 +1,5 @@
 import { query, withTransaction } from "./dataconnect-admin";
+import { xirr, type CashFlow } from "./xirr";
 import type { PoolClient } from "pg";
 
 // MOIC/unrealized/realized/health-mix/sector-breakdown math lives in exactly one place —
@@ -20,6 +21,10 @@ export interface CompanyRollup {
   moic: number;
   unrealizedValue: number;
   realizedValue: number;
+  // Mark-to-market "IRR to date" — only ever set on the portfolio-level row (computePortfolioRollup);
+  // per-company rows (computeCompanyRollup) always pass null, same nullable posture as the schema
+  // column itself.
+  irr: number | null;
 }
 
 // Investment-round entries are always identical across scenarios (FR-11); valuation/health
@@ -63,7 +68,7 @@ export async function computeCompanyRollup(companyId: string, scenario: string):
 
   const moic = invested > 0 ? (realizedValue + unrealizedValue) / invested : 0;
 
-  return { companyId, scenario, moic, unrealizedValue, realizedValue };
+  return { companyId, scenario, moic, unrealizedValue, realizedValue, irr: null };
 }
 
 // RollupCache's real key is the non-null `company_key` (Company.id as text, or the literal
@@ -72,11 +77,11 @@ export async function computeCompanyRollup(companyId: string, scenario: string):
 async function upsertRollupCache(client: PoolClient, rollup: CompanyRollup): Promise<void> {
   const companyKey = rollup.companyId ?? "PORTFOLIO";
   await client.query(
-    `INSERT INTO "rollup_cache" ("company_key", "company_id", scenario, moic, "unrealized_value", "realized_value", "computed_at")
-     VALUES ($1, $2, $3, $4, $5, $6, now())
+    `INSERT INTO "rollup_cache" ("company_key", "company_id", scenario, moic, "unrealized_value", "realized_value", irr, "computed_at")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, now())
      ON CONFLICT ("company_key", scenario)
-     DO UPDATE SET moic = $4, "unrealized_value" = $5, "realized_value" = $6, "computed_at" = now()`,
-    [companyKey, rollup.companyId, rollup.scenario, rollup.moic, rollup.unrealizedValue, rollup.realizedValue]
+     DO UPDATE SET moic = $4, "unrealized_value" = $5, "realized_value" = $6, irr = $7, "computed_at" = now()`,
+    [companyKey, rollup.companyId, rollup.scenario, rollup.moic, rollup.unrealizedValue, rollup.realizedValue, rollup.irr]
   );
 }
 
@@ -124,8 +129,39 @@ export async function computePortfolioRollup(scenario: string): Promise<CompanyR
   );
   const invested = Number(investedTotals[0]?.total ?? 0);
   const moic = invested > 0 ? (realizedValue + unrealizedValue) / invested : 0;
+  const irr = await computePortfolioIrr(scenario, unrealizedValue);
 
-  return { companyId: null, scenario, moic, unrealizedValue, realizedValue };
+  return { companyId: null, scenario, moic, unrealizedValue, realizedValue, irr };
+}
+
+// Mark-to-market "IRR to date": every dated capital-call outflow, every real dated
+// distribution inflow (currently ~0 rows — no exits yet), plus the portfolio's current
+// unrealizedValue treated as one terminal inflow dated today. Standard way to quote IRR before
+// a portfolio has fully realized — not a shortcut (plan: Portfolio-tab-restructure, IRR §).
+async function computePortfolioIrr(scenario: string, unrealizedValue: number): Promise<number | null> {
+  const outflows = await query<{ eventDate: string; amount: string }>(
+    `SELECT le."event_date" AS "eventDate", a.amount
+     FROM "allocation" a
+     JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
+     WHERE le.scenario = $1
+       AND le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')`,
+    [scenario]
+  );
+  const inflows = await query<{ eventDate: string; amount: string }>(
+    `SELECT le."event_date" AS "eventDate", ex."asv_total_payout" AS amount
+     FROM "exit_event_detail" ex
+     JOIN "ledger_entry" le ON le.id = ex."ledger_entry_id"
+     WHERE le.scenario = $1`,
+    [scenario]
+  );
+
+  const flows: CashFlow[] = [
+    ...outflows.map((r) => ({ date: new Date(r.eventDate), amount: -Number(r.amount) })),
+    ...inflows.map((r) => ({ date: new Date(r.eventDate), amount: Number(r.amount) })),
+    { date: new Date(), amount: unrealizedValue },
+  ];
+
+  return xirr(flows);
 }
 
 // Cloud Scheduler safety net (~15 min): recomputes everything from scratch and checks the

@@ -72,6 +72,7 @@ export enum ExitType {
 };
 
 export enum FundingRound {
+  FAMILY_AND_FRIENDS = "FAMILY_AND_FRIENDS",
   PRE_SEED = "PRE_SEED",
   SEED = "SEED",
   SERIES_A = "SERIES_A",
@@ -135,6 +136,11 @@ export interface AiPromptSetting_Key {
   __typename?: 'AiPromptSetting_Key';
 }
 
+export interface AiProviderSetting_Key {
+  key: string;
+  __typename?: 'AiProviderSetting_Key';
+}
+
 export interface Allocation_Key {
   id: UUIDString;
   __typename?: 'Allocation_Key';
@@ -180,9 +186,19 @@ export interface DealFundingRoundEntry_Key {
   __typename?: 'DealFundingRoundEntry_Key';
 }
 
+export interface DealPublicReview_Key {
+  id: UUIDString;
+  __typename?: 'DealPublicReview_Key';
+}
+
 export interface DealRating_Key {
   id: UUIDString;
   __typename?: 'DealRating_Key';
+}
+
+export interface DealReviewerMatch_Key {
+  id: UUIDString;
+  __typename?: 'DealReviewerMatch_Key';
 }
 
 export interface DealTagAssignment_Key {
@@ -218,6 +234,25 @@ export interface EventTypeDefinition_Key {
 export interface ExitEventDetail_Key {
   id: UUIDString;
   __typename?: 'ExitEventDetail_Key';
+}
+
+export interface GetCompanyByIdData {
+  company?: {
+    id: UUIDString;
+    name: string;
+    tradeName?: string | null;
+    tagline?: string | null;
+    sector?: string | null;
+    website?: string | null;
+    logoUrl?: string | null;
+    status: CompanyStatus;
+    ceoName?: string | null;
+    ceoContact?: string | null;
+  } & Company_Key;
+}
+
+export interface GetCompanyByIdVariables {
+  id: UUIDString;
 }
 
 export interface GetDealByIdData {
@@ -260,6 +295,22 @@ export interface GetDealByIdVariables {
   dealId: UUIDString;
 }
 
+export interface GetDocumentByIdData {
+  document?: {
+    id: UUIDString;
+    driveFileId: string;
+    filename?: string | null;
+    docType: DocumentType;
+    company: {
+      id: UUIDString;
+    } & Company_Key;
+  } & Document_Key;
+}
+
+export interface GetDocumentByIdVariables {
+  id: UUIDString;
+}
+
 export interface GetMemberByAuthUidData {
   members: ({
     id: string;
@@ -285,8 +336,13 @@ export interface GetMemberByIdData {
     photoUrl?: string | null;
     profileText?: string | null;
     phoneNumber?: string | null;
-    expertiseKeywords?: string[] | null;
+    professionalProfileUrl?: string | null;
+    interests?: string[] | null;
+    expertise?: string[] | null;
     membershipType: MembershipType;
+    aiChatEnabled: boolean;
+    lockedScenario?: Scenario | null;
+    duesSentForYear?: number | null;
     createdAt: TimestampString;
   } & Member_Key;
 }
@@ -300,12 +356,28 @@ export interface GetPortfolioRollupData {
     moic: number;
     unrealizedValue: number;
     realizedValue: number;
+    irr?: number | null;
     computedAt: TimestampString;
   })[];
 }
 
 export interface GetPortfolioRollupVariables {
   scenario: Scenario;
+}
+
+export interface GetTaxDocumentByIdData {
+  taxDocument?: {
+    id: UUIDString;
+    driveFileId: string;
+    filename: string;
+    member: {
+      id: string;
+    } & Member_Key;
+  } & TaxDocument_Key;
+}
+
+export interface GetTaxDocumentByIdVariables {
+  id: UUIDString;
 }
 
 export interface ImportedRecordHash_Key {
@@ -335,10 +407,23 @@ export interface ListAiPromptSettingsData {
   } & AiPromptSetting_Key)[];
 }
 
+export interface ListAiProviderSettingsData {
+  aiProviderSettings: ({
+    key: string;
+    provider: string;
+    openrouterModel?: string | null;
+    openrouterProviderSlug?: string | null;
+    searchBackend: string;
+    updatedAt: TimestampString;
+  } & AiProviderSetting_Key)[];
+}
+
 export interface ListAllDocumentsData {
   documents: ({
     id: UUIDString;
+    filename?: string | null;
     docType: DocumentType;
+    uploadedAt: TimestampString;
     company: {
       id: UUIDString;
       name: string;
@@ -357,18 +442,38 @@ export interface ListAllMembersData {
     status: MemberStatus;
     authUid?: string | null;
     membershipType: MembershipType;
+    phoneNumber?: string | null;
+    aiChatEnabled: boolean;
+    lockedScenario?: Scenario | null;
+    duesSentForYear?: number | null;
     createdAt: TimestampString;
   } & Member_Key)[];
+}
+
+export interface ListAllTaxDocumentsData {
+  taxDocuments: ({
+    id: UUIDString;
+    filename: string;
+    taxYear?: number | null;
+    uploadedAt: TimestampString;
+    member: {
+      id: string;
+      displayName: string;
+    } & Member_Key;
+  } & TaxDocument_Key)[];
 }
 
 export interface ListAllocationsForScenarioData {
   allocations: ({
     amount: number;
     ledgerEntry: {
+      id: UUIDString;
+      eventDate: DateString;
+      type: LedgerEntryType;
       company: {
         id: UUIDString;
       } & Company_Key;
-    };
+    } & LedgerEntry_Key;
   })[];
 }
 
@@ -396,6 +501,18 @@ export interface ListCompaniesData {
   } & Company_Key)[];
 }
 
+export interface ListCompanyDdLeadsData {
+  companies: ({
+    id: UUIDString;
+    ceoName?: string | null;
+    ceoContact?: string | null;
+    ddLead?: {
+      id: string;
+      displayName: string;
+    } & Member_Key;
+  } & Company_Key)[];
+}
+
 export interface ListCompanyRollupsData {
   rollupCaches: ({
     companyKey: string;
@@ -407,6 +524,7 @@ export interface ListCompanyRollupsData {
       name: string;
       tradeName?: string | null;
       sector?: string | null;
+      status: CompanyStatus;
     } & Company_Key;
   })[];
 }
@@ -496,6 +614,28 @@ export interface ListDealFundingRoundsByDealVariables {
   dealId: UUIDString;
 }
 
+export interface ListDealPitchDecksData {
+  dealDocuments: ({
+    deal: {
+      id: UUIDString;
+    } & Deal_Key;
+    driveUrl: string;
+  })[];
+}
+
+export interface ListDealPublicReviewsByDealData {
+  dealPublicReviews: ({
+    reviewerName: string;
+    reviewerContact: string;
+    comment: string;
+    createdAt: TimestampString;
+  })[];
+}
+
+export interface ListDealPublicReviewsByDealVariables {
+  dealId: UUIDString;
+}
+
 export interface ListDealRatingsByDealData {
   dealRatings: ({
     rating: number;
@@ -510,6 +650,29 @@ export interface ListDealRatingsByDealData {
 
 export interface ListDealRatingsByDealVariables {
   dealId: UUIDString;
+}
+
+export interface ListDealRatingsData {
+  dealRatings: ({
+    deal: {
+      id: UUIDString;
+    } & Deal_Key;
+    rating: number;
+  })[];
+}
+
+export interface ListDealReviewerMatchesData {
+  dealReviewerMatches: ({
+    deal: {
+      id: UUIDString;
+    } & Deal_Key;
+    member: {
+      id: string;
+      displayName: string;
+      phoneNumber?: string | null;
+    } & Member_Key;
+    reason: string;
+  })[];
 }
 
 export interface ListDealTagAssignmentsData {
@@ -624,11 +787,13 @@ export interface ListMemberAllocationsData {
     ledgerEntry: {
       id: UUIDString;
       eventDate: DateString;
+      type: LedgerEntryType;
       company: {
         id: UUIDString;
         name: string;
         tradeName?: string | null;
         sector?: string | null;
+        status: CompanyStatus;
       } & Company_Key;
     } & LedgerEntry_Key;
   })[];
@@ -676,6 +841,7 @@ export interface ListMemberValuationsData {
         name: string;
         tradeName?: string | null;
         sector?: string | null;
+        status: CompanyStatus;
       } & Company_Key;
     } & LedgerEntry_Key;
   })[];
@@ -693,6 +859,7 @@ export interface ListNonParticipatingRoundDetailsForScenarioData {
     roundName: string;
     newPricePerShare: number;
     newPostMoneyValuation: number;
+    totalRoundSize?: number | null;
     docLink?: string | null;
     notes?: string | null;
   })[];
@@ -710,6 +877,7 @@ export interface ListPricedRoundDetailsForScenarioData {
     companyUrl?: string | null;
     docLink?: string | null;
     asvTotal: number;
+    totalRoundSize?: number | null;
     roundName: string;
     pricePerShare: number;
     postMoneyValuation: number;
@@ -728,6 +896,7 @@ export interface ListSafeRoundDetailsForScenarioData {
     companyUrl?: string | null;
     docLink?: string | null;
     asvTotal: number;
+    totalRoundSize?: number | null;
     postMoneyValCap: number;
     discount: number;
     warrantShares?: number | null;
@@ -741,6 +910,19 @@ export interface ListSafeRoundDetailsForScenarioData {
 
 export interface ListSafeRoundDetailsForScenarioVariables {
   scenario: Scenario;
+}
+
+export interface ListTaxDocumentsByMemberData {
+  taxDocuments: ({
+    id: UUIDString;
+    filename: string;
+    taxYear?: number | null;
+    uploadedAt: TimestampString;
+  } & TaxDocument_Key)[];
+}
+
+export interface ListTaxDocumentsByMemberVariables {
+  memberId: string;
 }
 
 export interface ListValuationAssessmentDetailsForScenarioData {
@@ -793,6 +975,11 @@ export interface SafeRoundDetail_Key {
   __typename?: 'SafeRoundDetail_Key';
 }
 
+export interface TaxDocument_Key {
+  id: UUIDString;
+  __typename?: 'TaxDocument_Key';
+}
+
 export interface ValuationAssessmentDetail_Key {
   id: UUIDString;
   __typename?: 'ValuationAssessmentDetail_Key';
@@ -821,6 +1008,30 @@ export const listCompaniesRef: ListCompaniesRef;
 
 export function listCompanies(options?: ExecuteQueryOptions): QueryPromise<ListCompaniesData, undefined>;
 export function listCompanies(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListCompaniesData, undefined>;
+
+interface GetCompanyByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetCompanyByIdVariables): QueryRef<GetCompanyByIdData, GetCompanyByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetCompanyByIdVariables): QueryRef<GetCompanyByIdData, GetCompanyByIdVariables>;
+  operationName: string;
+}
+export const getCompanyByIdRef: GetCompanyByIdRef;
+
+export function getCompanyById(vars: GetCompanyByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetCompanyByIdData, GetCompanyByIdVariables>;
+export function getCompanyById(dc: DataConnect, vars: GetCompanyByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetCompanyByIdData, GetCompanyByIdVariables>;
+
+interface ListCompanyDdLeadsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListCompanyDdLeadsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListCompanyDdLeadsData, undefined>;
+  operationName: string;
+}
+export const listCompanyDdLeadsRef: ListCompanyDdLeadsRef;
+
+export function listCompanyDdLeads(options?: ExecuteQueryOptions): QueryPromise<ListCompanyDdLeadsData, undefined>;
+export function listCompanyDdLeads(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListCompanyDdLeadsData, undefined>;
 
 interface ListMemberProfilesRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -1026,6 +1237,54 @@ export const listAllDocumentsRef: ListAllDocumentsRef;
 export function listAllDocuments(options?: ExecuteQueryOptions): QueryPromise<ListAllDocumentsData, undefined>;
 export function listAllDocuments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAllDocumentsData, undefined>;
 
+interface GetDocumentByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetDocumentByIdVariables): QueryRef<GetDocumentByIdData, GetDocumentByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetDocumentByIdVariables): QueryRef<GetDocumentByIdData, GetDocumentByIdVariables>;
+  operationName: string;
+}
+export const getDocumentByIdRef: GetDocumentByIdRef;
+
+export function getDocumentById(vars: GetDocumentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetDocumentByIdData, GetDocumentByIdVariables>;
+export function getDocumentById(dc: DataConnect, vars: GetDocumentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetDocumentByIdData, GetDocumentByIdVariables>;
+
+interface ListAllTaxDocumentsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAllTaxDocumentsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAllTaxDocumentsData, undefined>;
+  operationName: string;
+}
+export const listAllTaxDocumentsRef: ListAllTaxDocumentsRef;
+
+export function listAllTaxDocuments(options?: ExecuteQueryOptions): QueryPromise<ListAllTaxDocumentsData, undefined>;
+export function listAllTaxDocuments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAllTaxDocumentsData, undefined>;
+
+interface ListTaxDocumentsByMemberRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListTaxDocumentsByMemberVariables): QueryRef<ListTaxDocumentsByMemberData, ListTaxDocumentsByMemberVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListTaxDocumentsByMemberVariables): QueryRef<ListTaxDocumentsByMemberData, ListTaxDocumentsByMemberVariables>;
+  operationName: string;
+}
+export const listTaxDocumentsByMemberRef: ListTaxDocumentsByMemberRef;
+
+export function listTaxDocumentsByMember(vars: ListTaxDocumentsByMemberVariables, options?: ExecuteQueryOptions): QueryPromise<ListTaxDocumentsByMemberData, ListTaxDocumentsByMemberVariables>;
+export function listTaxDocumentsByMember(dc: DataConnect, vars: ListTaxDocumentsByMemberVariables, options?: ExecuteQueryOptions): QueryPromise<ListTaxDocumentsByMemberData, ListTaxDocumentsByMemberVariables>;
+
+interface GetTaxDocumentByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetTaxDocumentByIdVariables): QueryRef<GetTaxDocumentByIdData, GetTaxDocumentByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetTaxDocumentByIdVariables): QueryRef<GetTaxDocumentByIdData, GetTaxDocumentByIdVariables>;
+  operationName: string;
+}
+export const getTaxDocumentByIdRef: GetTaxDocumentByIdRef;
+
+export function getTaxDocumentById(vars: GetTaxDocumentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetTaxDocumentByIdData, GetTaxDocumentByIdVariables>;
+export function getTaxDocumentById(dc: DataConnect, vars: GetTaxDocumentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetTaxDocumentByIdData, GetTaxDocumentByIdVariables>;
+
 interface GetMemberByAuthUidRef {
   /* Allow users to create refs without passing in DataConnect */
   (vars: GetMemberByAuthUidVariables): QueryRef<GetMemberByAuthUidData, GetMemberByAuthUidVariables>;
@@ -1085,6 +1344,18 @@ export const listAiPromptSettingsRef: ListAiPromptSettingsRef;
 
 export function listAiPromptSettings(options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
 export function listAiPromptSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAiPromptSettingsData, undefined>;
+
+interface ListAiProviderSettingsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListAiProviderSettingsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListAiProviderSettingsData, undefined>;
+  operationName: string;
+}
+export const listAiProviderSettingsRef: ListAiProviderSettingsRef;
+
+export function listAiProviderSettings(options?: ExecuteQueryOptions): QueryPromise<ListAiProviderSettingsData, undefined>;
+export function listAiProviderSettings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListAiProviderSettingsData, undefined>;
 
 interface ListAppSettingsRef {
   /* Allow users to create refs without passing in DataConnect */
@@ -1169,6 +1440,54 @@ export const listDealRatingsByDealRef: ListDealRatingsByDealRef;
 
 export function listDealRatingsByDeal(vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
 export function listDealRatingsByDeal(dc: DataConnect, vars: ListDealRatingsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsByDealData, ListDealRatingsByDealVariables>;
+
+interface ListDealRatingsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealRatingsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealRatingsData, undefined>;
+  operationName: string;
+}
+export const listDealRatingsRef: ListDealRatingsRef;
+
+export function listDealRatings(options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsData, undefined>;
+export function listDealRatings(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealRatingsData, undefined>;
+
+interface ListDealReviewerMatchesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealReviewerMatchesData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealReviewerMatchesData, undefined>;
+  operationName: string;
+}
+export const listDealReviewerMatchesRef: ListDealReviewerMatchesRef;
+
+export function listDealReviewerMatches(options?: ExecuteQueryOptions): QueryPromise<ListDealReviewerMatchesData, undefined>;
+export function listDealReviewerMatches(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealReviewerMatchesData, undefined>;
+
+interface ListDealPitchDecksRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListDealPitchDecksData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListDealPitchDecksData, undefined>;
+  operationName: string;
+}
+export const listDealPitchDecksRef: ListDealPitchDecksRef;
+
+export function listDealPitchDecks(options?: ExecuteQueryOptions): QueryPromise<ListDealPitchDecksData, undefined>;
+export function listDealPitchDecks(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListDealPitchDecksData, undefined>;
+
+interface ListDealPublicReviewsByDealRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListDealPublicReviewsByDealVariables): QueryRef<ListDealPublicReviewsByDealData, ListDealPublicReviewsByDealVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListDealPublicReviewsByDealVariables): QueryRef<ListDealPublicReviewsByDealData, ListDealPublicReviewsByDealVariables>;
+  operationName: string;
+}
+export const listDealPublicReviewsByDealRef: ListDealPublicReviewsByDealRef;
+
+export function listDealPublicReviewsByDeal(vars: ListDealPublicReviewsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealPublicReviewsByDealData, ListDealPublicReviewsByDealVariables>;
+export function listDealPublicReviewsByDeal(dc: DataConnect, vars: ListDealPublicReviewsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealPublicReviewsByDealData, ListDealPublicReviewsByDealVariables>;
 
 interface ListDealFundingRoundsByDealRef {
   /* Allow users to create refs without passing in DataConnect */

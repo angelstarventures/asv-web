@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { DealRatingModal } from "@/components/DealRatingModal";
 import { DealAdminControls } from "@/components/DealAdminControls";
 import { EditDealForm } from "@/components/EditDealForm";
+import { StarRatingDisplay } from "@/components/StarRatingDisplay";
 import type { DealTagOption } from "@/components/DealListTable";
 
 const TABS = ["overview", "deck", "team", "summary", "financials", "documents"] as const;
@@ -72,6 +73,13 @@ export interface DealFundingRoundRow {
   currency: string;
 }
 
+export interface DealPublicReviewRow {
+  reviewerName: string;
+  reviewerContact: string;
+  comment: string;
+  createdAt: string;
+}
+
 function currency(n: number, code?: string | null): string {
   if (code) {
     try {
@@ -121,6 +129,7 @@ export function DealDetailView({
   isAdmin,
   allTags,
   assignedTagIds,
+  publicReviews,
 }: {
   deal: DealDetail;
   documents: DealDocumentRow[];
@@ -130,6 +139,7 @@ export function DealDetailView({
   isAdmin: boolean;
   allTags: DealTagOption[];
   assignedTagIds: string[];
+  publicReviews?: DealPublicReviewRow[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
@@ -376,13 +386,33 @@ export function DealDetailView({
             <li key={r.member.id} className="border-t border-zinc-100 pt-3 first:border-t-0 first:pt-0 dark:border-zinc-900">
               <div className="flex items-center gap-2 text-sm">
                 <span className="font-medium">{r.member.displayName}</span>
-                <span className="text-amber-500">{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                <StarRatingDisplay rating={r.rating} />
               </div>
               {r.review && <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{r.review}</p>}
             </li>
           ))}
         </ul>
       </div>
+
+      {isAdmin && publicReviews && (
+        <div className="rounded-lg border border-zinc-200 bg-card p-6 dark:border-zinc-800">
+          <h2 className="text-sm font-semibold">External feedback</h2>
+          <p className="text-xs text-zinc-500">Comments from non-members via the public review link. Admin-only.</p>
+          {publicReviews.length === 0 && <p className="mt-2 text-sm text-zinc-500">No external feedback yet.</p>}
+          <ul className="mt-3 flex flex-col gap-3">
+            {publicReviews.map((r, i) => (
+              <li key={i} className="border-t border-zinc-100 pt-3 first:border-t-0 first:pt-0 dark:border-zinc-900">
+                <div className="flex flex-wrap items-baseline gap-2 text-sm">
+                  <span className="font-medium">{r.reviewerName}</span>
+                  <span className="text-xs text-zinc-500">{r.reviewerContact}</span>
+                  <span className="text-xs text-zinc-400">{new Date(r.createdAt).toLocaleDateString()}</span>
+                </div>
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{r.comment}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

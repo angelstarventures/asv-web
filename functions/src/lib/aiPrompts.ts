@@ -14,7 +14,15 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "(every prior round's price-per-share, post-money valuation, and per-member allocation; every " +
     "prior valuation mark and its per-member split) for context, draft one or more ledger " +
     "record(s). Resolve investor names in the document to the correct member IDs using the " +
-    "member list. Never fabricate figures that aren't in the document AND can't be derived from " +
+    "member list you were given — that list is COMPLETE and includes every member, so before " +
+    "concluding someone isn't in it: compare the document's name against both displayName AND " +
+    "investingEntityName for every member, case-insensitively, ignoring titles/middle names/" +
+    "extra whitespace/minor spelling variants — a name only counts as unresolvable if, after " +
+    "that careful comparison, truly no plausible match exists in the list. NEVER invent a member " +
+    "ID, and never use a person's name as a dict key in allocations/member_valuations/" +
+    "member_payouts — if you cannot confidently resolve someone to a real ID from the list, omit " +
+    "them from that dict entirely and say so in a `warnings` entry instead, naming exactly who " +
+    "you couldn't resolve. Never fabricate figures that aren't in the document AND can't be derived from " +
     "the ledger history you were given — omit optional fields you're not confident about rather " +
     "than guessing. In particular, a new round's price-per-share must be consistent with the " +
     "company's most recent prior price-per-share (a huge jump or drop, e.g. from using the " +
@@ -24,6 +32,10 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "the prior rounds in the history you were given, rather than inventing an unrelated number. " +
     "Every record you draft will be reviewed and can be edited by a human before it is ever " +
     "written to the database. " +
+    "For a Participating_PricedRound, Participating_SAFERound, or NonParticipating_Round, also " +
+    "extract total_round_size if the source document states the company's FULL raise across " +
+    "every investor in that round (not just ASV's own contribution, asv_total) — omit it " +
+    "entirely rather than guessing if the document only shows ASV's own commitment. " +
     "A priced financing round for a company ASV already holds a position in — even one ASV did " +
     "not participate in (a NonParticipating_Round) — is itself a valuation-changing event: also " +
     "draft a companion Transaction_ValuationChange record dated the same as the round, marking " +
@@ -33,7 +45,12 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "than ASV's own cumulative cost basis in that company, not a lower one. Use " +
     "Transaction_ValuationChange whenever an actual priced transaction sets the new value; reserve " +
     "Internal_ValuationAssessment for a markup/markdown you infer from company updates, market " +
-    "conditions, or sector health with no priced transaction behind it. In both cases, compute " +
+    "conditions, or sector health with no priced transaction behind it. This case is easy to " +
+    "under-draft: if your own analysis of a CompanyUpdate concludes a markup or markdown is " +
+    "warranted, describing that conclusion in the CompanyUpdate's viewpoint_analysis text is NOT " +
+    "enough — you MUST ALSO draft a separate, companion Internal_ValuationAssessment record " +
+    "(dated the same as the update) that actually changes asv_total_fair_market_value; a narrative " +
+    "conclusion with no record to back it is a half-finished draft. In both cases, compute " +
     "member_valuations by splitting asv_total_fair_market_value across members in proportion to " +
     "each member's cumulative cash allocation into that company relative to ASV's total cumulative " +
     "allocation there — you can derive this directly from the allocation dollars already present " +

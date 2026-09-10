@@ -3,8 +3,10 @@
 import { Fragment, useMemo, useState, type DragEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { deleteDeal, setDealRanks } from "@/lib/functions/deals";
-import { DealReviewMatchModal } from "@/components/DealReviewMatchModal";
+import { setDealRanks, findReviewers } from "@/lib/functions/deals";
+import { StarRatingDisplay } from "@/components/StarRatingDisplay";
+import { ROUND_OPTIONS } from "@/components/dealFormShared";
+import { truncateBlurb, type DealReviewerMatchInfo } from "@/lib/deals";
 
 export interface DealRow {
   id: string;
@@ -18,6 +20,11 @@ export interface DealRow {
   stage: string;
   rank?: number | null;
   createdAt: string;
+  sector?: string | null;
+  executiveSummary?: string | null;
+  discountPercent?: number | null;
+  ratingAvg?: number | null;
+  ratingCount?: number;
 }
 
 export interface DealTagOption {
@@ -35,16 +42,21 @@ const STAGE_LABELS: Record<string, string> = {
   ARCHIVED: "Archived",
 };
 
-type SortKey = "rank" | "companyName" | "round" | "seekingAmount" | "preMoneyValuation" | "stage" | "createdAt";
+// The pre-checked-by-default tag names for item (g)'s pre-filter — matched by name against
+// whatever tags exist, so this works whether or not the "Has Lead"/"Halal" DealTag rows have
+// already been seeded (functions/src/lib/dealAutoTags.ts creates them lazily on first sync).
+const DEFAULT_CHECKED_TAG_NAMES = ["Has Lead", "Halal"];
 
-const COLUMNS: { key: SortKey; label: string }[] = [
-  { key: "rank", label: "Rank" },
+type SortKey = "rank" | "companyName" | "ratingAvg";
+
+// The sort dropdown only ever offers these 3 — "Rank" is kept (rather than dropped to just
+// Company/Rating) because it's also the one sort state that activates the screening-queue
+// drag-and-reorder view (see `reorderable` below): there'd be no way back into that view once
+// a different sort was picked otherwise.
+const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: "rank", label: "Rank (screening queue)" },
   { key: "companyName", label: "Company" },
-  { key: "round", label: "Round" },
-  { key: "seekingAmount", label: "Seeking" },
-  { key: "preMoneyValuation", label: "Pre-money" },
-  { key: "stage", label: "Stage" },
-  { key: "createdAt", label: "Submitted" },
+  { key: "ratingAvg", label: "Rating" },
 ];
 
 function currency(n: number, code?: string): string {
@@ -60,20 +72,63 @@ function currency(n: number, code?: string): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-// A SAFE has no pre-money valuation — fall back to its valuation cap so the column still shows
-// something meaningful, with a "(cap)" suffix to distinguish it from a priced round's figure.
-function dealValuationDisplay(d: DealRow): string {
-  if (d.preMoneyValuation != null) return currency(d.preMoneyValuation, d.currency);
-  if (d.valuationCap != null) return `${currency(d.valuationCap, d.currency)} (cap)`;
-  return "—";
+const ROUND_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
+  ROUND_OPTIONS.map((o) => [o.value, o.label])
+);
+
+// Shorter than SECURITY_TYPE_LABELS' abbreviations ("Priced" vs "Priced Equity") — this one's
+// only ever used inside the "<Round> Round (<Security>)" prefix below, where the fuller word
+// reads better.
+const SECURITY_TYPE_PAREN_LABELS: Record<string, string> = {
+  PRICED_ROUND: "Priced Equity",
+  SAFE: "SAFE",
+  CONVERTIBLE_NOTE: "Convertible Note",
+  OTHER: "Other",
+};
+
+// Keyed off securityType, not field presence — a SAFE has no pre-money valuation in the
+// traditional sense (its cap is the relevant figure), but some rows carry a stale
+// preMoneyValuation left over from before securityType was corrected, which checking field
+// presence first (a real bug caught here once already) would wrongly prefer. Amounts render as
+// separate bold elements from the surrounding plain-weight sentence text.
+function RaiseInfo({ d }: { d: DealRow }) {
+  const roundLabel = ROUND_LABEL_BY_VALUE[d.round] ?? d.round.replaceAll("_", " ");
+  const securityLabel = SECURITY_TYPE_PAREN_LABELS[d.securityType] ?? d.securityType.replaceAll("_", " ");
+  const amount = <span className="font-semibold">{currency(d.seekingAmount, d.currency)}</span>;
+
+  let terms: React.ReactNode = null;
+  if (d.securityType === "SAFE" && d.valuationCap != null) {
+    terms = (
+      <>
+        {" "}
+        at <span className="font-semibold">{currency(d.valuationCap, d.currency)}</span> post-money cap
+        {d.discountPercent != null ? ` with ${d.discountPercent}% discount` : ""}
+      </>
+    );
+  } else if (d.preMoneyValuation != null) {
+    terms = (
+      <>
+        {" "}
+        at <span className="font-semibold">{currency(d.preMoneyValuation, d.currency)}</span> pre-money
+      </>
+    );
+  }
+
+  return (
+    <p className="text-sm">
+      <span className="font-semibold">
+        {roundLabel} Round ({securityLabel})
+      </span>
+      : Seeking {amount}
+      {terms}.
+    </p>
+  );
 }
 
 function sortValue(row: DealRow, key: SortKey): string | number {
-  if (key === "seekingAmount") return row.seekingAmount;
-  if (key === "preMoneyValuation") return row.preMoneyValuation ?? row.valuationCap ?? 0;
-  if (key === "createdAt") return new Date(row.createdAt).getTime();
   if (key === "rank") return row.rank ?? Number.MAX_SAFE_INTEGER;
-  return row[key].toLowerCase();
+  if (key === "ratingAvg") return row.ratingAvg ?? -1;
+  return row.companyName.toLowerCase();
 }
 
 function ScreeningLine() {
@@ -86,25 +141,42 @@ function ScreeningLine() {
   );
 }
 
-// Shared by /admin/deals and /member/deals — same click-to-sort-column client pattern as
-// MembersTable, plus a left filter panel (stage + admin-managed tags) matching the reference
-// deal-list screenshot. Row click navigates to the shared detail route. isAdmin adds a per-row
-// delete action and the screening-queue reorder controls (drag + up/down arrows), which appear
-// once the list is sorted by Rank ascending — that's the one order where ranked deals group
-// contiguously at the top, which is what makes a literal above/below-the-line divider (the
-// "screening line") and up/down moves mean anything coherent.
+// Minimal, recognizable WhatsApp glyph — no icon asset existed anywhere in this app before this
+// button, so it's inlined rather than adding a new dependency for one icon.
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-1.739-.87-2.876-1.554-4.019-3.524-.304-.524.304-.487.868-1.622.098-.198.049-.371-.05-.52-.099-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.059 3.133 4.988 4.27 2.929 1.137 2.929.76 3.878.71.95-.05 1.982-.79 2.278-1.55.297-.76.297-1.412.198-1.55-.099-.148-.297-.198-.594-.347z" />
+      <path d="M12.041 2c-5.503 0-9.977 4.474-9.977 9.978 0 1.827.494 3.611 1.432 5.166L2 22l4.99-1.475a9.94 9.94 0 0 0 5.051 1.379h.004c5.503 0 9.977-4.474 9.977-9.978S17.544 2 12.041 2zm0 18.117h-.004a8.14 8.14 0 0 1-4.15-1.135l-.298-.177-3.09.913.916-3.043-.194-.311a8.128 8.128 0 0 1-1.253-4.386c0-4.5 3.665-8.163 8.176-8.163 2.181 0 4.231.85 5.77 2.393a8.106 8.106 0 0 1 2.394 5.775c0 4.5-3.666 8.134-8.267 8.134z" />
+    </svg>
+  );
+}
+
+// Shared by /admin/deals and /member/deals — a single sortable card grid (same "Sort by"
+// dropdown + direction toggle at every breakpoint, since a card layout has no clickable column
+// headers to sort by). Row click navigates to the shared detail route. isAdmin adds a per-card
+// delete/rank/reviewer-matching action row, which gets the drag/screening-line reordering
+// controls once the list is sorted by Rank ascending — that's the one order where ranked deals
+// group contiguously at the top, which is what makes a literal above/below-the-line divider
+// (the "screening line") and up/down moves mean anything coherent.
 export function DealListTable({
   deals,
   tags,
   dealTagIds,
+  reviewerMatchesByDealId,
+  pitchDeckUrlByDealId,
   detailHrefBase,
   isAdmin,
+  isSiteAdmin,
 }: {
   deals: DealRow[];
   tags: DealTagOption[];
   dealTagIds: Record<string, string[]>;
+  reviewerMatchesByDealId?: Record<string, DealReviewerMatchInfo[]>;
+  pitchDeckUrlByDealId?: Record<string, string>;
   detailHrefBase: string;
   isAdmin?: boolean;
+  isSiteAdmin?: boolean;
 }) {
   const router = useRouter();
   // Rank ascending by default — the screening queue (highest-ranked/most-interesting first,
@@ -112,16 +184,42 @@ export function DealListTable({
   // view now, not something reached by clicking the Rank header first.
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "rank", dir: "asc" });
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
-  const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
-  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
-  const [reviewingDealId, setReviewingDealId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [tagFilter, setTagFilter] = useState<Set<string>>(
+    () => new Set(tags.filter((t) => DEFAULT_CHECKED_TAG_NAMES.includes(t.name)).map((t) => t.id))
+  );
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [findingReviewersId, setFindingReviewersId] = useState<string | null>(null);
   const [dragOrder, setDragOrder] = useState<string[] | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
 
-  function toggleSort(key: SortKey) {
-    setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  function handleSendWhatsApp(d: DealRow, member: DealReviewerMatchInfo) {
+    if (!member.phoneNumber) return;
+    const digits = member.phoneNumber.replace(/\D/g, "");
+    const pitchDeckUrl = pitchDeckUrlByDealId?.[d.id];
+    const reviewUrl = `${window.location.origin}/member/deals/${d.id}`;
+    const message = [
+      `Hi ${member.displayName}, ${d.companyName} may be in your domain of interest.`,
+      truncateBlurb(d.executiveSummary, 200),
+      pitchDeckUrl ? `Pitch deck: ${pitchDeckUrl}` : null,
+      `Full details & to share your thoughts: ${reviewUrl}`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+    window.open(`https://wa.me/${digits}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
+
+  async function handleFindReviewers(dealId: string) {
+    setError(null);
+    setFindingReviewersId(dealId);
+    try {
+      await findReviewers({ dealId });
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not find reviewers for this deal.");
+    } finally {
+      setFindingReviewersId(null);
+    }
   }
 
   function toggleSetMember(set: Set<string>, setter: (s: Set<string>) => void, value: string) {
@@ -133,73 +231,20 @@ export function DealListTable({
 
   async function commitRankUpdates(updates: { dealId: string; rank: number | null }[]) {
     setError(null);
-    setBusy(true);
     try {
       await setDealRanks({ updates });
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update the ranking.");
-    } finally {
-      setBusy(false);
     }
   }
 
-  async function handleConfirmDelete() {
-    if (!confirmingDeleteId) return;
-    setError(null);
-    setBusy(true);
-    try {
-      await deleteDeal({ dealId: confirmingDeleteId });
-      setConfirmingDeleteId(null);
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not delete this deal.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Global (unaffected by the stage/tag filters below), so "next available rank" and the
-  // up/down arrows' neighbor lookups are always correct even when the visible list is filtered.
+  // Unaffected by the stage/tag filters below, so handleDragEnd's hidden-ranked-deal lookup
+  // (see its own comment) is always correct even when the visible list is filtered.
   const rankedDeals = useMemo(
     () => deals.filter((d): d is DealRow & { rank: number } => d.rank != null).sort((a, b) => a.rank - b.rank),
     [deals]
   );
-  const rankedCount = rankedDeals.length;
-  function findByRank(rank: number) {
-    return rankedDeals.find((d) => d.rank === rank);
-  }
-
-  async function handlePromote(dealId: string) {
-    await commitRankUpdates([{ dealId, rank: rankedCount + 1 }]);
-  }
-
-  async function handleRemoveFromRankedList(dealId: string) {
-    await commitRankUpdates([{ dealId, rank: null }]);
-  }
-
-  async function handleMoveUp(d: DealRow) {
-    if (d.rank == null || d.rank <= 1) return;
-    const prev = findByRank(d.rank - 1);
-    if (!prev) return;
-    await commitRankUpdates([
-      { dealId: d.id, rank: prev.rank },
-      { dealId: prev.id, rank: d.rank },
-    ]);
-  }
-
-  async function handleMoveDown(d: DealRow) {
-    if (d.rank == null) return;
-    const next = findByRank(d.rank + 1);
-    if (next) {
-      await commitRankUpdates([
-        { dealId: d.id, rank: next.rank },
-        { dealId: next.id, rank: d.rank },
-      ]);
-    } else {
-      await handleRemoveFromRankedList(d.id);
-    }
-  }
 
   const filtered = useMemo(() => {
     return deals.filter((d) => {
@@ -223,13 +268,16 @@ export function DealListTable({
     });
   }, [filtered, sort]);
 
-  const lineVisible = sort.key === "rank" && sort.dir === "asc";
+  // Admin-only — a regular member has no reordering/screening-line-crossing controls at all, so
+  // showing them the line itself would just be a confusing, unexplained marker with no action
+  // attached to it.
+  const lineVisible = Boolean(isAdmin) && sort.key === "rank" && sort.dir === "asc";
   const reorderable = Boolean(isAdmin) && lineVisible;
-  // Drag additionally requires no active stage/tag filter: a filtered view can hide ranked
-  // deals in between the ones shown, so renumbering just what's visible 1..N would silently
-  // corrupt the true global ranking. The arrows don't have that problem — each one swaps or
-  // reassigns specific deals by id, never assuming the visible order is the full order.
-  const dragEnabled = reorderable && stageFilter.size === 0 && tagFilter.size === 0;
+  // Dragging works under an active stage/tag filter too — a filtered view can hide ranked
+  // deals in between the ones shown, so handleDragEnd explicitly pushes every hidden ranked
+  // deal to the bottom of the queue (preserving their relative order) rather than letting the
+  // visible deals' fresh 1..N numbering collide with whatever rank a hidden deal already had.
+  const dragEnabled = reorderable;
 
   // The screening line is just another slot in the dragged sequence (a sentinel id no real deal
   // can have) — dragging a row to either side of it, or dropping directly on it, moves that row
@@ -285,19 +333,28 @@ export function DealListTable({
       return;
     }
 
-    // Every currently-above-the-line id gets a fresh dense rank; anything that used to be
-    // ranked but ended up below the line gets explicitly cleared.
+    // A ranked deal hidden by the active stage/tag filter never appears in `sorted`, so it
+    // can't be dragged — per its own request, it stays exactly where it is relative to every
+    // other hidden deal, just pushed below every VISIBLE ranked deal (which take the fresh
+    // 1..N numbering from the drag). rankedDeals is global (unfiltered) and already
+    // rank-ascending, so filtering out the visible ids leaves the hidden ones in their
+    // existing relative order.
+    const visibleIds = new Set(sorted.map((d) => d.id));
+    const hiddenRankedIds = rankedDeals.filter((d) => !visibleIds.has(d.id)).map((d) => d.id);
+
     const updates: { dealId: string; rank: number | null }[] = finalRankedIds.map((dealId, i) => ({
       dealId,
       rank: i + 1,
     }));
+    hiddenRankedIds.forEach((dealId, i) => {
+      updates.push({ dealId, rank: finalRankedIds.length + i + 1 });
+    });
+    // Any previously-ranked VISIBLE deal that ended up below the line gets explicitly cleared.
     for (const id of originalRankedIds) {
       if (!finalRankedIds.includes(id)) updates.push({ dealId: id, rank: null });
     }
     await commitRankUpdates(updates);
   }
-
-  const dealBeingDeleted = deals.find((d) => d.id === confirmingDeleteId) ?? null;
 
   const activeFilterCount = stageFilter.size + tagFilter.size;
 
@@ -339,18 +396,18 @@ export function DealListTable({
   );
 
   return (
-    <div className="flex flex-col gap-6 md:flex-row">
-      <aside className="flex w-full flex-col gap-6 md:w-52 md:flex-shrink-0">
-        <details className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 md:hidden">
-          <summary className="cursor-pointer text-sm font-medium">
-            Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
-          </summary>
-          <div className="mt-3 flex flex-col gap-6">{filterSections}</div>
-        </details>
-        <div className="hidden md:flex md:flex-col md:gap-6">{filterSections}</div>
-      </aside>
+    <div className="flex flex-col gap-4">
+      <div>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(true)}
+          className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
+        >
+          Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+        </button>
+      </div>
 
-      <div className="flex-1 rounded-lg border border-zinc-200 bg-card px-4 py-4 sm:px-5">
+      <div className="rounded-lg border border-zinc-200 bg-card px-4 py-4 sm:px-5">
         {error && (
           <p role="alert" className="mb-2 text-sm text-red-600 dark:text-red-400">
             {error}
@@ -358,20 +415,12 @@ export function DealListTable({
         )}
         {reorderable && (
           <p className="mb-3 rounded-md border border-zinc-200 bg-background px-3 py-2 text-sm text-zinc-500 dark:border-zinc-800">
-            {dragEnabled ? (
-              <>
-                <span className="hidden md:inline">
-                  Drag rows or use the arrows to reorder the screening queue — changes save immediately.
-                </span>
-                <span className="md:hidden">Use the arrows to reorder the screening queue — changes save immediately.</span>
-              </>
-            ) : (
-              "Use the arrows to reorder the screening queue — changes save immediately. (Clear filters to also drag rows.)"
-            )}
+            Drag cards or use the arrows to reorder the screening queue — changes save immediately.
+            {activeFilterCount > 0 && " Deals hidden by the current filters stay put, below whatever's shown here."}
           </p>
         )}
 
-        <div className="mb-3 flex items-center gap-2 md:hidden">
+        <div className="mb-3 flex items-center gap-2">
           <label htmlFor="deal-sort" className="text-xs font-semibold uppercase text-zinc-500">
             Sort by
           </label>
@@ -381,7 +430,7 @@ export function DealListTable({
             onChange={(e) => setSort((prev) => ({ ...prev, key: e.target.value as SortKey }))}
             className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
-            {COLUMNS.map((col) => (
+            {SORT_OPTIONS.map((col) => (
               <option key={col.key} value={col.key}>
                 {col.label}
               </option>
@@ -397,313 +446,122 @@ export function DealListTable({
           </button>
         </div>
 
-        <div className="flex flex-col gap-3 md:hidden">
-          {displayRows.map((d, i) => (
-            <Fragment key={d.id}>
-              {showLine && i === boundaryIndex && <ScreeningLine />}
-              <div
-                className={`rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${draggingId === d.id ? "opacity-50" : ""}`}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
-                      {d.companyName}
-                    </Link>
-                    <p className="text-xs text-zinc-500">
-                      {d.round.replaceAll("_", " ")} · {STAGE_LABELS[d.stage] ?? d.stage}
-                    </p>
-                  </div>
-                  {reorderable &&
-                    (d.rank != null ? (
-                      <div className="flex flex-shrink-0 flex-col gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleMoveUp(d)}
-                          disabled={busy || d.rank <= 1}
-                          aria-label="Move up"
-                          className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleMoveDown(d)}
-                          disabled={busy}
-                          aria-label="Move down"
-                          className="rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
-                        >
-                          ▼
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handlePromote(d.id)}
-                        disabled={busy}
-                        aria-label="Add to screening queue"
-                        className="flex-shrink-0 rounded-md border border-zinc-300 px-2 text-xs disabled:opacity-30 dark:border-zinc-700"
-                      >
-                        ▲
-                      </button>
-                    ))}
-                </div>
-                <dl className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <dt className="text-xs text-zinc-500">Rank</dt>
-                    <dd className="tabular-nums">{d.rank ?? "—"}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-zinc-500">Seeking</dt>
-                    <dd className="tabular-nums">{currency(d.seekingAmount, d.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-zinc-500">Pre-money</dt>
-                    <dd className="tabular-nums">{dealValuationDisplay(d)}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs text-zinc-500">Submitted</dt>
-                    <dd>{new Date(d.createdAt).toLocaleDateString()}</dd>
-                  </div>
-                </dl>
-                {isAdmin && (
-                  <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
-                    {!reorderable &&
-                      (d.rank == null ? (
-                        <button
-                          type="button"
-                          onClick={() => handlePromote(d.id)}
-                          disabled={busy}
-                          className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                        >
-                          Add to ranked list
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveFromRankedList(d.id)}
-                          disabled={busy}
-                          className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                        >
-                          Remove from ranked list
-                        </button>
-                      ))}
-                    <button
-                      type="button"
-                      onClick={() => setReviewingDealId(d.id)}
-                      className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium dark:border-zinc-700"
-                    >
-                      Send for review
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingDeleteId(d.id)}
-                      className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
-                    >
-                      Delete
-                    </button>
+        <div className="grid grid-cols-1 gap-3">
+          {displayRows.map((d, i) => {
+            const matches = reviewerMatchesByDealId?.[d.id] ?? [];
+            return (
+              <Fragment key={d.id}>
+                {showLine && i === boundaryIndex && (
+                  <div className="col-span-full" onDragOver={(e) => handleDragOver(e, LINE_MARKER)}>
+                    <ScreeningLine />
                   </div>
                 )}
-              </div>
-            </Fragment>
-          ))}
-          {displayRows.length === 0 && <p className="py-6 text-center text-sm text-zinc-500">No deals match these filters.</p>}
-        </div>
-
-        <div className="hidden md:block md:overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
-                {COLUMNS.map((col) => {
-                  const active = sort.key === col.key;
-                  return (
-                    <th
-                      key={col.key}
-                      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
-                      className="py-2 font-medium"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(col.key)}
-                        className={`inline-flex items-center gap-1 hover:text-foreground ${active ? "text-foreground" : ""}`}
-                      >
-                        {col.label}
-                        <span aria-hidden className="text-[10px]">
-                          {active ? (sort.dir === "asc" ? "▲" : "▼") : ""}
-                        </span>
-                      </button>
-                    </th>
-                  );
-                })}
-                {isAdmin && <th className="py-2" />}
-              </tr>
-            </thead>
-            <tbody>
-              {displayRows.map((d, i) => (
-                <Fragment key={d.id}>
-                  {showLine && i === boundaryIndex && (
-                    <tr aria-hidden="true" onDragOver={(e) => handleDragOver(e, LINE_MARKER)}>
-                      <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-1">
-                        <ScreeningLine />
-                      </td>
-                    </tr>
-                  )}
-                  <tr
-                    draggable={dragEnabled}
-                    onDragStart={() => handleDragStart(d.id)}
-                    onDragOver={(e) => handleDragOver(e, d.id)}
-                    onDragEnd={handleDragEnd}
-                    className={`border-b border-zinc-100 dark:border-zinc-900 ${
-                      dragEnabled ? "cursor-move" : ""
-                    } ${draggingId === d.id ? "opacity-50" : ""}`}
-                  >
-                    <td className="py-2 tabular-nums text-zinc-500">{d.rank ?? "—"}</td>
-                    <td className="py-2">
-                      <Link href={`${detailHrefBase}/${d.id}`} className="font-medium underline-offset-2 hover:underline">
+                <div
+                  draggable={dragEnabled}
+                  onDragStart={() => handleDragStart(d.id)}
+                  onDragOver={(e) => handleDragOver(e, d.id)}
+                  onDragEnd={handleDragEnd}
+                  className={`flex flex-col rounded-lg border border-zinc-200 p-3 dark:border-zinc-800 ${
+                    dragEnabled ? "cursor-move" : ""
+                  } ${draggingId === d.id ? "opacity-50" : ""}`}
+                >
+                  {/* One row of 3 items — title+sector (left), raise info (right), rating
+                      (far right) — followed by the full-width description. Cell boundaries are
+                      invisible — this is a layout aid, not a visible table. */}
+                  <div className="grid grid-cols-3 items-baseline gap-x-4">
+                    <div className="min-w-0">
+                      <Link href={`${detailHrefBase}/${d.id}`} className="text-lg font-semibold underline-offset-2 hover:underline">
                         {d.companyName}
                       </Link>
-                    </td>
-                    <td className="py-2 text-zinc-500 dark:text-zinc-500">{d.round.replaceAll("_", " ")}</td>
-                    <td className="py-2 tabular-nums">{currency(d.seekingAmount, d.currency)}</td>
-                    <td className="py-2 tabular-nums">{dealValuationDisplay(d)}</td>
-                    <td className="py-2">{STAGE_LABELS[d.stage] ?? d.stage}</td>
-                    <td className="py-2 text-zinc-500 dark:text-zinc-500">{new Date(d.createdAt).toLocaleDateString()}</td>
-                    {isAdmin && (
-                      <td className="py-2 text-right">
-                        <div className="flex items-center justify-end gap-2">
-                          {reorderable ? (
-                            d.rank != null ? (
-                              <div className="flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveUp(d)}
-                                  disabled={busy || d.rank <= 1}
-                                  aria-label="Move up"
-                                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleMoveDown(d)}
-                                  disabled={busy}
-                                  aria-label="Move down"
-                                  className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
-                                >
-                                  ▼
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() => handlePromote(d.id)}
-                                disabled={busy}
-                                aria-label="Add to screening queue"
-                                className="rounded-md border border-zinc-300 px-2 py-1 text-xs disabled:opacity-30 dark:border-zinc-700"
-                              >
-                                ▲
-                              </button>
-                            )
-                          ) : d.rank == null ? (
-                            <button
-                              type="button"
-                              onClick={() => handlePromote(d.id)}
-                              disabled={busy}
-                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                            >
-                              Add to ranked list
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveFromRankedList(d.id)}
-                              disabled={busy}
-                              className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
-                            >
-                              Remove from ranked list
-                            </button>
-                          )}
+                      {d.sector && <span className="ml-2 text-xs text-zinc-500">{d.sector}</span>}
+                    </div>
+                    <div className="text-right">
+                      <RaiseInfo d={d} />
+                    </div>
+                    <div className="flex justify-end">
+                      <StarRatingDisplay rating={d.ratingAvg ?? null} count={d.ratingCount} />
+                    </div>
+                  </div>
+                  {truncateBlurb(d.executiveSummary, 220) && (
+                    <p className="mt-1 text-sm">{truncateBlurb(d.executiveSummary, 220)}</p>
+                  )}
+                  <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                    {isAdmin ? (
+                      <div className="flex flex-wrap gap-2">
+                        {matches.map((m) => (
+                          <button
+                            key={m.memberId}
+                            type="button"
+                            onClick={() => handleSendWhatsApp(d, m)}
+                            disabled={!m.phoneNumber}
+                            title={m.phoneNumber ? m.reason : `${m.reason} (no phone number on file)`}
+                            className="inline-flex items-center gap-1.5 rounded-full border border-green-300 px-3 py-1 text-xs font-medium text-green-700 disabled:opacity-40 dark:border-green-900 dark:text-green-400"
+                          >
+                            <WhatsAppIcon />
+                            {m.displayName}
+                          </button>
+                        ))}
+                        {(matches.length === 0 || isSiteAdmin) && (
                           <button
                             type="button"
-                            onClick={() => setReviewingDealId(d.id)}
-                            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium dark:border-zinc-700"
+                            onClick={() => handleFindReviewers(d.id)}
+                            disabled={findingReviewersId === d.id}
+                            title={matches.length > 0 ? "Replaces the current matched reviewers." : undefined}
+                            className="rounded-full border border-zinc-300 px-3 py-1 text-xs font-medium disabled:opacity-50 dark:border-zinc-700"
                           >
-                            Send for review
+                            {findingReviewersId === d.id ? "Finding..." : "Find Reviewers"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setConfirmingDeleteId(d.id)}
-                            className="rounded-full border border-red-300 px-3 py-1 text-xs font-medium text-red-600 dark:border-red-900 dark:text-red-400"
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
+                        )}
+                      </div>
+                    ) : (
+                      <span />
                     )}
-                  </tr>
-                </Fragment>
-              ))}
-              {displayRows.length === 0 && (
-                <tr>
-                  <td colSpan={COLUMNS.length + (isAdmin ? 1 : 0)} className="py-6 text-center text-zinc-500">
-                    No deals match these filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                    <span className="flex-shrink-0 text-xs text-zinc-400">
+                      Submitted: {new Date(d.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+              </Fragment>
+            );
+          })}
+          {displayRows.length === 0 && (
+            <p className="col-span-full py-6 text-center text-sm text-zinc-500">No deals match these filters.</p>
+          )}
         </div>
       </div>
 
-      {dealBeingDeleted && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-sm rounded-lg bg-background p-6 shadow-lg">
-            <h3 className="text-base font-semibold">Delete {dealBeingDeleted.companyName}?</h3>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              This permanently removes the deal, its documents, tags, and ratings. This cannot
-              be undone.
-            </p>
-            {error && (
-              <p role="alert" className="mt-2 text-sm text-red-600 dark:text-red-400">
-                {error}
-              </p>
-            )}
-            <div className="mt-4 flex justify-end gap-2">
-              {/* "No" is styled as the primary action and autoFocused, so it's the visually and
-                  functionally pre-selected/default choice (e.g. pressing Enter is the safe path). */}
+      {filtersOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="flex w-full max-w-sm flex-col gap-4 rounded-lg bg-background p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-semibold">Filters</h3>
+              <button type="button" onClick={() => setFiltersOpen(false)} className="text-sm text-zinc-500 hover:text-foreground">
+                Close
+              </button>
+            </div>
+            {filterSections}
+            <div className="flex justify-between">
               <button
                 type="button"
-                autoFocus
-                onClick={() => setConfirmingDeleteId(null)}
-                disabled={busy}
-                className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
+                onClick={() => {
+                  setStageFilter(new Set());
+                  setTagFilter(new Set());
+                }}
+                className="text-sm text-zinc-500 underline underline-offset-2 hover:text-foreground"
               >
-                No
+                Clear all
               </button>
               <button
                 type="button"
-                onClick={handleConfirmDelete}
-                disabled={busy}
-                className="rounded-full border border-red-300 px-4 py-1.5 text-sm font-medium text-red-600 disabled:opacity-50 dark:border-red-900 dark:text-red-400"
+                onClick={() => setFiltersOpen(false)}
+                className="rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background"
               >
-                {busy ? "Deleting..." : "Yes, delete"}
+                Done
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {reviewingDealId &&
-        (() => {
-          const reviewingDeal = deals.find((d) => d.id === reviewingDealId);
-          if (!reviewingDeal) return null;
-          return (
-            <DealReviewMatchModal
-              dealId={reviewingDeal.id}
-              companyName={reviewingDeal.companyName}
-              onClose={() => setReviewingDealId(null)}
-            />
-          );
-        })()}
     </div>
   );
 }

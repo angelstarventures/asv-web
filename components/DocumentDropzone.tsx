@@ -22,13 +22,30 @@ export function DocumentDropzone({
     warnings: string[],
     groups: RecordGroup[],
     companyId: string | null,
-    files: AnalyzedFile[]
+    files: AnalyzedFile[],
+    unknownMemberReferences: string[],
+    newCompanyName: string | null
   ) => void;
 }) {
   const [isNewCompany, setIsNewCompany] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [chosenFiles, setChosenFiles] = useState<File[]>([]);
+
+  function addChosenFiles(newFiles: File[]) {
+    setChosenFiles((prev) => {
+      const merged = [...prev];
+      for (const f of newFiles) {
+        if (!merged.some((m) => m.name === f.name && m.size === f.size)) merged.push(f);
+      }
+      return merged;
+    });
+  }
+
+  function removeChosenFile(index: number) {
+    setChosenFiles((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,8 +53,10 @@ export function DocumentDropzone({
     setStatus(null);
     setBusy(true);
     const form = new FormData(e.currentTarget);
-    const fileInput = (e.currentTarget.elements.namedItem("files") as HTMLInputElement) ?? null;
-    const selectedFiles = fileInput?.files ? Array.from(fileInput.files) : [];
+    // Not read from the file input itself — re-opening the OS picker replaces its selection
+    // rather than adding to it, so `chosenFiles` (accumulated across every picker use via
+    // addChosenFiles) is the actual source of truth for what to submit.
+    const selectedFiles = chosenFiles;
     const pastedText = String(form.get("textBlob") ?? "").trim();
     if (selectedFiles.length === 0 && !pastedText) {
       setError("Choose at least one file, or paste a message below.");
@@ -64,11 +83,20 @@ export function DocumentDropzone({
         }))
       );
       const companyId = isNewCompany ? null : String(form.get("companyId"));
-      const { proposedRecords, warnings, groups } = await documentsAnalyze(
+      const { proposedRecords, warnings, groups, unknownMemberReferences } = await documentsAnalyze(
         isNewCompany ? { newCompanyName, files } : { companyId: companyId!, files }
       );
       setStatus(null);
-      onAnalyzed(proposedRecords, warnings, groups, companyId, files);
+      setChosenFiles([]);
+      onAnalyzed(
+        proposedRecords,
+        warnings,
+        groups,
+        companyId,
+        files,
+        unknownMemberReferences,
+        isNewCompany ? newCompanyName : null
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Analysis failed.");
       setStatus(null);
@@ -116,19 +144,53 @@ export function DocumentDropzone({
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
             <option value="">Select a company</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.tradeName ?? c.name}
-              </option>
-            ))}
+            {[...companies]
+              .sort((a, b) => (a.tradeName ?? a.name).localeCompare(b.tradeName ?? b.name))
+              .map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.tradeName ?? c.name}
+                </option>
+              ))}
           </select>
         </label>
       )}
 
-      <label className="flex flex-col gap-1 text-sm">
+      <div className="flex flex-col gap-1.5 text-sm">
         File(s)
-        <input type="file" name="files" multiple className="text-sm" />
-      </label>
+        <div className="flex items-center gap-3">
+          <label className="w-fit cursor-pointer rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700">
+            Choose file(s)
+            <input
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) addChosenFiles(Array.from(e.target.files));
+                // Reset so picking the same file again (e.g. after removing it below) still
+                // fires onChange — the browser otherwise treats an unchanged selection as a no-op.
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {chosenFiles.length === 0 && <span className="text-zinc-500">No files chosen</span>}
+        </div>
+        {chosenFiles.length > 0 && (
+          <ul className="flex flex-col gap-1">
+            {chosenFiles.map((f, i) => (
+              <li key={`${f.name}-${f.size}`} className="flex items-center justify-between gap-2 text-zinc-600 dark:text-zinc-400">
+                <span className="min-w-0 truncate">{f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => removeChosenFile(i)}
+                  className="shrink-0 text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                >
+                  Remove
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <label className="flex flex-col gap-1 text-sm">
         Or paste a message (e.g. an email or update the company sent as plain text)

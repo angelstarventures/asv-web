@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
 import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
 
+// Reports lives inside the Portfolio tab now (?tab=reports), not as its own top-level tab —
+// every panel that used to be on /member/reports moved there (lib/portfolioView.tsx).
 const MEMBER_TABS = [
   { href: "/member/dashboard", label: "Portfolio" },
   { href: "/member/deals", label: "Deals" },
