@@ -41,7 +41,9 @@ export function MemberPortfolioPicker({
         className="w-full max-w-sm rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
       >
         <option value="">Select a member...</option>
-        {members.map((m) => (
+        {[...members]
+          .sort((a, b) => a.displayName.localeCompare(b.displayName))
+          .map((m) => (
           <option key={m.id} value={m.id} disabled={!m.authUid}>
             {m.displayName}
             {!m.authUid ? " (no linked account)" : ""}

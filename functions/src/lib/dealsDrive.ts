@@ -12,8 +12,10 @@ import { defineSecret } from "firebase-functions/params";
 // (COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID) — since it's the only account in this whole system with
 // real quota to write into, not because the two features share any other credentials/state. The
 // refresh token was obtained once via scripts/get-drive-oauth-token.js; calls made with it act
-// AS that real account, using its real personal storage quota. Scope is drive.file only (least
-// privilege) — read/write only for files/folders this app creates itself.
+// AS that real account, using its real personal storage quota. Scope is the full `drive` scope
+// (not `drive.file`), because `drive.file` only lets the app see files/folders it created itself
+// — the sync-from-Drive flow needs to discover files placed directly into shared company folders
+// via the Drive web UI (confirmed empirically, see scripts/get-drive-oauth-token.js).
 export const driveOAuthClientSecret = defineSecret("DRIVE_OAUTH_CLIENT_SECRET");
 export const driveOAuthRefreshToken = defineSecret("DRIVE_OAUTH_REFRESH_TOKEN");
 
@@ -118,22 +120,61 @@ export interface DriveFileListing {
   webViewLink: string;
 }
 
+export interface DriveFolderListing {
+  driveFileId: string;
+  folderName: string;
+}
+
 // Direct (non-folder) file children of a folder — backs the "sync from Drive" flow, which
 // reconciles whatever's actually sitting in each company's folder against the `document` table
 // rather than only ever knowing about files uploaded through the app itself.
+// Handles pagination via nextPageToken (folders with >200 files).
 export async function listFilesInFolder(folderId: string): Promise<DriveFileListing[]> {
   const drive = getDealsDriveClient();
-  const res = await drive.files.list({
-    q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
-    fields: "files(id, name, mimeType, webViewLink)",
-    pageSize: 200,
-  });
-  return (res.data.files ?? []).map((f) => ({
-    driveFileId: f.id!,
-    name: f.name ?? "Untitled",
-    mimeType: f.mimeType ?? "application/octet-stream",
-    webViewLink: f.webViewLink ?? "",
-  }));
+  const allFiles: DriveFileListing[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType != 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: "files(id, name, mimeType, webViewLink), nextPageToken",
+      pageSize: 200,
+      pageToken,
+    });
+    for (const f of res.data.files ?? []) {
+      allFiles.push({
+        driveFileId: f.id!,
+        name: f.name ?? "Untitled",
+        mimeType: f.mimeType ?? "application/octet-stream",
+        webViewLink: f.webViewLink ?? "",
+      });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return allFiles;
+}
+
+// Immediate (non-recursive) sub-folders of a folder — used by the sync-from-Drive flow to
+// discover files organised into sub-folders the app didn't create itself.
+export async function listSubFolders(folderId: string): Promise<DriveFolderListing[]> {
+  const drive = getDealsDriveClient();
+  const allFolders: DriveFolderListing[] = [];
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${folderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+      fields: "files(id, name), nextPageToken",
+      pageSize: 200,
+      pageToken,
+    });
+    for (const f of res.data.files ?? []) {
+      allFolders.push({
+        driveFileId: f.id!,
+        folderName: f.name ?? "Untitled",
+      });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return allFolders;
 }
 
 export async function deleteDealFolder(driveFolderId: string): Promise<void> {

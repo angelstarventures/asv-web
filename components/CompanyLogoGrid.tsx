@@ -105,8 +105,10 @@ function CompanyLogoSection({ title, companies }: { title: string; companies: Co
 // into current (still ACTIVE) vs past (exited/written-off/archived) rather than hiding the
 // latter outright, per user request.
 export function CompanyLogoGrid({ companies }: { companies: Company[] }) {
-  const current = companies.filter((c) => c.status === CompanyStatus.ACTIVE);
-  const past = companies.filter((c) => c.status !== CompanyStatus.ACTIVE);
+  const sortByName = (a: Company, b: Company) =>
+    (a.tradeName ?? a.name).localeCompare(b.tradeName ?? b.name);
+  const current = companies.filter((c) => c.status === CompanyStatus.ACTIVE).sort(sortByName);
+  const past = companies.filter((c) => c.status !== CompanyStatus.ACTIVE).sort(sortByName);
 
   return (
     <div className="flex flex-col gap-10">

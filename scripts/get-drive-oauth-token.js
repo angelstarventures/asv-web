@@ -33,7 +33,7 @@ const oauth2Client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_U
 const authUrl = oauth2Client.generateAuthUrl({
   access_type: "offline",
   prompt: "consent", // forces a fresh refresh token even if this account consented before
-  scope: ["https://www.googleapis.com/auth/drive.file", "https://www.googleapis.com/auth/gmail.send"],
+  scope: ["https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/gmail.send"],
 });
 
 console.log("\nOpen this URL, signed in as angelstarventures@gmail.com:\n");

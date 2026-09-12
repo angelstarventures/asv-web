@@ -468,7 +468,7 @@ export function DealListTable({
                   {/* One row of 3 items — title+sector (left), raise info (right), rating
                       (far right) — followed by the full-width description. Cell boundaries are
                       invisible — this is a layout aid, not a visible table. */}
-                  <div className="grid grid-cols-3 items-baseline gap-x-4">
+                  <div className="grid grid-cols-[auto_1fr_minmax(22ch,_auto)] items-baseline gap-x-4">
                     <div className="min-w-0">
                       <Link href={`${detailHrefBase}/${d.id}`} className="text-lg font-semibold underline-offset-2 hover:underline">
                         {d.companyName}

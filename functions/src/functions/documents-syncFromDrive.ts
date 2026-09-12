@@ -1,17 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
-import { findFolder, listFilesInFolder, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
+import { findFolder, listFilesInFolder, listSubFolders, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 // "Pull from what's there" — reconciles whatever's actually sitting in each company's
-// Investments/{Company}/ folder (and its Updates/ subfolder) against the `document` table,
-// registering any file the app didn't already know about. Read-only against Drive (findFolder,
-// not findOrCreateFolder — a company with no folder yet simply has nothing to sync) and additive
-// against the DB (never deletes a Document row for a file that's since been removed from Drive).
-// Files directly in the company folder default to DATA_ROOM (same allocation-gated visibility as
-// COMPANY_UPDATE_DOC — a safer unknown-type default than a publicly-visible type like PITCH_DECK);
-// files in the Updates subfolder are COMPANY_UPDATE_DOC, matching where the app itself now
-// uploads company updates.
+// Investments/{Company}/ folder (and its Updates/ subfolder, plus any other sub-folders
+// created directly in Drive) against the `document` table, registering any file the app
+// didn't already know about. Read-only against Drive (findFolder, not findOrCreateFolder —
+// a company with no folder yet simply has nothing to sync) and additive against the DB
+// (never deletes a Document row for a file that's since been removed from Drive).
+// Files directly in the company folder or any non-Updates sub-folder default to DATA_ROOM
+// (same allocation-gated visibility as COMPANY_UPDATE_DOC — a safer unknown-type default
+// than a publicly-visible type like PITCH_DECK); files in the Updates subfolder are
+// COMPANY_UPDATE_DOC, matching where the app itself now uploads company updates.
 
 export interface DocumentsSyncFromDriveInput {
   companyId?: string; // omit to sync every company
@@ -51,6 +52,7 @@ export const documentsSyncFromDrive = onCall<DocumentsSyncFromDriveInput, Promis
       const companyFolderId = await findFolder(rootFolderId, company.name);
       if (!companyFolderId) continue;
 
+      // Always scan root files + the known "Updates" subfolder (same as before).
       const rootFiles = await listFilesInFolder(companyFolderId);
       const updatesFolderId = await findFolder(companyFolderId, "Updates");
       const updateFiles = updatesFolderId ? await listFilesInFolder(updatesFolderId) : [];
@@ -59,6 +61,17 @@ export const documentsSyncFromDrive = onCall<DocumentsSyncFromDriveInput, Promis
         ...rootFiles.map((f) => ({ ...f, docType: "DATA_ROOM" as const })),
         ...updateFiles.map((f) => ({ ...f, docType: "COMPANY_UPDATE_DOC" as const })),
       ];
+
+      // Also scan any other sub-folders directly in the company folder (ones the app
+      // didn't create — e.g. "Legal", "Financials", etc.) — files there default to
+      // DATA_ROOM, the safest allocation-gated type.
+      const subFolders = (await listSubFolders(companyFolderId)).filter(
+        (s) => s.folderName !== "Updates"
+      );
+      for (const sub of subFolders) {
+        const subFiles = await listFilesInFolder(sub.driveFileId);
+        candidates.push(...subFiles.map((f) => ({ ...f, docType: "DATA_ROOM" as const })));
+      }
 
       for (const file of candidates) {
         if (knownDriveFileIds.has(file.driveFileId)) {
