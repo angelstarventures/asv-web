@@ -110,3 +110,15 @@ export async function requireAllUserManagement(request: CallableRequest): Promis
   }
   return caller;
 }
+
+// EXACTLY the given role, not a tier — for boundaries narrower than any of the checkers
+// above. CompanyMember assignment is dev_site_admin-only by explicit product decision (not
+// dev_site_admin-or-site_admin, unlike requireDevSiteAdmin's tier check) — do not swap this
+// for requireDevSiteAdmin, that would silently widen who can assign company membership.
+export async function requireExactRole(request: CallableRequest, role: Role): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== role) {
+    throw new HttpsError("permission-denied", `${role} role required.`);
+  }
+  return caller;
+}

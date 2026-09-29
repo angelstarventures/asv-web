@@ -9,10 +9,16 @@
 # Enums (mirrors asv_master_portfolio_schema.json's `enum` arrays exactly)
 # ---------------------------------------------------------------------------
 
+# App-level permission tier — stored on Member.role + Firebase Auth custom claims.
+# Mapping: ADMIN -> admin, MEMBER -> user, SITE_ADMIN -> site_admin (migration Step 11).
+# DEVELOPER / DEV_SITE_ADMIN are new "outside ASV" roles with no Member record or
+# investing entity; they share the Member table but keep member-specific fields null.
 enum Role {
-  ADMIN
-  MEMBER
+  DEVELOPER
+  DEV_SITE_ADMIN
   SITE_ADMIN
+  ADMIN
+  USER
 }
 
 enum MemberStatus {
@@ -141,6 +147,72 @@ enum DealDocumentType {
   ADDITIONAL_DOCUMENT
 }
 
+# --- Feature flags & company membership ---
+
+enum CompanyFeatureKey {
+  DEALS
+  AI_DEAL_MATCHING
+  AI_CHAT
+  AI_DOCUMENT_ANALYSIS
+  MULTIPLE_LEDGERS
+  AI_MODEL_PROMPT_CONFIG
+  AI_MODEL_SELECTION
+  MEMBERSHIP_DUES
+  COSTS
+}
+
+enum MemberCompanyFeatureKey {
+  DEALS_SCREENING
+  DEAL_VIEW
+  COMPANY_MANAGEMENT
+  AI_DEAL_MATCHING
+  AI_CHAT
+  AI_DOCUMENT_ANALYSIS
+  MULTIPLE_LEDGERS
+  MEMBER_MANAGEMENT
+  MEMBER_PORTFOLIO_VIEW
+  AI_MODEL_PROMPT_CONFIG
+  AI_MODEL_SELECTION
+  MEMBERSHIP_DUES
+  COSTS
+}
+
+# Explicit company membership join table — assignable by dev_site_admin only (see
+# functions/src/functions/companyMembers.ts's requireExactRole check).
+# Determines which company an admin "belongs to" for company_member_management scoping.
+# A member belongs to at most one company; uniqueness is enforced by the writing Cloud
+# Function (assignCompanyMember moves an existing row rather than inserting a duplicate).
+type CompanyMember @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  company: Company!
+  member: Member!
+  roleInCompany: String # optional label (e.g. "Lead", "Observer") — free-text, no enum
+  createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Company-level feature enablement — toggle by dev-site-admin / developer.
+# A company with no row for a given feature key defaults to false.
+type CompanyFeature @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  company: Company!
+  featureKey: CompanyFeatureKey!
+  enabled: Boolean!     @default(value: false)
+  updatedAt: Timestamp! @default(expr: "request.time")
+  updatedBy: Member!
+}
+
+# Per-user-within-company feature enablement — overrides the company-level toggle.
+# A member with no row for a given (company, featureKey) inherits the CompanyFeature default.
+type MemberCompanyFeature @table {
+  id: UUID!             @default(expr: "uuidV4()")
+  company: Company!
+  member: Member!
+  featureKey: MemberCompanyFeatureKey!
+  enabled: Boolean!     @default(value: false)
+  updatedAt: Timestamp! @default(expr: "request.time")
+  updatedBy: Member!
+}
+
 # ---------------------------------------------------------------------------
 # Core entities
 # ---------------------------------------------------------------------------
@@ -160,7 +232,7 @@ type Member @table(key: "id") {
   interests: [String!]    # sector/topic interest tags (e.g. Healthcare, Medical Device, IT) — distinct from expertise: self-declared areas of *interest*, not necessarily expertise
   expertise: [String!]    # resume-style skill/domain terms, self- or admin-editable — matched against Deal.keywords/sector to suggest reviewers. Merged from the former separate free-text `expertise` + `expertiseKeywords` fields; deduped case-insensitively.
   membershipType: MembershipType! @default(value: MEMBER)
-  role: Role!             @default(value: MEMBER)
+  role: Role!             @default(value: USER)
   status: MemberStatus!   @default(value: ACTIVE)
   aiChatEnabled: Boolean! @default(value: false)  # per-member (replaces the old per-role app_setting), site-admin-root-mode-editable only
   lockedScenario: Scenario @default(value: OPTIMISTIC)  # null = this member picks freely among all 3; site-admin-root-mode-editable only
@@ -224,6 +296,7 @@ type PricedRoundDetail @table {
   ledgerEntry: LedgerEntry! @unique
   companyUrl: String
   docLink: String
+  driveFolderId: String               # Google Drive folder ID for this round's documents (linked by the sync-from-Drive flow)
   asvTotal: Float!
   totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   roundName: String!
@@ -236,6 +309,8 @@ type SafeRoundDetail @table {
   ledgerEntry: LedgerEntry! @unique
   companyUrl: String
   docLink: String
+  driveFolderId: String               # Google Drive folder ID for this round's documents (linked by the sync-from-Drive flow)
+  roundName: String!      @default(value: "SAFE")
   asvTotal: Float!
   totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   postMoneyValCap: Float!
@@ -256,6 +331,7 @@ type NonParticipatingRoundDetail @table {
   newPostMoneyValuation: Float!
   totalRoundSize: Float # the company's full raise across every investor — null for rounds entered before this field existed
   docLink: String
+  driveFolderId: String               # Google Drive folder ID for this round's documents (linked by the sync-from-Drive flow)
   notes: String
 }
 
@@ -304,6 +380,8 @@ type CompanyUpdateDetail @table {
   highlights: [String!]!
   lowlights: [String!]!
   upcomingPlans: [String!]!
+  driveFileId: String                 # Google Drive file ID for this update's document (linked by the sync-from-Drive flow)
+  driveUrl: String                    # Google Drive web link to the update document
   # viewpoint_analysis, flattened (same pattern as SafeRoundDetail's warrant* fields) — required
   # for every CompanyUpdate going forward. Existing rows predate this field: backfilled to ""
   # (text fields) and the row's own ledger entry scenario (see post_migrations/003).

@@ -7,7 +7,7 @@ initializeApp();
 // function-to-Postgres call would otherwise cross regions on every request.
 setGlobalOptions({ region: "us-east1" });
 
-export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode } from "./functions/users-onCreateProvision";
+export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode, setDevSiteAdminMode } from "./functions/users-onCreateProvision";
 export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
 export { updateAiProviderSetting } from "./functions/ai-updateProviderSetting";
 export { updateAppSetting } from "./functions/app-updateSetting";
@@ -19,6 +19,7 @@ export { documentsGetAccessUrl } from "./functions/documents-getAccessUrl";
 export { documentsOnDriveUpload } from "./functions/documents-onDriveUpload";
 export { documentsUploadTaxDocument } from "./functions/documents-uploadTaxDocument";
 export { documentsSyncFromDrive } from "./functions/documents-syncFromDrive";
+export { documentsSyncToDrive } from "./functions/documents-syncToDrive";
 export { ledgerCustomEventWrite } from "./functions/ledger-customEventWrite";
 export { ledgerCustomEventRead } from "./functions/ledger-customEventRead";
 export { eventTypesDefine } from "./functions/eventTypes-define";
@@ -42,7 +43,9 @@ export { companiesSetCeoInfo } from "./functions/companies-setCeoInfo";
 export { dealsSetRanks } from "./functions/deals-setRanks";
 export { dealsUpdateFields } from "./functions/deals-updateFields";
 export { ledgerAudit } from "./functions/ledger-audit";
+export { feedbackSend } from "./functions/feedback-send";
 export { documentsShareCompanyUpdate } from "./functions/documents-shareCompanyUpdate";
 export { dealsFindReviewers } from "./functions/deals-findReviewers";
 export { ledgerRebalanceMemberValuations } from "./functions/ledger-rebalanceMemberValuations";
-export { dealsSubmitPublicReview } from "./functions/deals-submitPublicReview";
+export { updateCompanyFeature, getCompanyFeatures, updateMemberCompanyFeature, getMemberCompanyFeatures } from "./functions/companyFeatures";
+export { assignCompanyMember, removeCompanyMember, listCompanyMembers } from "./functions/companyMembers";
