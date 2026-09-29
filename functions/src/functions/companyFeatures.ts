@@ -21,7 +21,7 @@ export interface UpdateCompanyFeatureInput {
 // Toggle a company-level feature. Gated to dev_site_admin / site_admin.
 export const updateCompanyFeature = onCall<UpdateCompanyFeatureInput, Promise<{ ok: true }>>(
   async (request) => {
-    await requireAllUserManagement(request);
+    const caller = await requireAllUserManagement(request);
 
     const { companyId, featureKey, enabled } = request.data;
     if (!companyId || !featureKey || typeof enabled !== "boolean") {
@@ -39,7 +39,7 @@ export const updateCompanyFeature = onCall<UpdateCompanyFeatureInput, Promise<{ 
         `INSERT INTO "company_feature" ("company_id", "feature_key", "enabled", "updated_by_id", "updated_at")
          VALUES ($1, $2, $3, $4, now())
          ON CONFLICT ("company_id", "feature_key") DO UPDATE SET enabled = $3, "updated_by_id" = $4, "updated_at" = now()`,
-        [companyId, featureKey, enabled, request.auth!.uid]
+        [companyId, featureKey, enabled, caller.memberId]
       );
     });
 
@@ -80,7 +80,7 @@ export interface UpdateMemberCompanyFeatureInput {
 // some keys are togglable by admin — see lib/auth/permissions.ts).
 export const updateMemberCompanyFeature = onCall<UpdateMemberCompanyFeatureInput, Promise<{ ok: true }>>(
   async (request) => {
-    await requireAllUserManagement(request);
+    const caller = await requireAllUserManagement(request);
 
     const { memberId, companyId, featureKey, enabled } = request.data;
     if (!memberId || !companyId || !featureKey || typeof enabled !== "boolean") {
@@ -101,7 +101,7 @@ export const updateMemberCompanyFeature = onCall<UpdateMemberCompanyFeatureInput
         `INSERT INTO "member_company_feature" ("company_id", "member_id", "feature_key", "enabled", "updated_by_id", "updated_at")
          VALUES ($1, $2, $3, $4, $5, now())
          ON CONFLICT ("company_id", "member_id", "feature_key") DO UPDATE SET enabled = $4, "updated_by_id" = $5, "updated_at" = now()`,
-        [companyId, memberId, featureKey, enabled, request.auth!.uid]
+        [companyId, memberId, featureKey, enabled, caller.memberId]
       );
     });
 
