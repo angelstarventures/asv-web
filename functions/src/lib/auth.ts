@@ -1,10 +1,19 @@
 import { getAuth } from "firebase-admin/auth";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 
+// The full set of app-level roles. Stored on Member.role + Firebase Auth custom claims.
+// Hierarchy (higher = more permissions): developer < dev_site_admin ≈ site_admin < admin < user
+//   developer       — outside ASV, tech-only (deploy, migrate, maintain)
+//   dev_site_admin  — outside ASV, full tech + user management
+//   site_admin      — inside or outside ASV, full admin across the board
+//   admin           — ASV member, company-scoped management
+//   user            — ASV member, no special permissions
+export type Role = "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
+
 export interface CallerContext {
   uid: string;
   memberId: string;
-  role: "admin" | "member" | "site_admin";
+  role: Role;
   status: "active" | "disabled";
 }
 
@@ -28,29 +37,76 @@ export async function requireCaller(request: CallableRequest): Promise<CallerCon
     throw new HttpsError("permission-denied", "Account is disabled.");
   }
 
+  const role = claims.role as Role;
+  // Validate that the role is one of the known values
+  const VALID_ROLES: readonly Role[] = ["developer", "dev_site_admin", "site_admin", "admin", "user"];
+  if (!VALID_ROLES.includes(role)) {
+    throw new HttpsError("permission-denied", `Unknown role: ${role}`);
+  }
+
   return {
     uid: user.uid,
     memberId: claims.memberId,
-    role: claims.role as "admin" | "member" | "site_admin",
+    role,
     status: claims.status as "active" | "disabled",
   };
 }
 
-// site_admin is a strict superset of admin — every admin-gated function accepts it too, with
-// no per-call-site changes needed. requireSiteAdmin is the separate, stricter gate for the
-// handful of functions (Settings) that must stay site_admin-only.
+// ── Permission checkers ────────────────────────────────────────────────────
+// Each function checks the caller holds one of the named roles. developer/dev_site_admin/
+// site_admin form the "technical" tier (deploy, migrate, maintain, full user management);
+// admin/user are ASV-member-only roles and never satisfy a developer-tier check, regardless
+// of any numeric ordering — explicit role lists here, not a hierarchy comparison, since a
+// previous numeric-hierarchy version of requireDeveloper/requireDevSiteAdmin had a bug where
+// >= comparisons against the wrong baseline let every role (including "user") pass.
+
+// Any authenticated, active account — the baseline for every callable.
+export function hasBasicAccess(caller: CallerContext): boolean {
+  return caller.status === "active";
+}
+
+// developer, dev_site_admin, or site_admin — for deploy, migration, maintenance surfaces.
+export async function requireDeveloper(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== "developer" && caller.role !== "dev_site_admin" && caller.role !== "site_admin") {
+    throw new HttpsError("permission-denied", "Developer role required.");
+  }
+  return caller;
+}
+
+// dev_site_admin or site_admin — for user management, DB management, feature toggles.
+export async function requireDevSiteAdmin(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== "dev_site_admin" && caller.role !== "site_admin") {
+    throw new HttpsError("permission-denied", "Dev-site-admin role required.");
+  }
+  return caller;
+}
+
+// admin or site_admin — the previous requireAdmin equivalent, now explicitly
+// excludes developer / dev_site_admin from admin-tier company management.
 export async function requireAdmin(request: CallableRequest): Promise<CallerContext> {
   const caller = await requireCaller(request);
-  if (caller.role !== "admin" && caller.role !== "site_admin") {
+  if (caller.role !== "admin" && caller.role !== "site_admin" && caller.role !== "dev_site_admin") {
     throw new HttpsError("permission-denied", "Admin role required.");
   }
   return caller;
 }
 
+// Strict site_admin only — for root surfaces (Settings, costs, portfolios).
 export async function requireSiteAdmin(request: CallableRequest): Promise<CallerContext> {
   const caller = await requireCaller(request);
   if (caller.role !== "site_admin") {
     throw new HttpsError("permission-denied", "Site-admin role required.");
+  }
+  return caller;
+}
+
+// site_admin or dev_site_admin — for feature toggling and all-user management.
+export async function requireAllUserManagement(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== "site_admin" && caller.role !== "dev_site_admin") {
+    throw new HttpsError("permission-denied", "Full user management requires site-admin or dev-site-admin role.");
   }
   return caller;
 }
