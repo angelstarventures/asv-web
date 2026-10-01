@@ -15,6 +15,7 @@ const BASE_ADMIN_TABS = [
   { href: "/admin/documents", label: "Document uploads" },
 ];
 const ROOT_MODE_TABS = [
+  { href: "/admin/features", label: "Features" },
   { href: "/admin/portfolios", label: "Portfolios" },
   { href: "/admin/settings", label: "Settings" },
   { href: "/admin/costs", label: "Costs" },

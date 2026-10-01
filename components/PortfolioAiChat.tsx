@@ -4,6 +4,7 @@ import { useState, type FormEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { aiPortfolioQuery, type ChatTurn } from "@/lib/functions/aiChat";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // The schema/ledger/member-list context is seeded once per session as a Vertex AI context
 // cache (see ai-portfolioQuery.ts) — this component just carries the returned cache handle and
@@ -42,7 +43,7 @@ export function PortfolioAiChat({ scope }: { scope: "mine" | "asv" }) {
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-4 dark:border-zinc-800">
       <h2 className="text-sm font-medium">
-        Ask about {scope === "mine" ? "your holdings" : "the ASV portfolio"}
+        Ask about {scope === "mine" ? "your holdings" : `the ${tenantConfig.orgAbbreviation} portfolio`}
       </h2>
 
       {history.length > 0 && (
@@ -85,7 +86,11 @@ export function PortfolioAiChat({ scope }: { scope: "mine" | "asv" }) {
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder={scope === "mine" ? "e.g. What's my MOIC in the balanced scenario?" : "e.g. What's ASV's portfolio-wide MOIC?"}
+          placeholder={
+            scope === "mine"
+              ? "e.g. What's my MOIC in the balanced scenario?"
+              : `e.g. What's ${tenantConfig.orgAbbreviation}'s portfolio-wide MOIC?`
+          }
           disabled={busy}
           className="flex-1 rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         />

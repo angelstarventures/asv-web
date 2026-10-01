@@ -2,19 +2,15 @@ import { listCompanies, listCompanyDdLeads, listAllMembers } from "@/lib/datacon
 import { AdminCompanyLogoUpload } from "@/components/AdminCompanyLogoUpload";
 import { AdminCompanyDdLead } from "@/components/AdminCompanyDdLead";
 import { AdminCompanyCeoInfo } from "@/components/AdminCompanyCeoInfo";
-import { AdminCompanyMemberAssignment } from "@/components/AdminCompanyMemberAssignment";
-import { getCurrentMember } from "@/lib/auth/currentMember";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCompaniesPage() {
-  const [current, { companies }, { companies: ddLeads }, { members }] = await Promise.all([
-    getCurrentMember(),
+  const [{ companies }, { companies: ddLeads }, { members }] = await Promise.all([
     listCompanies(),
     listCompanyDdLeads(),
     listAllMembers(),
   ]);
-  const isDevSiteAdmin = current?.role === "dev_site_admin";
   const ddLeadByCompanyId = new Map(ddLeads.map((c) => [c.id, c.ddLead?.id ?? null]));
   const ceoInfoByCompanyId = new Map(ddLeads.map((c) => [c.id, { ceoName: c.ceoName ?? null, ceoContact: c.ceoContact ?? null }]));
 
@@ -31,7 +27,6 @@ export default async function AdminCompaniesPage() {
               <AdminCompanyLogoUpload companyId={c.id} name={c.tradeName ?? c.name} currentLogoUrl={c.logoUrl ?? null} />
               <AdminCompanyCeoInfo companyId={c.id} ceoName={ceoInfo.ceoName} ceoContact={ceoInfo.ceoContact} />
               <AdminCompanyDdLead companyId={c.id} ddLeadId={ddLeadByCompanyId.get(c.id) ?? null} members={members} />
-              {isDevSiteAdmin && <AdminCompanyMemberAssignment companyId={c.id} members={members} />}
             </div>
           );
         })}

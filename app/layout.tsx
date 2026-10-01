@@ -3,6 +3,7 @@ import { Playfair_Display, Manrope, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth/useAuth";
 import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // Playfair Display (headings) + Manrope (body/UI/tables). Applied globally: Manrope via
 // --font-sans (globals.css's @theme inline), Playfair Display via --font-heading, targeted at
@@ -25,19 +26,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AngelStar Ventures",
-  description: "AngelStar Ventures member portal: portfolio, ledger, and deal flow.",
+  title: tenantConfig.orgName,
+  description: tenantConfig.pwaDescription,
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "AngelStar",
+    title: tenantConfig.orgShortName,
   },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#2c2520",
+  themeColor: tenantConfig.themeColor,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

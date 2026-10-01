@@ -149,7 +149,7 @@ enum DealDocumentType {
 
 # --- Feature flags & company membership ---
 
-enum CompanyFeatureKey {
+enum OrganizationFeatureKey {
   DEALS
   AI_DEAL_MATCHING
   AI_CHAT
@@ -161,7 +161,7 @@ enum CompanyFeatureKey {
   COSTS
 }
 
-enum MemberCompanyFeatureKey {
+enum MemberOrganizationFeatureKey {
   DEALS_SCREENING
   DEAL_VIEW
   COMPANY_MANAGEMENT
@@ -177,37 +177,58 @@ enum MemberCompanyFeatureKey {
   COSTS
 }
 
-# Explicit company membership join table — assignable by dev_site_admin only (see
-# functions/src/functions/companyMembers.ts's requireExactRole check).
-# Determines which company an admin "belongs to" for company_member_management scoping.
-# A member belongs to at most one company; uniqueness is enforced by the writing Cloud
-# Function (assignCompanyMember moves an existing row rather than inserting a duplicate).
-type CompanyMember @table {
+# The angel fund/tenant itself — distinct from Company (a portfolio startup ASV has
+# invested in). One row per Firebase project under the template-per-deployment model (see
+# the templatization plan) — this table exists mainly so the schema/code can express
+# "which org does this admin belong to" without conflating it with the 30+ portfolio
+# Company rows. Expect exactly one row (this deployment's own fund) for the foreseeable
+# future; kept as a real table rather than an implicit singleton in case that ever changes.
+type Organization @table {
+  id: UUID!  @default(expr: "uuidV4()")
+  name: String! @unique
+}
+
+# Explicit organization membership join table — assignable by dev_site_admin only (see
+# functions/src/functions/organizationMembers.ts's requireExactRole check).
+# Determines which organization an admin "belongs to" for company_member_management
+# scoping (named after the GlobalPermission key in lib/auth/permissions.ts, which predates
+# this table). A member belongs to at most one organization; uniqueness is enforced by the
+# writing Cloud Function (assignOrganizationMember moves an existing row rather than
+# inserting a duplicate).
+type OrganizationMember @table {
   id: UUID!             @default(expr: "uuidV4()")
-  company: Company!
+  organization: Organization!
   member: Member!
-  roleInCompany: String # optional label (e.g. "Lead", "Observer") — free-text, no enum
+  roleInOrganization: String # optional label (e.g. "Lead", "Observer") — free-text, no enum
   createdAt: Timestamp! @default(expr: "request.time")
 }
 
-# Company-level feature enablement — toggle by dev-site-admin / developer.
-# A company with no row for a given feature key defaults to false.
-type CompanyFeature @table {
+# Organization-level feature enablement — the master switch for a deployment. Toggled by
+# developer/dev_site_admin only (functions/src/functions/organizationFeatures.ts). A
+# feature disabled here is completely unavailable to the whole org — site_admin's
+# per-member overrides below can only apply to a feature that's enabled here.
+# An organization with no row for a given feature key defaults to false (disabled).
+type OrganizationFeature @table {
   id: UUID!             @default(expr: "uuidV4()")
-  company: Company!
-  featureKey: CompanyFeatureKey!
+  organization: Organization!
+  featureKey: OrganizationFeatureKey!
   enabled: Boolean!     @default(value: false)
   updatedAt: Timestamp! @default(expr: "request.time")
   updatedBy: Member!
 }
 
-# Per-user-within-company feature enablement — overrides the company-level toggle.
-# A member with no row for a given (company, featureKey) inherits the CompanyFeature default.
-type MemberCompanyFeature @table {
+# Per-member-within-organization feature enablement — overrides which members can use an
+# already-org-enabled feature. Toggled by site_admin (and developer/dev_site_admin). A
+# member with no row for a given (organization, featureKey) inherits the
+# OrganizationFeature's own enabled value (on by default once the org enables it; a
+# member-level row is how site_admin carves out an individual exception in either
+# direction). If the org-level feature is disabled, no member-level row can turn it on —
+# OrganizationFeature is a hard gate, not just a default.
+type MemberOrganizationFeature @table {
   id: UUID!             @default(expr: "uuidV4()")
-  company: Company!
+  organization: Organization!
   member: Member!
-  featureKey: MemberCompanyFeatureKey!
+  featureKey: MemberOrganizationFeatureKey!
   enabled: Boolean!     @default(value: false)
   updatedAt: Timestamp! @default(expr: "request.time")
   updatedBy: Member!

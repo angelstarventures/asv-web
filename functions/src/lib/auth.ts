@@ -93,10 +93,12 @@ export async function requireAdmin(request: CallableRequest): Promise<CallerCont
   return caller;
 }
 
-// Strict site_admin only — for root surfaces (Settings, costs, portfolios).
+// Strict site_admin or dev_site_admin — for root surfaces (Settings, costs, portfolios).
+// dev_site_admin is included here because the migration sets both devSiteAdminMode and
+// siteAdminMode claims for dev_site_admin accounts that act as site admins.
 export async function requireSiteAdmin(request: CallableRequest): Promise<CallerContext> {
   const caller = await requireCaller(request);
-  if (caller.role !== "site_admin") {
+  if (caller.role !== "site_admin" && caller.role !== "dev_site_admin") {
     throw new HttpsError("permission-denied", "Site-admin role required.");
   }
   return caller;
@@ -112,13 +114,27 @@ export async function requireAllUserManagement(request: CallableRequest): Promis
 }
 
 // EXACTLY the given role, not a tier — for boundaries narrower than any of the checkers
-// above. CompanyMember assignment is dev_site_admin-only by explicit product decision (not
-// dev_site_admin-or-site_admin, unlike requireDevSiteAdmin's tier check) — do not swap this
-// for requireDevSiteAdmin, that would silently widen who can assign company membership.
+// above. OrganizationMember assignment is dev_site_admin-only by explicit product decision
+// (not dev_site_admin-or-site_admin, unlike requireDevSiteAdmin's tier check) — do not swap
+// this for requireDevSiteAdmin, that would silently widen who can assign org membership.
 export async function requireExactRole(request: CallableRequest, role: Role): Promise<CallerContext> {
   const caller = await requireCaller(request);
   if (caller.role !== role) {
     throw new HttpsError("permission-denied", `${role} role required.`);
+  }
+  return caller;
+}
+
+// developer or dev_site_admin — EXCLUDES site_admin, unlike every other tier checker above
+// (which treats dev_site_admin/site_admin as interchangeable). This is the org-level
+// feature-toggle boundary: developer/dev_site_admin control which features are enabled for
+// the deployment at all; site_admin only gets to control per-member access within whatever
+// developer/dev_site_admin has already made available (see requireAllUserManagement for the
+// per-member-level checker, which does include site_admin).
+export async function requireFeatureControl(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireCaller(request);
+  if (caller.role !== "developer" && caller.role !== "dev_site_admin") {
+    throw new HttpsError("permission-denied", "Developer or dev-site-admin role required.");
   }
   return caller;
 }

@@ -1,6 +1,6 @@
 // Shared permission definitions — used by both the client (UI visibility) and server
 // (Cloud Function enforcement). Global permissions are role-gated in code; feature toggles
-// are per-company / per-member-company and stored in the DB.
+// are per-organization / per-member-organization and stored in the DB.
 //
 // This map is a UI-affordance / documentation layer, not the security boundary. It's safe
 // to use for deciding what to render or enable client-side, but the actual enforcement for
@@ -52,9 +52,11 @@ export function hasGlobalPermission(role: Role, permission: GlobalPermission): b
   return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
 }
 
-// ── Company-level feature keys ───────────────────────────────────────────────
+// ── Organization-level feature keys ──────────────────────────────────────────
+// "Organization" here is the angel investing group itself (see schema.gql's Organization
+// comment) — NOT a portfolio company.
 
-export type CompanyFeatureKey =
+export type OrganizationFeatureKey =
   | "DEALS"
   | "AI_DEAL_MATCHING"
   | "AI_CHAT"
@@ -65,33 +67,26 @@ export type CompanyFeatureKey =
   | "MEMBERSHIP_DUES"
   | "COSTS";
 
-// Ordered list of all company feature keys for rendering toggles.
-export const companyFeatureKeys: readonly CompanyFeatureKey[] = [
+// Ordered list of all organization feature keys for rendering toggles.
+export const organizationFeatureKeys: readonly OrganizationFeatureKey[] = [
   "DEALS", "AI_DEAL_MATCHING", "AI_CHAT", "AI_DOCUMENT_ANALYSIS",
   "MULTIPLE_LEDGERS", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
   "MEMBERSHIP_DUES", "COSTS",
 ];
 
-// Which roles can TOGGLE each company-level feature (not which roles can USE it).
-export const COMPANY_FEATURE_TOGGLERS: Record<CompanyFeatureKey, Role[]> = {
-  DEALS:                   ["dev_site_admin", "site_admin"],
-  AI_DEAL_MATCHING:        ["dev_site_admin", "site_admin"],
-  AI_CHAT:                 ["dev_site_admin", "site_admin"],
-  AI_DOCUMENT_ANALYSIS:    ["dev_site_admin", "site_admin"],
-  MULTIPLE_LEDGERS:        ["dev_site_admin", "site_admin"],
-  AI_MODEL_PROMPT_CONFIG:  ["dev_site_admin", "site_admin"],
-  AI_MODEL_SELECTION:      ["dev_site_admin", "site_admin"],
-  MEMBERSHIP_DUES:         ["dev_site_admin", "site_admin", "admin"],
-  COSTS:                   ["dev_site_admin", "site_admin", "admin"],
-};
+// Which roles can TOGGLE organization-level features (not which roles can USE them) —
+// developer/dev_site_admin only, uniformly across every key. This is the master switch for
+// the whole deployment; site_admin does NOT get a say here, only over the per-member
+// overrides below, and only within whatever's already enabled here.
+export const ORGANIZATION_FEATURE_TOGGLER_ROLES: readonly Role[] = ["developer", "dev_site_admin"];
 
-export function canToggleCompanyFeature(role: Role, featureKey: CompanyFeatureKey): boolean {
-  return COMPANY_FEATURE_TOGGLERS[featureKey]?.includes(role) ?? false;
+export function canToggleOrganizationFeature(role: Role): boolean {
+  return ORGANIZATION_FEATURE_TOGGLER_ROLES.includes(role);
 }
 
-// ── Per-user-in-company feature keys ─────────────────────────────────────────
+// ── Per-member-within-organization feature keys ──────────────────────────────
 
-export type MemberCompanyFeatureKey =
+export type MemberOrganizationFeatureKey =
   | "DEALS_SCREENING"
   | "DEAL_VIEW"
   | "COMPANY_MANAGEMENT"
@@ -106,31 +101,25 @@ export type MemberCompanyFeatureKey =
   | "MEMBERSHIP_DUES"
   | "COSTS";
 
-// Ordered list of all per-user feature keys for rendering toggles.
-export const memberCompanyFeatureKeys: readonly MemberCompanyFeatureKey[] = [
+// Ordered list of all per-member feature keys for rendering toggles.
+export const memberOrganizationFeatureKeys: readonly MemberOrganizationFeatureKey[] = [
   "DEALS_SCREENING", "DEAL_VIEW", "COMPANY_MANAGEMENT", "AI_DEAL_MATCHING",
   "AI_CHAT", "AI_DOCUMENT_ANALYSIS", "MULTIPLE_LEDGERS", "MEMBER_MANAGEMENT",
   "MEMBER_PORTFOLIO_VIEW", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
   "MEMBERSHIP_DUES", "COSTS",
 ];
 
-// Which roles can TOGGLE each per-user feature.
-export const MEMBER_FEATURE_TOGGLERS: Record<MemberCompanyFeatureKey, Role[]> = {
-  DEALS_SCREENING:          ["dev_site_admin", "site_admin", "admin"],
-  DEAL_VIEW:                ["dev_site_admin", "site_admin", "admin"],
-  COMPANY_MANAGEMENT:       ["dev_site_admin", "site_admin", "admin"],
-  AI_DEAL_MATCHING:         ["dev_site_admin", "site_admin", "admin"],
-  AI_CHAT:                  ["dev_site_admin", "site_admin", "admin"],
-  AI_DOCUMENT_ANALYSIS:     ["dev_site_admin", "site_admin", "admin"],
-  MULTIPLE_LEDGERS:         ["dev_site_admin", "site_admin", "admin"],
-  MEMBER_MANAGEMENT:        ["dev_site_admin", "site_admin"],
-  MEMBER_PORTFOLIO_VIEW:    ["dev_site_admin", "site_admin", "admin"],
-  AI_MODEL_PROMPT_CONFIG:   ["dev_site_admin", "site_admin"],
-  AI_MODEL_SELECTION:       ["dev_site_admin", "site_admin"],
-  MEMBERSHIP_DUES:          ["dev_site_admin", "site_admin", "admin"],
-  COSTS:                    ["dev_site_admin", "site_admin", "admin"],
-};
+// Which roles can TOGGLE per-member overrides — dev_site_admin and site_admin, uniformly
+// across every key (matches requireAllUserManagement's server-side enforcement exactly).
+// developer is deliberately excluded here — per-member access is member/business-level
+// control, outside developer's dev-ops-only scope (deploy/migrate/maintain). Enforcement
+// of "only within what's already organization-enabled" lives server-side in
+// functions/src/functions/organizationFeatures.ts, not here.
+export const MEMBER_ORGANIZATION_FEATURE_TOGGLER_ROLES: readonly Role[] = [
+  "dev_site_admin",
+  "site_admin",
+];
 
-export function canToggleMemberFeature(role: Role, featureKey: MemberCompanyFeatureKey): boolean {
-  return MEMBER_FEATURE_TOGGLERS[featureKey]?.includes(role) ?? false;
+export function canToggleMemberOrganizationFeature(role: Role): boolean {
+  return MEMBER_ORGANIZATION_FEATURE_TOGGLER_ROLES.includes(role);
 }

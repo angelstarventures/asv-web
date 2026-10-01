@@ -106,9 +106,11 @@ export enum MembershipType {
 };
 
 export enum Role {
-  ADMIN = "ADMIN",
-  MEMBER = "MEMBER",
+  DEVELOPER = "DEVELOPER",
+  DEV_SITE_ADMIN = "DEV_SITE_ADMIN",
   SITE_ADMIN = "SITE_ADMIN",
+  ADMIN = "ADMIN",
+  USER = "USER",
 };
 
 export enum Scenario {
@@ -540,6 +542,8 @@ export interface ListCompanyUpdatesForScenarioData {
     highlights: string[];
     lowlights: string[];
     upcomingPlans: string[];
+    driveFileId?: string | null;
+    driveUrl?: string | null;
     viewpointScenario: Scenario;
     viewpointMarketResearchGrounding: string;
     viewpointValuationImpactSummary: string;
@@ -861,6 +865,7 @@ export interface ListNonParticipatingRoundDetailsForScenarioData {
     newPostMoneyValuation: number;
     totalRoundSize?: number | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
     notes?: string | null;
   })[];
 }
@@ -876,6 +881,7 @@ export interface ListPricedRoundDetailsForScenarioData {
     } & LedgerEntry_Key;
     companyUrl?: string | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
     asvTotal: number;
     totalRoundSize?: number | null;
     roundName: string;
@@ -895,6 +901,8 @@ export interface ListSafeRoundDetailsForScenarioData {
     } & LedgerEntry_Key;
     companyUrl?: string | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
+    roundName: string;
     asvTotal: number;
     totalRoundSize?: number | null;
     postMoneyValCap: number;
@@ -944,6 +952,11 @@ export interface ListValuationAssessmentDetailsForScenarioVariables {
   scenario: Scenario;
 }
 
+export interface MemberOrganizationFeature_Key {
+  id: UUIDString;
+  __typename?: 'MemberOrganizationFeature_Key';
+}
+
 export interface MemberValuation_Key {
   id: UUIDString;
   __typename?: 'MemberValuation_Key';
@@ -957,6 +970,21 @@ export interface Member_Key {
 export interface NonParticipatingRoundDetail_Key {
   id: UUIDString;
   __typename?: 'NonParticipatingRoundDetail_Key';
+}
+
+export interface OrganizationFeature_Key {
+  id: UUIDString;
+  __typename?: 'OrganizationFeature_Key';
+}
+
+export interface OrganizationMember_Key {
+  id: UUIDString;
+  __typename?: 'OrganizationMember_Key';
+}
+
+export interface Organization_Key {
+  id: UUIDString;
+  __typename?: 'Organization_Key';
 }
 
 export interface PricedRoundDetail_Key {
@@ -973,6 +1001,11 @@ export interface RollupCache_Key {
 export interface SafeRoundDetail_Key {
   id: UUIDString;
   __typename?: 'SafeRoundDetail_Key';
+}
+
+export interface SerperUsageCounter_Key {
+  key: string;
+  __typename?: 'SerperUsageCounter_Key';
 }
 
 export interface TaxDocument_Key {

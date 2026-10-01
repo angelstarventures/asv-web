@@ -800,6 +800,8 @@ export interface ListCompanyUpdatesForScenarioData {
     highlights: string[];
     lowlights: string[];
     upcomingPlans: string[];
+    driveFileId?: string | null;
+    driveUrl?: string | null;
     viewpointScenario: Scenario;
     viewpointMarketResearchGrounding: string;
     viewpointValuationImpactSummary: string;
@@ -1169,6 +1171,7 @@ export interface ListPricedRoundDetailsForScenarioData {
     } & LedgerEntry_Key;
     companyUrl?: string | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
     asvTotal: number;
     totalRoundSize?: number | null;
     roundName: string;
@@ -1289,6 +1292,8 @@ export interface ListSafeRoundDetailsForScenarioData {
     } & LedgerEntry_Key;
     companyUrl?: string | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
+    roundName: string;
     asvTotal: number;
     totalRoundSize?: number | null;
     postMoneyValCap: number;
@@ -1417,6 +1422,7 @@ export interface ListNonParticipatingRoundDetailsForScenarioData {
     newPostMoneyValuation: number;
     totalRoundSize?: number | null;
     docLink?: string | null;
+    driveFolderId?: string | null;
     notes?: string | null;
   })[];
 }

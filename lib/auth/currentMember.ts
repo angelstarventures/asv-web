@@ -5,10 +5,11 @@ import { SESSION_COOKIE_NAME, verifySessionCookie } from "@/lib/firebase/session
 export interface CurrentMember {
   memberId: string;
   authUid: string;
-  role: "admin" | "member" | "site_admin";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   status: "active" | "disabled";
   mustChangePassword: boolean;
   siteAdminMode: boolean;
+  devSiteAdminMode: boolean;
 }
 
 // proxy.ts already guarantees any /member/* or /admin/* request has a valid, active session
@@ -34,9 +35,10 @@ export async function getCurrentMember(): Promise<CurrentMember | null> {
   return {
     memberId: claims.memberId,
     authUid: claims.uid,
-    role: claims.role,
-    status: claims.status,
+    role: claims.role as CurrentMember["role"],
+    status: claims.status as "active" | "disabled",
     mustChangePassword: claims.mustChangePassword ?? false,
     siteAdminMode: claims.siteAdminMode ?? false,
+    devSiteAdminMode: claims.devSiteAdminMode ?? false,
   };
 }

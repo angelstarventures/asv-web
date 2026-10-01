@@ -23,7 +23,7 @@ function AddMemberRow({ reference }: { reference: string }) {
       const { memberId } = await createMember({
         displayName: String(form.get("displayName")),
         email: String(form.get("email")),
-        role: "member",
+        role: "user",
       });
       setAdded(memberId);
       setOpen(false);

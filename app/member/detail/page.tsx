@@ -8,6 +8,7 @@ import {
 } from "@/lib/dataconnect/client";
 import { Scenario, type ListLedgerEntriesForScenarioData } from "@/lib/dataconnect/generated";
 import type { Scope } from "@/lib/scenarioTypes";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // Reads searchParams and the session cookie, so this is already dynamic — explicit for
 // clarity (plan §4).
@@ -129,7 +130,7 @@ export default async function MemberDetailPage({
                 scope === s ? "bg-foreground text-background" : "text-zinc-600 dark:text-zinc-400"
               }`}
             >
-              {s === "mine" ? "My holdings" : "All of ASV"}
+              {s === "mine" ? "My holdings" : `All of ${tenantConfig.orgAbbreviation}`}
             </a>
           ))}
         </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatCurrencyCompact, MoicBadge } from "./StatTile";
 import type { Scenario as ScenarioParam } from "@/lib/scenarioTypes";
+import { tenantConfig } from "@/lib/config/tenant";
 
 export interface ExitRow {
   companyKey: string;
@@ -45,7 +46,7 @@ export function ExitsTable({
             <th className="py-2 font-medium">Exit type</th>
             <th className="py-2 text-right font-medium">Exit date</th>
             <th className="py-2 text-right font-medium">Total exit value</th>
-            <th className="py-2 text-right font-medium">ASV payout</th>
+            <th className="py-2 text-right font-medium">{tenantConfig.orgAbbreviation} payout</th>
             <th className="py-2 text-right font-medium">MOIC at exit</th>
           </tr>
         </thead>

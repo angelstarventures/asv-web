@@ -4,6 +4,8 @@ import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   provisionMember,
+  deleteMember,
+  adminSendPasswordReset,
   adminSetTemporaryPassword,
   setMemberStatus,
   setMemberRole,
@@ -16,6 +18,7 @@ import {
 export function MemberActions({
   memberId,
   email,
+  displayName,
   isLinked,
   status,
   role,
@@ -23,9 +26,10 @@ export function MemberActions({
 }: {
   memberId: string;
   email: string;
+  displayName?: string;
   isLinked: boolean;
   status: "active" | "disabled";
-  role: "admin" | "member" | "site_admin";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   viewerIsSiteAdmin: boolean;
 }) {
   const router = useRouter();
@@ -44,13 +48,27 @@ export function MemberActions({
       const result = await provisionMember({
         memberId,
         email: String(form.get("email")),
-        role: form.get("role") === "admin" ? "admin" : "member",
-        temporaryPassword: String(form.get("temporaryPassword")),
+        role: form.get("role") === "admin" ? "admin" : "user",
+        displayName: String(form.get("displayName")),
       });
-      setNotice(`Provisioned ${result.email} (${result.authUid}). Relay the temporary password out-of-band.`);
+      setNotice(`Invitation sent to ${result.email}. They will receive an email to set their password.`);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Provisioning failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSendPasswordReset() {
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      await adminSendPasswordReset({ memberId });
+      setNotice("Password reset email sent.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send password reset.");
     } finally {
       setBusy(false);
     }
@@ -88,7 +106,7 @@ export function MemberActions({
     }
   }
 
-  async function handleSetRole(next: "member" | "admin" | "site_admin") {
+  async function handleSetRole(next: "user" | "admin" | "site_admin" | "dev_site_admin" | "developer") {
     setError(null);
     setNotice(null);
     setBusy(true);
@@ -97,6 +115,23 @@ export function MemberActions({
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update role.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  async function handleDeleteMember() {
+    setError(null);
+    setNotice(null);
+    setBusy(true);
+    try {
+      await deleteMember({ memberId });
+      // Navigate back to the members list since this member no longer exists
+      router.push("/admin/members");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete member.");
     } finally {
       setBusy(false);
     }
@@ -113,7 +148,21 @@ export function MemberActions({
 
       {!isLinked ? (
         <form onSubmit={handleProvision} className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-card p-5 dark:border-zinc-800">
-          <h2 className="text-sm font-medium">Provision account</h2>
+          <h2 className="text-sm font-medium">Send invitation</h2>
+          <p className="text-sm text-zinc-500">
+            An email will be sent to the member with a link to set their password and sign in.
+          </p>
+          <label className="flex flex-col gap-1 text-sm">
+            Display name
+            <input
+              type="text"
+              name="displayName"
+              required
+              minLength={2}
+              defaultValue={displayName}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+            />
+          </label>
           <label className="flex flex-col gap-1 text-sm">
             Email
             <input
@@ -128,34 +177,34 @@ export function MemberActions({
             Role
             <select
               name="role"
-              defaultValue="member"
+              defaultValue="user"
               className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
             >
-              <option value="member">Member</option>
+              <option value="user">User</option>
               <option value="admin">Admin</option>
             </select>
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Temporary password
-            <input
-              type="text"
-              name="temporaryPassword"
-              required
-              minLength={8}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-            />
           </label>
           <button
             type="submit"
             disabled={busy}
             className="mt-1 rounded-full bg-foreground px-4 py-1.5 text-sm font-medium text-background disabled:opacity-50"
           >
-            {busy ? "Provisioning..." : "Provision"}
+            {busy ? "Sending..." : "Send invitation"}
           </button>
         </form>
       ) : (
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap gap-3">
+            {!settingPassword && (
+              <button
+                type="button"
+                onClick={handleSendPasswordReset}
+                disabled={busy}
+                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+              >
+                {busy ? "Sending..." : "Send password reset"}
+              </button>
+            )}
             {!settingPassword && (
               <button
                 type="button"
@@ -180,12 +229,14 @@ export function MemberActions({
                 <select
                   value={role}
                   disabled={busy}
-                  onChange={(e) => handleSetRole(e.target.value as "member" | "admin" | "site_admin")}
+                  onChange={(e) => handleSetRole(e.target.value as "user" | "admin" | "site_admin" | "dev_site_admin" | "developer")}
                   className="rounded-md border border-zinc-300 px-2 py-1 text-sm disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900"
                 >
-                  <option value="member">Member</option>
+                  <option value="user">User</option>
                   <option value="admin">Admin</option>
                   <option value="site_admin">Site-admin</option>
+                  <option value="dev_site_admin">Dev-site-admin</option>
+                  <option value="developer">Developer</option>
                 </select>
               </label>
             ) : role === "site_admin" ? (
@@ -193,11 +244,11 @@ export function MemberActions({
             ) : (
               <button
                 type="button"
-                onClick={() => handleSetRole(role === "admin" ? "member" : "admin")}
+                onClick={() => handleSetRole(role === "admin" ? "user" : "admin")}
                 disabled={busy}
                 className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
               >
-                {role === "admin" ? "Demote to member" : "Promote to admin"}
+                {role === "admin" ? "Demote to user" : "Promote to admin"}
               </button>
             )}
           </div>
@@ -241,6 +292,42 @@ export function MemberActions({
               </div>
             </form>
           )}
+          <hr className="border-zinc-200 dark:border-zinc-800" />
+          <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-900">
+            <h2 className="text-sm font-medium text-red-700 dark:text-red-400">Danger zone</h2>
+            <p className="text-xs text-zinc-500">
+              Delete this member and their account. Only possible if they have no investment history.
+            </p>
+            {!confirmDelete ? (
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(true)}
+                disabled={busy}
+                className="self-start rounded-full border border-red-400 px-4 py-1.5 text-sm font-medium text-red-600 disabled:opacity-50"
+              >
+                Delete member
+              </button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDeleteMember}
+                  disabled={busy}
+                  className="rounded-full bg-red-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+                >
+                  {busy ? "Deleting..." : "Confirm delete"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={busy}
+                  className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

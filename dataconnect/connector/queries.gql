@@ -116,6 +116,8 @@ query ListCompanyUpdatesForScenario($scenario: Scenario!) @auth(level: USER, ins
     highlights
     lowlights
     upcomingPlans
+    driveFileId
+    driveUrl
     viewpointScenario
     viewpointMarketResearchGrounding
     viewpointValuationImpactSummary
@@ -182,6 +184,7 @@ query ListPricedRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER,
     }
     companyUrl
     docLink
+    driveFolderId
     asvTotal
     totalRoundSize
     roundName
@@ -197,6 +200,8 @@ query ListSafeRoundDetailsForScenario($scenario: Scenario!) @auth(level: USER, i
     }
     companyUrl
     docLink
+    driveFolderId
+    roundName
     asvTotal
     totalRoundSize
     postMoneyValCap
@@ -220,6 +225,7 @@ query ListNonParticipatingRoundDetailsForScenario($scenario: Scenario!) @auth(le
     newPostMoneyValuation
     totalRoundSize
     docLink
+    driveFolderId
     notes
   }
 }

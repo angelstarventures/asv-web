@@ -1,11 +1,9 @@
 import { listCompanies, listAllMembers, listAllDocuments, listAllTaxDocuments } from "@/lib/dataconnect/client";
 import { AdminDocumentsFlow } from "@/components/AdminDocumentsFlow";
-import { AdminDocumentUploadForm } from "@/components/AdminDocumentUploadForm";
 import { AdminTaxDocumentUploadForm } from "@/components/AdminTaxDocumentUploadForm";
-import { MemberDocumentsTable, type MemberDocumentCompanyGroup } from "@/components/MemberDocumentsTable";
 import { TaxDocumentsTable, type TaxDocumentMemberGroup } from "@/components/TaxDocumentsTable";
 import { DocumentsTabs } from "@/components/DocumentsTabs";
-import { SyncDocumentsFromDriveButton } from "@/components/SyncDocumentsFromDriveButton";
+import { SyncDocumentsPanel } from "@/components/SyncDocumentsPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -19,30 +17,11 @@ const DOC_TYPE_LABELS: Record<string, string> = {
 };
 
 export default async function AdminDocumentsPage() {
-  const [{ companies }, { members }, { documents }, { taxDocuments }] = await Promise.all([
+  const [{ companies }, { members }, { taxDocuments }] = await Promise.all([
     listCompanies(),
     listAllMembers(),
-    listAllDocuments(),
     listAllTaxDocuments(),
   ]);
-
-  const byCompany = new Map<string, MemberDocumentCompanyGroup>();
-  for (const doc of documents) {
-    const group = byCompany.get(doc.company.id) ?? {
-      companyId: doc.company.id,
-      companyName: doc.company.tradeName ?? doc.company.name,
-      documents: [],
-    };
-    // Admins always pass canViewDocument — every row is always shown, unlike the member view.
-    group.documents.push({
-      id: doc.id,
-      label: doc.filename ?? DOC_TYPE_LABELS[doc.docType] ?? doc.docType,
-      uploadedAt: doc.uploadedAt,
-      canAccess: true,
-    });
-    byCompany.set(doc.company.id, group);
-  }
-  const documentGroups = [...byCompany.values()].sort((a, b) => a.companyName.localeCompare(b.companyName));
 
   const byMember = new Map<string, TaxDocumentMemberGroup>();
   for (const doc of taxDocuments) {
@@ -68,13 +47,7 @@ export default async function AdminDocumentsPage() {
         companyTab={
           <div className="flex flex-col gap-6">
             <AdminDocumentsFlow companies={companies} />
-            <AdminDocumentUploadForm companies={companies} />
-            <SyncDocumentsFromDriveButton />
-            {documentGroups.length === 0 ? (
-              <p className="text-sm text-zinc-500 dark:text-zinc-500">No documents have been uploaded yet.</p>
-            ) : (
-              <MemberDocumentsTable groups={documentGroups} />
-            )}
+            <SyncDocumentsPanel companies={companies} />
           </div>
         }
         taxTab={

@@ -90,6 +90,147 @@ export const documentsSyncFromDrive = onCall<DocumentsSyncFromDriveInput, Promis
       }
     }
 
+    // --- Phase 2: Update ledger detail records from Drive folder structure ---
+    // For rounds without driveFolderId, find the Company/Rounds/RoundName folder.
+    // For updates without driveFileId, find the matching "Update - MMDDYYYY.*" file.
+    {
+      const roundDetails = await query<{
+        id: string; ledgerEntryId: string; companyId: string; companyName: string;
+        roundName: string; driveFolderId: string | null; type: string;
+      }>(`
+        SELECT prd.id, prd.ledger_entry_id AS "ledgerEntryId",
+               c.id AS "companyId", COALESCE(c.trade_name, c.name) AS "companyName",
+               prd.round_name AS "roundName", prd.drive_folder_id AS "driveFolderId",
+               'PARTICIPATING_PRICED_ROUND' AS type
+        FROM priced_round_detail prd
+        JOIN ledger_entry le ON le.id = prd.ledger_entry_id
+        JOIN company c ON c.id = le.company_id
+        WHERE prd.drive_folder_id IS NULL
+          AND ($1::uuid IS NULL OR le.company_id = $1::uuid)
+        UNION ALL
+        SELECT srd.id, srd.ledger_entry_id, c.id, COALESCE(c.trade_name, c.name),
+               srd.round_name AS "roundName", srd.drive_folder_id, 'PARTICIPATING_SAFE_ROUND'
+        FROM safe_round_detail srd
+        JOIN ledger_entry le ON le.id = srd.ledger_entry_id
+        JOIN company c ON c.id = le.company_id
+        WHERE srd.drive_folder_id IS NULL
+          AND ($1::uuid IS NULL OR le.company_id = $1::uuid)
+        UNION ALL
+        SELECT nrd.id, nrd.ledger_entry_id, c.id, COALESCE(c.trade_name, c.name),
+               nrd.round_name, nrd.drive_folder_id, 'NON_PARTICIPATING_ROUND'
+        FROM non_participating_round_detail nrd
+        JOIN ledger_entry le ON le.id = nrd.ledger_entry_id
+        JOIN company c ON c.id = le.company_id
+        WHERE nrd.drive_folder_id IS NULL
+          AND ($1::uuid IS NULL OR le.company_id = $1::uuid)
+      `, [companyId ?? null]);
+
+      const updateDetails = await query<{
+        id: string; ledgerEntryId: string; companyId: string;
+        companyName: string; eventDate: string; driveFileId: string | null;
+      }>(`
+        SELECT cud.id, cud.ledger_entry_id AS "ledgerEntryId",
+               c.id AS "companyId", COALESCE(c.trade_name, c.name) AS "companyName",
+               le.event_date::text AS "eventDate", cud.drive_file_id AS "driveFileId"
+        FROM company_update_detail cud
+        JOIN ledger_entry le ON le.id = cud.ledger_entry_id
+        JOIN company c ON c.id = le.company_id
+        WHERE cud.drive_file_id IS NULL
+          AND ($1::uuid IS NULL OR le.company_id = $1::uuid)
+      `, [companyId ?? null]);
+
+      // Process rounds: find Company/Rounds/RoundName folder and set driveFolderId.
+      // Groups by (companyId, roundName, type) to deduplicate across scenarios,
+      // then updates ALL scenario records for each matched folder.
+      {
+        const folderCountByCompany = new Map<string, Map<string, number>>(); // companyId → baseName → count seen
+
+        function nextRoundFolderName(companyId: string, baseName: string): string {
+          const companyCounts = folderCountByCompany.get(companyId) ?? new Map();
+          const count = (companyCounts.get(baseName) ?? 0) + 1;
+          companyCounts.set(baseName, count);
+          folderCountByCompany.set(companyId, companyCounts);
+          return count === 1 ? baseName : `${baseName}-${count}`;
+        }
+
+        // Group records by (companyId + roundName + type) so each unique round
+        // is processed once, but all scenario copies get updated.
+        type RoundKey = `${string}|${string}|${string}`;
+        const byKey = new Map<RoundKey, typeof roundDetails>([]);
+        for (const detail of roundDetails) {
+          const key: RoundKey = `${detail.companyId}|${detail.roundName}|${detail.type}`;
+          const group = byKey.get(key) ?? [];
+          group.push(detail);
+          byKey.set(key, group);
+        }
+
+        for (const group of byKey.values()) {
+          const first = group[0];
+          const companyFolderId = await findFolder(rootFolderId, first.companyName);
+          if (!companyFolderId) continue;
+          const roundsFolderId = await findFolder(companyFolderId, "Rounds");
+          if (!roundsFolderId) continue;
+
+          const folderName = nextRoundFolderName(first.companyId, first.roundName);
+          const roundFolderId = await findFolder(roundsFolderId, folderName);
+          if (!roundFolderId) continue;
+
+          // Update ALL scenario copies of this round with the same folder ID.
+          const tableName =
+            first.type === "PARTICIPATING_PRICED_ROUND" ? "priced_round_detail" :
+            first.type === "PARTICIPATING_SAFE_ROUND" ? "safe_round_detail" :
+            "non_participating_round_detail";
+          const ids = group.map((d) => d.id);
+          await withTransaction(async (client) => {
+            await client.query(
+              `UPDATE "${tableName}" SET drive_folder_id = $1 WHERE id = ANY($2::uuid[])`,
+              [roundFolderId, ids]
+            );
+          });
+        }
+      }
+
+      // Process updates: find "Update - MMDDYYYY.*" file in Company/Updates/ and set driveFileId.
+      // Groups by (companyId, eventDate) to deduplicate across scenarios.
+      {
+        type UpdateKey = `${string}|${string}`;
+        const updatesByKey = new Map<UpdateKey, typeof updateDetails>([]);
+        for (const detail of updateDetails) {
+          const key: UpdateKey = `${detail.companyId}|${detail.eventDate}`;
+          const group = updatesByKey.get(key) ?? [];
+          group.push(detail);
+          updatesByKey.set(key, group);
+        }
+
+        for (const group of updatesByKey.values()) {
+          const first = group[0];
+          const companyFolderId = await findFolder(rootFolderId, first.companyName);
+          if (!companyFolderId) continue;
+          const updatesFolderId = await findFolder(companyFolderId, "Updates");
+          if (!updatesFolderId) continue;
+
+          const eventDate = new Date(first.eventDate);
+          const mm = String(eventDate.getMonth() + 1).padStart(2, "0");
+          const dd = String(eventDate.getDate()).padStart(2, "0");
+          const yyyy = eventDate.getFullYear();
+          const prefix = `Update - ${mm}${dd}${yyyy}`;
+
+          const files = await listFilesInFolder(updatesFolderId);
+          const match = files.find((f) => f.name.startsWith(prefix));
+          if (!match) continue;
+
+          // Update ALL scenario copies with the same file ID.
+          const ids = group.map((d) => d.id);
+          await withTransaction(async (client) => {
+            await client.query(
+              `UPDATE company_update_detail SET drive_file_id = $1, drive_url = $2 WHERE id = ANY($3::uuid[])`,
+              [match.driveFileId, match.webViewLink, ids]
+            );
+          });
+        }
+      }
+    }
+
     return { imported, alreadyTracked, companiesScanned: companies.length };
   }
 );

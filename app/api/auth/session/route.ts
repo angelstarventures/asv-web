@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase/admin";
 import { createSessionCookie, SESSION_COOKIE_NAME } from "@/lib/firebase/session";
+import type { Role } from "@/lib/auth/claims";
 
 // API routes are NOT covered by proxy.ts's matcher — this route independently verifies the
 // ID token itself before minting a session cookie (plan §4).
@@ -19,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid ID token." }, { status: 401 });
   }
 
-  const claims = decoded as { role?: "admin" | "member" | "site_admin"; status?: "active" | "disabled" };
+  const claims = decoded as { role?: Role; status?: "active" | "disabled" };
   if (!claims.role || !claims.status) {
     return NextResponse.json(
       { error: "Account is not fully provisioned. Contact an administrator." },

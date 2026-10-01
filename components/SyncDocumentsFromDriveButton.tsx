@@ -7,7 +7,7 @@ import { documentsSyncFromDrive } from "@/lib/functions/documents";
 // "Pull from what's there" — reconciles every company's Investments/{Company}/ (+ Updates/)
 // Drive folder against the `document` table, registering anything the app doesn't already
 // know about. See functions/src/functions/documents-syncFromDrive.ts for the exact rules.
-export function SyncDocumentsFromDriveButton() {
+export function SyncDocumentsFromDriveButton({ companyId }: { companyId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -18,7 +18,7 @@ export function SyncDocumentsFromDriveButton() {
     setNotice(null);
     setBusy(true);
     try {
-      const result = await documentsSyncFromDrive();
+      const result = await documentsSyncFromDrive(companyId ? { companyId } : {});
       setNotice(
         result.imported > 0
           ? `Imported ${result.imported} new document(s) from Drive (${result.alreadyTracked} already tracked).`

@@ -5,6 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
 import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
+import { FeedbackButton } from "@/components/FeedbackButton";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // Reports lives inside the Portfolio tab now (?tab=reports), not as its own top-level tab —
 // every panel that used to be on /member/reports moved there (lib/portfolioView.tsx).
@@ -20,30 +22,41 @@ const MEMBER_TABS = [
 // tab set (and which tab reads "active") is consistent no matter which route rendered it.
 export function AppHeader({
   isAdmin,
+  isDeveloper,
   displayName,
   photoUrl,
 }: {
   isAdmin: boolean;
+  isDeveloper?: boolean;
   displayName?: string;
   photoUrl?: string | null;
 }) {
   const pathname = usePathname();
-  const tabs = isAdmin ? [...MEMBER_TABS, { href: "/admin/members", label: "Admin View" }] : MEMBER_TABS;
-  const isTabActive = (href: string) =>
-    href === "/admin/members" ? pathname.startsWith("/admin") : pathname.startsWith(href);
+  const baseTabs = isDeveloper
+    ? [...MEMBER_TABS, { href: "/developer", label: "Developer View" }]
+    : MEMBER_TABS;
+  const tabs = isAdmin ? [...baseTabs, { href: "/admin/members", label: "Admin View" }] : baseTabs;
+  const isTabActive = (href: string) => {
+    if (href === "/admin/members") return pathname.startsWith("/admin");
+    if (href === "/developer") return pathname.startsWith("/developer");
+    return pathname.startsWith(href);
+  };
 
   return (
     <header className="relative flex items-center justify-between border-b border-zinc-200 px-4 py-4 sm:px-8 sm:py-6">
       <div className="flex items-center gap-4 sm:gap-8">
-        <span className="rounded-md">
+        <span className="flex items-center gap-2 rounded-md">
           <Image
-            src="/asv-logo.png"
-            alt="Angel Star Ventures"
+            src={tenantConfig.logoPath}
+            alt={tenantConfig.logoAlt}
             width={157}
             height={36}
             priority
             className="h-auto w-28 sm:w-[157px]"
           />
+          <span className="self-start rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold leading-none text-white">
+            BETA
+          </span>
         </span>
         <nav className="hidden gap-1 rounded-full border border-zinc-200 bg-card p-1.5 md:flex">
           {tabs.map((tab) => {
@@ -66,6 +79,7 @@ export function AppHeader({
         </nav>
       </div>
       <div className="flex items-center gap-3 sm:gap-4">
+        <FeedbackButton displayName={displayName} />
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a member-uploaded data: URL, not an optimizable remote image
           <img src={photoUrl} alt={displayName ?? ""} className="h-10 w-10 rounded-full border border-zinc-200 object-cover sm:h-12 sm:w-12" />

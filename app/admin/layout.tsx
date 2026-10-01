@@ -11,12 +11,12 @@ import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 export default async function AdminLayout({ children }: { children: ReactNode }) {
   const current = await getCurrentMember();
   const { member } = current ? await getMemberById({ id: current.memberId }) : { member: undefined };
-  const isSiteAdminRole = current?.role === "site_admin";
+  const isSiteAdminRole = current?.role === "site_admin" || current?.role === "dev_site_admin";
   const siteAdminModeOn = isSiteAdminModeOn(current?.role, current?.siteAdminMode);
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
-      <AppHeader isAdmin displayName={member?.displayName} photoUrl={member?.photoUrl} />
+      <AppHeader isAdmin displayName={member?.displayName} photoUrl={member?.photoUrl} isDeveloper={current?.role === "developer" || current?.role === "dev_site_admin"} />
       <AdminSubNav isSiteAdminRole={isSiteAdminRole} siteAdminModeOn={siteAdminModeOn} />
       <main className="flex flex-1 flex-col">{children}</main>
     </div>

@@ -4,7 +4,7 @@
 // (it's httpOnly), it only triggers the exchange (plan §4).
 
 export interface SessionResult {
-  role: "admin" | "member" | "site_admin";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   status: "active" | "disabled";
 }
 

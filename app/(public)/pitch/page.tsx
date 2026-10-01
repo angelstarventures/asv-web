@@ -1,5 +1,6 @@
 import { LandingHeader } from "@/components/LandingHeader";
 import { PitchForm } from "@/components/PitchForm";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // FR-15: the entrepreneur-facing pitch intake portal. No login, no Data Connect reads — the
 // only server-side dependency is the dealsSubmitPitch Cloud Function, called from PitchForm.
@@ -13,7 +14,7 @@ export default function PitchPage() {
       <div className="flex flex-1 justify-center px-6 py-12">
         <div className="flex w-full max-w-3xl flex-col gap-10">
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight">About ASV</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">About {tenantConfig.orgAbbreviation}</h2>
             <section className="mt-2 rounded-lg border border-zinc-200 bg-card p-6 text-sm dark:border-zinc-800">
               <p className="text-zinc-600 dark:text-zinc-400">
                 A diverse group (IT, physicians, architects, real estate developers, fund

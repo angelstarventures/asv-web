@@ -7,6 +7,7 @@ import { HealthDot } from "@/components/HealthDot";
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
 import type { CompanyDetail } from "@/lib/portfolioView";
 import type { Scope } from "@/lib/scenarioTypes";
+import { tenantConfig } from "@/lib/config/tenant";
 
 const STATUS_LABEL: Record<CompanyStatus, { label: string; className: string }> = {
   [CompanyStatus.ACTIVE]: { label: "Active", className: "text-green-600 dark:text-green-400" },
@@ -149,7 +150,7 @@ function RoundsSection({ detail, scope }: { detail: CompanyDetail; scope: Scope 
                 <span className="text-zinc-400">·</span>
               </>
             )}
-            <span>ASV invested: {formatCurrencyCompact(r.asvInvested)}</span>
+            <span>{tenantConfig.orgAbbreviation} invested: {formatCurrencyCompact(r.asvInvested)}</span>
             {scope === "mine" && r.yourApproxValue != null && (
               <>
                 <span className="text-zinc-400">·</span>
@@ -157,6 +158,18 @@ function RoundsSection({ detail, scope }: { detail: CompanyDetail; scope: Scope 
               </>
             )}
           </div>
+          {r.driveFolderId && (
+            <div className="mt-2">
+              <a
+                href={`https://drive.google.com/drive/folders/${r.driveFolderId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
+              >
+                View round documents ↗
+              </a>
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -195,6 +208,18 @@ function UpdatesSection({ detail }: { detail: CompanyDetail }) {
             <UpdateList title="Lowlights" items={u.lowlights} />
             <UpdateList title="Upcoming plans" items={u.upcomingPlans} />
           </div>
+          {u.driveUrl && (
+            <div className="mt-2">
+              <a
+                href={u.driveUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
+              >
+                View update document ↗
+              </a>
+            </div>
+          )}
         </div>
       ))}
     </div>

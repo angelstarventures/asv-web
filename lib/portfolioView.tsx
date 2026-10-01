@@ -209,6 +209,7 @@ export interface CompanyDetailRound {
   asvInvested: number;
   yourInvested?: number;
   yourApproxValue?: number;
+  driveFolderId: string | null;        // Drive folder ID for this round's documents
 }
 
 export interface CompanyDetailUpdate {
@@ -219,6 +220,8 @@ export interface CompanyDetailUpdate {
   highlights: string[];
   lowlights: string[];
   upcomingPlans: string[];
+  driveFileId: string | null;          // Drive file ID for this update's document
+  driveUrl: string | null;             // Drive web link to the update document
 }
 
 export interface CompanyDetail {
@@ -299,7 +302,7 @@ export async function getCompanyDetail(
       const priced = pricedByEntry.get(e.id);
       const safe = safeByEntry.get(e.id);
       const nonPart = nonPartByEntry.get(e.id);
-      const roundName = priced?.roundName ?? nonPart?.roundName ?? "SAFE";
+      const roundName = priced?.roundName ?? safe?.roundName ?? nonPart?.roundName ?? "SAFE";
       const amountRaised = priced?.totalRoundSize ?? safe?.totalRoundSize ?? nonPart?.totalRoundSize ?? null;
       // SAFE terms are a valuation CAP (not a firm valuation) plus a discount — a priced round
       // or a non-participating round's re-mark both have a firm post-money valuation instead.
@@ -319,6 +322,7 @@ export async function getCompanyDetail(
         discount,
         notes,
         asvInvested,
+        driveFolderId: priced?.driveFolderId ?? safe?.driveFolderId ?? nonPart?.driveFolderId ?? null,
       };
       // "Your value post-raise" is an approximation — there's no true per-round-per-member
       // valuation history, so this scales your dollars into that round by the company's
@@ -344,6 +348,8 @@ export async function getCompanyDetail(
       highlights: u.highlights,
       lowlights: u.lowlights,
       upcomingPlans: u.upcomingPlans,
+      driveFileId: u.driveFileId ?? null,
+      driveUrl: u.driveUrl ?? null,
     }))
     .sort((a, b) => (a.eventDate < b.eventDate ? 1 : -1));
 

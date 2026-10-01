@@ -11,7 +11,7 @@ export function canViewDocument(
   docType: DocumentType,
   hasHeldAllocation: boolean
 ): boolean {
-  if (role === "admin" || role === "site_admin") return true;
+  if (role === "admin" || role === "site_admin" || role === "dev_site_admin") return true;
   if (docType === DocumentType.SPA || docType === DocumentType.ALLOCATION_SCHEDULE) return false;
   if (docType === DocumentType.PITCH_DECK || docType === DocumentType.DD_REPORT) return true;
   return hasHeldAllocation; // DATA_ROOM / COMPANY_UPDATE_DOC

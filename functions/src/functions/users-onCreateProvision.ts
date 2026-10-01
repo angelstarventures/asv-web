@@ -2,16 +2,92 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
 import { requireAdmin, requireCaller, requireSiteAdmin } from "../lib/auth";
 import { query, withTransaction } from "../lib/dataconnect-admin";
+import { sendEmail } from "../lib/gmail";
+import { driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 // The ONLY path that ever sets role/status custom claims (plan §3/§4). Backs the admin
-// "add member" flow at app/admin/members/page.tsx. This is the frontend/backend contract
-// point — input/output shape here must be nailed down before Milestone 3.
+// "add member" flow at app/admin/members/page.tsx.
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const APP_DOMAIN = "https://angelstar-investments.firebaseapp.com";
+
+// Generates a random token and stores it with a 48-hour expiry on the member row.
+// Returns the custom link the user will receive via email.
+async function storePasswordResetToken(memberId: string): Promise<string> {
+  const token = crypto.randomUUID().replace(/-/g, "");
+  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE "member" SET "password_reset_token" = $1, "password_reset_expires_at" = $2 WHERE id = $3`,
+      [token, expiresAt.toISOString(), memberId]
+    );
+  });
+
+  return `${APP_DOMAIN}/set-password?token=${token}`;
+}
+
+// Sends a password-set/reset email via Gmail. The link goes through our app's
+// /set-password page which validates the 48-hour token, then redirects to a
+// fresh Firebase password reset link.
+async function sendPasswordSetEmail(
+  email: string,
+  displayName: string,
+  memberId: string
+): Promise<void> {
+  const customLink = await storePasswordResetToken(memberId);
+
+  await sendEmail({
+    to: email,
+    subject: `Set your AngelStar Ventures account password`,
+    body: [
+      `Hi ${displayName},`,
+      "",
+      "An admin has created an account for you on the AngelStar Ventures member portal.",
+      "Click the link below to set your password and sign in:",
+      "",
+      customLink,
+      "",
+      "This link expires in 48 hours. If you didn't expect this email, you can safely ignore it.",
+      "",
+      "— AngelStar Ventures",
+    ].join("\n"),
+  });
+}
+
+// Sends a password-reset email via Gmail — distinct from the provisioning email above.
+// Called when an admin explicitly requests a password reset for an existing member.
+async function sendPasswordResetEmail(
+  email: string,
+  displayName: string,
+  memberId: string
+): Promise<void> {
+  const customLink = await storePasswordResetToken(memberId);
+
+  await sendEmail({
+    to: email,
+    subject: `Password reset request for AngelStar Ventures`,
+    body: [
+      `Hi ${displayName},`,
+      "",
+      "An admin has requested that you reset your AngelStar Ventures member portal password.",
+      "Click the link below to choose a new password and sign in:",
+      "",
+      customLink,
+      "",
+      "This link expires in 48 hours. If you didn't request this, you can safely ignore this email.",
+      "",
+      "— AngelStar Ventures",
+    ].join("\n"),
+  });
+}
 
 export interface ProvisionMemberInput {
   memberId: string; // existing zero-padded 5-digit Member.id (row must already exist)
   email: string;
-  role: "admin" | "member";
-  temporaryPassword: string; // shown once to the admin to relay out-of-band
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
+  displayName: string; // used in the invitation email
 }
 
 export interface ProvisionMemberOutput {
@@ -20,12 +96,13 @@ export interface ProvisionMemberOutput {
 }
 
 export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMemberOutput>>(
+  { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
   async (request) => {
     await requireAdmin(request);
 
-    const { memberId, email, role, temporaryPassword } = request.data;
-    if (!memberId || !email || !role || !temporaryPassword) {
-      throw new HttpsError("invalid-argument", "memberId, email, role, and temporaryPassword are required.");
+    const { memberId, email, role, displayName } = request.data;
+    if (!memberId || !email || !role || !displayName) {
+      throw new HttpsError("invalid-argument", "memberId, email, role, and displayName are required.");
     }
 
     const members = await query<{ id: string; authUid: string | null }>(
@@ -39,13 +116,15 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
       throw new HttpsError("already-exists", `Member "${memberId}" is already linked to an auth account.`);
     }
 
+    // Generate a random temporary password for the Firebase Auth account — the member will
+    // reset it via the email link, but the account must have a password to exist.
+    const temporaryPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 16) + "A1!";
+
     const userRecord = await getAuth().createUser({ email, password: temporaryPassword });
 
     // Custom claims are the sole enforcement input for proxy.ts (formerly middleware.ts) —
     // set them in the same call that links the auth account so there's never a window where
-    // an account exists without claims. mustChangePassword: true since the admin (not the
-    // member) chose this password — proxy.ts redirects to /change-password until they set
-    // their own, cleared by memberCompletePasswordChange below.
+    // an account exists without claims.
     await getAuth().setCustomUserClaims(userRecord.uid, {
       role,
       status: "active",
@@ -60,6 +139,17 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
       );
     });
 
+    // Send the password-set link via email
+    try {
+      await sendPasswordSetEmail(email, displayName, memberId);
+    } catch (err) {
+      console.error("provisionMember: failed to send invitation email", err);
+      throw new HttpsError(
+        "internal",
+        "Account created but could not send the invitation email. The email-sending account may not have been granted email-send permission, or the OAuth credentials need to be refreshed."
+      );
+    }
+
     return { authUid: userRecord.uid, email };
   }
 );
@@ -70,7 +160,7 @@ type MembershipType = (typeof MEMBERSHIP_TYPES)[number];
 export interface CreateMemberInput {
   displayName: string;
   email: string;
-  role: "admin" | "member";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   // Defaults to MEMBER (matching the schema's own default) when omitted — most new members
   // created via the admin UI are regular members; this only needs to be set explicitly for a
   // batch/import path adding an Associate or Emeritus member directly.
@@ -466,9 +556,223 @@ export const setSiteAdminMode = onCall<SetSiteAdminModeInput, Promise<{ ok: true
   return { ok: true };
 });
 
+export interface SetDevSiteAdminModeInput {
+  on: boolean;
+}
+
+// Self-service, dev_site_admin-only: toggles the mode claim that reveals the extra
+// dev-site-admin surfaces — same pattern as setSiteAdminMode. A dev_site_admin with this off
+// sees what a developer sees; on reveals full dev-site-admin surfaces.
+export const setDevSiteAdminMode = onCall<SetDevSiteAdminModeInput, Promise<{ ok: true }>>(async (request) => {
+  const caller = await requireCaller(request);
+  if (caller.role !== "dev_site_admin") {
+    throw new HttpsError("permission-denied", "Dev-site-admin role required.");
+  }
+
+  const { on } = request.data;
+  if (typeof on !== "boolean") {
+    throw new HttpsError("invalid-argument", "on (boolean) is required.");
+  }
+
+  const user = await getAuth().getUser(caller.uid);
+  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+  await getAuth().setCustomUserClaims(caller.uid, { ...existingClaims, devSiteAdminMode: on });
+
+  return { ok: true };
+});
+
+export interface DeleteMemberInput {
+  memberId: string;
+}
+
+// Deletes a member only if they have no investment history (allocations or member valuations).
+// Prevents accidental deletion of members with financial data. Once a member has any allocation
+// or valuation, they're considered a historical investor and cannot be removed from the system.
+export const deleteMember = onCall<DeleteMemberInput, Promise<{ ok: true }>>(async (request) => {
+  try {
+    await requireAdmin(request);
+
+    const { memberId } = request.data;
+    if (!memberId) {
+      throw new HttpsError("invalid-argument", "memberId is required.");
+    }
+
+    // Check the member exists
+    const members = await query<{ id: string; authUid: string | null }>(
+      `SELECT id, "auth_uid" AS "authUid" FROM "member" WHERE id = $1`,
+      [memberId]
+    );
+    if (members.length === 0) {
+      throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
+    }
+
+    const member = members[0];
+
+    // Check for investment history (allocations or valuations)
+    const investments = await query<{ cnt: number }>(
+      `SELECT COUNT(*) AS cnt FROM (
+         SELECT 1 FROM "allocation" WHERE "member_id" = $1
+         UNION ALL
+         SELECT 1 FROM "member_valuation" WHERE "member_id" = $1
+       ) t`,
+      [memberId]
+    );
+    if (investments[0]?.cnt && investments[0].cnt > 0) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Cannot delete this member — they have investment history (allocations or valuations)."
+      );
+    }
+
+    const authUid = member.authUid;
+
+    // Clean up optional references (may not exist for test members)
+    try { await query(`DELETE FROM "organization_member" WHERE "member_id" = $1`, [memberId]); } catch {}
+
+    // Delete the member row
+    await withTransaction(async (client) => {
+      await client.query(`DELETE FROM "member" WHERE id = $1`, [memberId]);
+    });
+
+    // If the member had a Firebase Auth account, delete it too
+    if (authUid) {
+      try {
+        await getAuth().deleteUser(authUid);
+      } catch (e) {
+        console.warn(`deleteMember: failed to delete auth user ${authUid}:`, e);
+      }
+    }
+
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteMember error:", err);
+    throw err; // re-throw so Firebase Functions returns the appropriate error
+  }
+});
+
+export interface AdminSendPasswordResetInput {
+  memberId: string;
+}
+
+// Sends a password-reset link to an already-provisioned member. Gated to requireAdmin.
+export const adminSendPasswordReset = onCall<AdminSendPasswordResetInput, Promise<{ ok: true }>>(
+  { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
+  async (request) => {
+    await requireAdmin(request);
+
+    const { memberId } = request.data;
+    if (!memberId) {
+      throw new HttpsError("invalid-argument", "memberId is required.");
+    }
+
+    const members = await query<{ authUid: string | null; email: string; displayName: string }>(
+      `SELECT "auth_uid" AS "authUid", email, "display_name" AS "displayName" FROM "member" WHERE id = $1`,
+      [memberId]
+    );
+    if (members.length === 0) {
+      throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
+    }
+    const member = members[0];
+    if (!member.authUid) {
+      throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
+    }
+    if (!member.email) {
+      throw new HttpsError("failed-precondition", "This member has no email address on file.");
+    }
+
+    try {
+      await sendPasswordResetEmail(member.email, member.displayName, memberId);
+    } catch (err) {
+      console.error("adminSendPasswordReset: failed to send email", err);
+      throw new HttpsError(
+        "internal",
+        "Could not send the password reset email. The email-sending account may not have been granted email-send permission, or the OAuth credentials need to be refreshed."
+      );
+    }
+
+    return { ok: true };
+  }
+);
+
+export interface ValidatePasswordResetTokenInput {
+  token: string;
+}
+
+export interface ValidatePasswordResetTokenOutput {
+  resetLink: string;
+}
+
+// Validates a password-reset token (checks expiry, clears it), generates a fresh
+// Firebase password reset link, and returns it. The caller's browser redirects to it.
+export const validatePasswordResetToken = onCall<
+  ValidatePasswordResetTokenInput,
+  Promise<ValidatePasswordResetTokenOutput>
+>(async (request) => {
+  const { token } = request.data;
+  if (!token) {
+    throw new HttpsError("invalid-argument", "Token is required.");
+  }
+
+  const rows = await query<{
+    id: string;
+    email: string;
+    passwordResetToken: string | null;
+    passwordResetExpiresAt: string | null;
+  }>(
+    `SELECT id, email, "password_reset_token" AS "passwordResetToken",
+            "password_reset_expires_at" AS "passwordResetExpiresAt"
+     FROM "member" WHERE "password_reset_token" = $1`,
+    [token]
+  );
+
+  if (rows.length === 0) {
+    throw new HttpsError("invalid-argument", "Invalid or expired token.");
+  }
+
+  const member = rows[0];
+
+  if (!member.passwordResetExpiresAt || new Date(member.passwordResetExpiresAt) < new Date()) {
+    // Token expired — still clear it so it can't be reused
+    await withTransaction(async (client) => {
+      await client.query(
+        `UPDATE "member" SET "password_reset_token" = NULL, "password_reset_expires_at" = NULL WHERE id = $1`,
+        [member.id]
+      );
+    });
+    throw new HttpsError("invalid-argument", "This link has expired. Ask an admin to send a new one.");
+  }
+
+  if (!member.email) {
+    throw new HttpsError("failed-precondition", "No email on file for this member.");
+  }
+
+  // Clear the token (single-use)
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE "member" SET "password_reset_token" = NULL, "password_reset_expires_at" = NULL WHERE id = $1`,
+      [member.id]
+    );
+  });
+
+  // Clear the mustChangePassword flag so the user isn't redirected to the
+  // change-password page after resetting via the Firebase link.
+  const user = await getAuth().getUserByEmail(member.email);
+  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
+  await getAuth().setCustomUserClaims(user.uid, { ...existingClaims, mustChangePassword: false });
+
+  // Generate a fresh Firebase password reset link (1-hour expiry from now, which is
+  // fine — the user is clicking at this moment)
+  const resetLink = await getAuth().generatePasswordResetLink(member.email, {
+    url: `${APP_DOMAIN}/login`,
+    handleCodeInApp: false,
+  });
+
+  return { resetLink };
+});
+
 export interface SetMemberRoleInput {
   memberId: string;
-  role: "admin" | "member" | "site_admin";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
 }
 
 // Only meaningful for an already-provisioned member (authUid set) — provisionMember takes its
@@ -482,10 +786,11 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
   const caller = await requireAdmin(request);
 
   const { memberId, role } = request.data;
-  if (!memberId || (role !== "admin" && role !== "member" && role !== "site_admin")) {
+  const VALID_ROLES = ["developer", "dev_site_admin", "site_admin", "admin", "user"] as const;
+  if (!memberId || !VALID_ROLES.includes(role as typeof VALID_ROLES[number])) {
     throw new HttpsError(
       "invalid-argument",
-      "memberId and a valid role ('admin', 'member', or 'site_admin') are required."
+      `memberId and a valid role ('developer', 'dev_site_admin', 'site_admin', 'admin', or 'user') are required.`
     );
   }
   if (memberId === caller.memberId) {
@@ -504,11 +809,20 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
   }
 
-  // Granting OR revoking the top tier is site-admin-only — a plain admin can still toggle
-  // member<->admin freely (unchanged from before), but can't touch the site-admin tier at all.
-  const targetIsSiteAdmin = members[0].role === "SITE_ADMIN";
-  if ((role === "site_admin" || targetIsSiteAdmin) && caller.role !== "site_admin") {
+  // Granting OR revoking the top tiers (site_admin, dev_site_admin) is restricted:
+  //   - Only a site_admin can grant/revoke site_admin
+  //   - Only a dev_site_admin or site_admin can grant/revoke dev_site_admin
+  const targetRole = members[0].role;
+  const targetIsSiteAdmin = targetRole === "SITE_ADMIN";
+  const targetIsDevSiteAdmin = targetRole === "DEV_SITE_ADMIN";
+  const roleIsSiteAdmin = role === "site_admin";
+  const roleIsDevSiteAdmin = role === "dev_site_admin";
+
+  if ((roleIsSiteAdmin || targetIsSiteAdmin) && caller.role !== "site_admin") {
     throw new HttpsError("permission-denied", "Only a site-admin can grant or revoke the site-admin role.");
+  }
+  if ((roleIsDevSiteAdmin || targetIsDevSiteAdmin) && caller.role !== "site_admin" && caller.role !== "dev_site_admin") {
+    throw new HttpsError("permission-denied", "Only a dev-site-admin or site-admin can grant or revoke the dev-site-admin role.");
   }
 
   await withTransaction(async (client) => {

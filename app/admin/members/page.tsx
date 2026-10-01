@@ -2,8 +2,10 @@ import { listAllMembers } from "@/lib/dataconnect/client";
 import { NewMemberForm } from "@/components/NewMemberForm";
 import { MembersTable } from "@/components/MembersTable";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
+import { AdminOrganizationMembers } from "@/components/AdminOrganizationMembers";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
+import { tenantConfig } from "@/lib/config/tenant";
 
 // Wireframe 5's members table. Provisioning a login/reset/status live on the per-member
 // detail page (app/admin/members/[memberId]) since those each act on one existing Member row
@@ -16,9 +18,13 @@ export default async function AdminMembersPage() {
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
-      <WelcomeBanner subtitle="Build, manage, and review ASV's membership and ledger in one place." />
+      <WelcomeBanner
+        subtitle={`Build, manage, and review ${tenantConfig.orgAbbreviation}'s membership and ledger in one place.`}
+      />
 
       <h1 className="text-xl font-semibold tracking-tight">Members</h1>
+
+      {current?.role === "dev_site_admin" && <AdminOrganizationMembers members={members} />}
 
       <NewMemberForm />
 

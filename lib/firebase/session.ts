@@ -1,6 +1,7 @@
 import "server-only";
 import { adminAuth } from "./admin";
 import type { DecodedIdToken } from "firebase-admin/auth";
+import type { Role } from "@/lib/auth/claims";
 
 // Firebase Hosting only forwards a cookie named exactly `__session` to SSR functions —
 // this name is not arbitrary (plan §4/§6).
@@ -12,11 +13,12 @@ export async function createSessionCookie(idToken: string): Promise<string> {
 }
 
 export type SessionClaims = DecodedIdToken & {
-  role?: "admin" | "member" | "site_admin";
+  role?: Role;
   status?: "active" | "disabled";
   memberId?: string;
   mustChangePassword?: boolean;
   siteAdminMode?: boolean;
+  devSiteAdminMode?: boolean;
 };
 
 // checkRevoked=true is the whole point of a session cookie over a bare ID token here: it

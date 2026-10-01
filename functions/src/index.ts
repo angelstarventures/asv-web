@@ -7,7 +7,7 @@ initializeApp();
 // function-to-Postgres call would otherwise cross regions on every request.
 setGlobalOptions({ region: "us-east1" });
 
-export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode, setDevSiteAdminMode } from "./functions/users-onCreateProvision";
+export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, deleteMember, adminSendPasswordReset, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode, setDevSiteAdminMode, validatePasswordResetToken } from "./functions/users-onCreateProvision";
 export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
 export { updateAiProviderSetting } from "./functions/ai-updateProviderSetting";
 export { updateAppSetting } from "./functions/app-updateSetting";
@@ -47,5 +47,5 @@ export { feedbackSend } from "./functions/feedback-send";
 export { documentsShareCompanyUpdate } from "./functions/documents-shareCompanyUpdate";
 export { dealsFindReviewers } from "./functions/deals-findReviewers";
 export { ledgerRebalanceMemberValuations } from "./functions/ledger-rebalanceMemberValuations";
-export { updateCompanyFeature, getCompanyFeatures, updateMemberCompanyFeature, getMemberCompanyFeatures } from "./functions/companyFeatures";
-export { assignCompanyMember, removeCompanyMember, listCompanyMembers } from "./functions/companyMembers";
+export { updateOrganizationFeature, getOrganizationFeatures, updateMemberOrganizationFeature, getMemberOrganizationFeatures } from "./functions/organizationFeatures";
+export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers } from "./functions/organizationMembers";

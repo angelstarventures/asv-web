@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { LoginModal } from "@/components/LoginModal";
 import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
+import { tenantConfig } from "@/lib/config/tenant";
 
 export type LandingTab = "welcome" | "profiles" | "companies" | "pitch";
 
@@ -43,16 +44,21 @@ export function LandingHeader({
   return (
     <header className="relative flex items-center justify-between border-b border-zinc-200 px-4 py-4 sm:px-8 sm:py-6">
       <div className="flex items-center gap-4 sm:gap-8">
-        <Link href="/">
-          <Image
-            src="/asv-logo.png"
-            alt="Angel Star Ventures"
-            width={157}
-            height={36}
-            priority
-            className="h-auto w-28 sm:w-[157px]"
-          />
-        </Link>
+        <span className="flex items-center gap-2 rounded-md">
+          <Link href="/">
+            <Image
+              src={tenantConfig.logoPath}
+              alt={tenantConfig.logoAlt}
+              width={157}
+              height={36}
+              priority
+              className="h-auto w-28 sm:w-[157px]"
+            />
+          </Link>
+          <span className="self-start rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold leading-none text-white">
+            BETA
+          </span>
+        </span>
         <nav className="hidden gap-1 rounded-full border border-zinc-200 bg-card p-1.5 md:flex">
           {HOME_TABS.map((t) => {
             const isActive = active === t;

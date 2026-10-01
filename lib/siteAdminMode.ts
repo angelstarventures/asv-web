@@ -12,5 +12,11 @@
 // component, see lib/firebase/session.ts's own header comment), so any per-viewer toggle state
 // has to live inside that one cookie's own signed claims instead.
 export function isSiteAdminModeOn(role: string | undefined, siteAdminModeClaim: boolean | undefined): boolean {
-  return role === "site_admin" && siteAdminModeClaim === true;
+  return (role === "site_admin" || role === "dev_site_admin") && siteAdminModeClaim === true;
+}
+
+// Dev-site-admin's mode toggle — same pattern as siteAdminMode. A dev_site_admin with this off
+// sees what a developer sees; on reveals full dev-site-admin surfaces.
+export function isDevSiteAdminModeOn(role: string | undefined, devSiteAdminModeClaim: boolean | undefined): boolean {
+  return role === "dev_site_admin" && devSiteAdminModeClaim === true;
 }

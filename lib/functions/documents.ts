@@ -150,3 +150,23 @@ export async function documentsUploadTaxDocument(
   const res = await call(input);
   return res.data;
 }
+
+export interface DocumentsSyncToDriveInput {
+  companyId?: string;
+}
+export interface DocumentsSyncToDriveOutput {
+  foldersCreated: number;
+  filesCreated: number;
+  companiesProcessed: number;
+}
+export async function documentsSyncToDrive(
+  input: DocumentsSyncToDriveInput = {}
+): Promise<DocumentsSyncToDriveOutput> {
+  const call = httpsCallable<DocumentsSyncToDriveInput, DocumentsSyncToDriveOutput>(
+    functions,
+    "documentsSyncToDrive",
+    { timeout: 300000 }
+  );
+  const res = await call(input);
+  return res.data;
+}

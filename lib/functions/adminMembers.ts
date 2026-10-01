@@ -8,7 +8,7 @@ import { functions } from "@/lib/firebase/client";
 export interface CreateMemberInput {
   displayName: string;
   email: string;
-  role: "admin" | "member";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   membershipType?: MembershipType;
 }
 export interface CreateMemberOutput {
@@ -82,8 +82,8 @@ export async function updateMemberDuesStatus(input: UpdateMemberDuesStatusInput)
 export interface ProvisionMemberInput {
   memberId: string;
   email: string;
-  role: "admin" | "member";
-  temporaryPassword: string;
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
+  displayName: string;
 }
 export interface ProvisionMemberOutput {
   authUid: string;
@@ -91,6 +91,15 @@ export interface ProvisionMemberOutput {
 }
 export async function provisionMember(input: ProvisionMemberInput): Promise<ProvisionMemberOutput> {
   const call = httpsCallable<ProvisionMemberInput, ProvisionMemberOutput>(functions, "provisionMember");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface AdminSendPasswordResetInput {
+  memberId: string;
+}
+export async function adminSendPasswordReset(input: AdminSendPasswordResetInput): Promise<{ ok: true }> {
+  const call = httpsCallable<AdminSendPasswordResetInput, { ok: true }>(functions, "adminSendPasswordReset");
   const res = await call(input);
   return res.data;
 }
@@ -127,7 +136,7 @@ export async function setMemberStatus(input: SetMemberStatusInput): Promise<{ ok
 
 export interface SetMemberRoleInput {
   memberId: string;
-  role: "admin" | "member" | "site_admin";
+  role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
 }
 export async function setMemberRole(input: SetMemberRoleInput): Promise<{ ok: true }> {
   const call = httpsCallable<SetMemberRoleInput, { ok: true }>(functions, "setMemberRole");
@@ -140,6 +149,40 @@ export interface SetSiteAdminModeInput {
 }
 export async function setSiteAdminMode(input: SetSiteAdminModeInput): Promise<{ ok: true }> {
   const call = httpsCallable<SetSiteAdminModeInput, { ok: true }>(functions, "setSiteAdminMode");
+  const res = await call(input);
+  return res.data;
+}
+
+export interface SetDevSiteAdminModeInput {
+  on: boolean;
+}
+export async function setDevSiteAdminMode(input: SetDevSiteAdminModeInput): Promise<{ ok: true }> {
+  const call = httpsCallable<SetDevSiteAdminModeInput, { ok: true }>(functions, "setDevSiteAdminMode");
+  const res = await call(input);
+  return res.data;
+}
+export interface ValidatePasswordResetTokenInput {
+  token: string;
+}
+export interface ValidatePasswordResetTokenOutput {
+  resetLink: string;
+}
+export async function validatePasswordResetToken(
+  input: ValidatePasswordResetTokenInput
+): Promise<ValidatePasswordResetTokenOutput> {
+  const call = httpsCallable<ValidatePasswordResetTokenInput, ValidatePasswordResetTokenOutput>(
+    functions,
+    "validatePasswordResetToken"
+  );
+  const res = await call(input);
+  return res.data;
+}
+
+export interface DeleteMemberInput {
+  memberId: string;
+}
+export async function deleteMember(input: DeleteMemberInput): Promise<{ ok: true }> {
+  const call = httpsCallable<DeleteMemberInput, { ok: true }>(functions, "deleteMember");
   const res = await call(input);
   return res.data;
 }

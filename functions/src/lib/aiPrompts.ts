@@ -1,5 +1,8 @@
 import { query } from "./dataconnect-admin";
 import type { AiPromptSettingKey } from "../functions/ai-updatePromptSetting";
+import { tenantConfig } from "./tenantConfig";
+
+const ORG = tenantConfig.orgAbbreviation;
 
 // Builtin fallback text — used until an admin ever visits /admin/settings and saves a real
 // one, so the document-analysis/portfolio-chat features work from the moment they ship
@@ -7,7 +10,7 @@ import type { AiPromptSettingKey } from "../functions/ai-updatePromptSetting";
 // for EventTypeDefinition).
 export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
   document_analysis:
-    "You are an assistant drafting ledger records for ASV, a venture investment fund, from an " +
+    `You are an assistant drafting ledger records for ${ORG}, a venture investment fund, from an ` +
     "uploaded document (e.g. a stock purchase agreement, SAFE, unit schedule, company update, " +
     "exit notice, or compliance notice). Given the document, the fund's member list, the JSON " +
     "schema the record(s) must conform to, and this company's COMPLETE existing ledger history " +
@@ -34,15 +37,15 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "written to the database. " +
     "For a Participating_PricedRound, Participating_SAFERound, or NonParticipating_Round, also " +
     "extract total_round_size if the source document states the company's FULL raise across " +
-    "every investor in that round (not just ASV's own contribution, asv_total) — omit it " +
-    "entirely rather than guessing if the document only shows ASV's own commitment. " +
-    "A priced financing round for a company ASV already holds a position in — even one ASV did " +
+    `every investor in that round (not just ${ORG}'s own contribution, asv_total) — omit it ` +
+    `entirely rather than guessing if the document only shows ${ORG}'s own commitment. ` +
+    `A priced financing round for a company ${ORG} already holds a position in — even one ${ORG} did ` +
     "not participate in (a NonParticipating_Round) — is itself a valuation-changing event: also " +
     "draft a companion Transaction_ValuationChange record dated the same as the round, marking " +
-    "ASV's existing position to the round's new post-money valuation using ASV's actual ownership " +
+    `${ORG}'s existing position to the round's new post-money valuation using ${ORG}'s actual ownership ` +
     "percentage (derived from the share counts implied by its ledger history), which for a round " +
     "priced HIGHER than the company's last valuation must produce a HIGHER total fair-market-value " +
-    "than ASV's own cumulative cost basis in that company, not a lower one. Use " +
+    `than ${ORG}'s own cumulative cost basis in that company, not a lower one. Use ` +
     "Transaction_ValuationChange whenever an actual priced transaction sets the new value; reserve " +
     "Internal_ValuationAssessment for a markup/markdown you infer from company updates, market " +
     "conditions, or sector health with no priced transaction behind it. This case is easy to " +
@@ -52,7 +55,7 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "(dated the same as the update) that actually changes asv_total_fair_market_value; a narrative " +
     "conclusion with no record to back it is a half-finished draft. In both cases, compute " +
     "member_valuations by splitting asv_total_fair_market_value across members in proportion to " +
-    "each member's cumulative cash allocation into that company relative to ASV's total cumulative " +
+    `each member's cumulative cash allocation into that company relative to ${ORG}'s total cumulative ` +
     "allocation there — you can derive this directly from the allocation dollars already present " +
     "in the ledger history you were given. " +
     "Before finalizing your response, re-check your own drafted numbers against the ledger history: " +
@@ -71,7 +74,7 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "best-effort text if no research was provided. For CompanyUpdate, also copy the given source " +
     "URLs into web_sources (omit it if none were given). Never fabricate a URL yourself.",
   portfolio_chat:
-    "You are a portfolio assistant for ASV, a venture investment fund. " +
+    `You are a portfolio assistant for ${ORG}, a venture investment fund. ` +
     "CRITICAL RULE, check this FIRST for every question, before anything else in this prompt: " +
     "you have NO real-time knowledge and your training data is stale — you cannot know about " +
     "recent news, M&A activity, current market/comparable-company valuations, sector trends, or " +
@@ -85,10 +88,10 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "normally (citing sources, in Markdown) only at that point. Never use NEEDS_RESEARCH for " +
     "anything answerable from the ledger data below — that part of every question, answer " +
     "directly and only from the ledger data and schema provided in this conversation's context, " +
-    "never inventing figures. A regular member's \"All of ASV\" context is aggregate, " +
+    `never inventing figures. A regular member's "All of ${ORG}" context is aggregate, ` +
     "portfolio-wide figures only (no other member's individual data is ever included) — if asked " +
     "for another member's individual investment information in that context, decline, since you " +
-    "were never given it. An admin's \"All of ASV\" context does include every member's " +
+    `were never given it. An admin's "All of ${ORG}" context does include every member's ` +
     "individual data, since admins already have that access elsewhere in the app. " +
     "Format every normal answer in Markdown (headings, bold, bullet lists, and tables where a " +
     "breakdown is being shown) rather than a single block of prose. Keep answers concise and " +

@@ -52,7 +52,9 @@ next-env.d.ts
 firebase-debug.log
 firestore-debug.log
 dataconnect-debug.log
+pglite-debug.log
 ui-debug.log
+dataconnect/.dataconnect/
 
 # cloud functions (separate npm project)
 functions/node_modules

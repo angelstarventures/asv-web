@@ -1,4 +1,5 @@
 import { query } from "./dataconnect-admin";
+import { tenantConfig } from "./tenantConfig";
 
 // Mechanical sanity checks on drafted/edited ledger records, independent of whatever produced
 // them (AI draft, hand-typed JSON, admin edit) — the House of Biryan incident (a $0.099/share
@@ -166,7 +167,7 @@ export async function checkValuationGuardrails(records: Record<string, unknown>[
                 severity: "warning",
                 message: `"${company}": the drafted fair-market-value ($${fmv.toLocaleString()}) differs substantially from a rough ownership-based estimate ($${Math.round(
                   expectedFmv
-                ).toLocaleString()}, using ASV's ~${(ownershipPct * 100).toFixed(2)}% stake from its priced-round history against this event's $${impliedPostMoney.toLocaleString()} valuation). Worth double-checking before committing.`,
+                ).toLocaleString()}, using ${tenantConfig.orgAbbreviation}'s ~${(ownershipPct * 100).toFixed(2)}% stake from its priced-round history against this event's $${impliedPostMoney.toLocaleString()} valuation). Worth double-checking before committing.`,
               });
             }
           }

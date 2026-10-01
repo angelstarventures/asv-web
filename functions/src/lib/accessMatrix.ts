@@ -1,4 +1,5 @@
 import { query } from "./dataconnect-admin";
+import type { Role } from "./auth";
 
 export type DocumentType =
   | "PITCH_DECK"
@@ -32,16 +33,16 @@ export interface AccessCheckResult {
   reason: string;
 }
 
-// Admin gets everything; PITCH_DECK/DD_REPORT are open to any active member; DATA_ROOM/
-// COMPANY_UPDATE_DOC require having held an allocation; SPA/ALLOCATION_SCHEDULE are
-// admin-only, unconditionally (plan §3).
+// Admin / site_admin / dev_site_admin gets everything; PITCH_DECK/DD_REPORT are open to any
+// active member; DATA_ROOM/COMPANY_UPDATE_DOC require having held an allocation;
+// SPA/ALLOCATION_SCHEDULE are admin-only, unconditionally (plan §3).
 export async function checkDocumentAccess(
-  role: "admin" | "member" | "site_admin",
+  role: Role,
   memberId: string,
   companyId: string,
   docType: DocumentType
 ): Promise<AccessCheckResult> {
-  if (role === "admin" || role === "site_admin") {
+  if (role === "admin" || role === "site_admin" || role === "dev_site_admin") {
     return { granted: true, reason: "admin" };
   }
 

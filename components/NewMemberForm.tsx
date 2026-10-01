@@ -22,7 +22,7 @@ export function NewMemberForm() {
       const { memberId } = await createMember({
         displayName: String(form.get("displayName")),
         email: String(form.get("email")),
-        role: form.get("role") === "admin" ? "admin" : "member",
+        role: form.get("role") === "admin" ? "admin" : "user",
       });
       router.push(`/admin/members/${memberId}`);
       router.refresh();
@@ -77,10 +77,10 @@ export function NewMemberForm() {
         Role
         <select
           name="role"
-          defaultValue="member"
+          defaultValue="user"
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         >
-          <option value="member">Member</option>
+          <option value="user">User</option>
           <option value="admin">Admin</option>
         </select>
       </label>

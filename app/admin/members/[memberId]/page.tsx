@@ -74,9 +74,10 @@ export default async function AdminMemberDetailPage({
       <MemberActions
         memberId={member.id}
         email={member.email}
+        displayName={member.displayName}
         isLinked={Boolean(member.authUid)}
         status={member.status === "ACTIVE" ? "active" : "disabled"}
-        role={member.role === "SITE_ADMIN" ? "site_admin" : member.role === "ADMIN" ? "admin" : "member"}
+        role={member.role.toLowerCase() as "developer" | "dev_site_admin" | "site_admin" | "admin" | "user"}
         viewerIsSiteAdmin={viewer?.role === "site_admin"}
       />
     </div>
