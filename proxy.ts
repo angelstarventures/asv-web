@@ -55,7 +55,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Root-mode surfaces — site_admin-only with siteAdminMode toggle ON
-  const rootSurfaces = ["/admin/settings", "/admin/portfolios", "/admin/costs", "/admin/features"];
+  const rootSurfaces = ["/admin/settings", "/admin/portfolios", "/admin/features"];
   if (
     rootSurfaces.some((p) => request.nextUrl.pathname.startsWith(p)) &&
     !isSiteAdminModeOn(claims.role, claims.siteAdminMode)

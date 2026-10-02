@@ -33,12 +33,12 @@ const BASE_ADMIN_TABS = [
   { href: "/admin/ledger", label: "Ledger" },
   { href: "/admin/deals", label: "Deals" },
   { href: "/admin/documents", label: "Document uploads" },
+  { href: "/admin/costs", label: "Costs" },
 ];
 const ROOT_MODE_TABS = [
   { href: "/admin/features", label: "Features" },
   { href: "/admin/portfolios", label: "Portfolios" },
   { href: "/admin/settings", label: "Settings" },
-  { href: "/admin/costs", label: "Costs" },
 ];
 
 // isSiteAdminRole: the viewer genuinely holds the site_admin role (controls whether the toggle
