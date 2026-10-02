@@ -363,6 +363,7 @@ export function AdminDocumentsFlow({
             expandForSubmit={expandForSubmit}
             onCommitted={handleCommitted}
             onDiffResult={setLastCheckErrors}
+            formattedView
           />
         </div>
       )}

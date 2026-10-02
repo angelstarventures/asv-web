@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ledgerMassImportDiff, ledgerMassImportCommit, type DiffResult } from "@/lib/functions/massIO";
 import { ImportDiffTable } from "@/components/ImportDiffTable";
+import { LedgerRecordFormattedCard } from "@/components/LedgerRecordFormattedCard";
 
 const EMPTY_RECORD_TEMPLATE = JSON.stringify(
   { date: "", company: "", type: "", scenario: "" },
@@ -11,10 +12,10 @@ const EMPTY_RECORD_TEMPLATE = JSON.stringify(
 );
 
 // Every ledger record — AI-drafted (AdminDocumentsFlow) or hand-written (/admin/ledger/record)
-// — renders as editable, pretty-printed JSON, reusing the exact ledgerMassImportDiff/-Commit
-// pipeline and ImportDiffTable the hand-uploaded JSON import flow already uses
-// (app/admin/ledger/import/page.tsx), rather than a structured per-field form. A record here is
-// exactly the same shape as one in that JSON import file.
+// — renders as editable, pretty-printed JSON (or as a formatted card when `formattedView` is true),
+// reusing the exact ledgerMassImportDiff/-Commit pipeline and ImportDiffTable the hand-uploaded
+// JSON import flow already uses (app/admin/ledger/import/page.tsx), rather than a structured
+// per-field form. A record here is exactly the same shape as one in that JSON import file.
 export function LedgerRecordsEditor({
   initialRecords,
   allowAddRemove = false,
@@ -22,6 +23,7 @@ export function LedgerRecordsEditor({
   expandForSubmit,
   onCommitted,
   onDiffResult,
+  formattedView = false,
 }: {
   initialRecords: Record<string, unknown>[];
   allowAddRemove?: boolean;
@@ -44,7 +46,11 @@ export function LedgerRecordsEditor({
   // flow's "ask for a change" box feeds these back to the model verbatim on the next
   // regeneration, so it sees the exact validation failure rather than the admin's own paraphrase.
   onDiffResult?: (errors: string[]) => void;
+  // When true, records render as formatted cards by default with a "Show raw JSON" toggle.
+  // Defaults to false (raw JSON textareas, the original import-flow behavior).
+  formattedView?: boolean;
 }) {
+  const [showRawJson, setShowRawJson] = useState<Set<number>>(new Set());
   const [jsonTexts, setJsonTexts] = useState<string[]>(
     initialRecords.length > 0 ? initialRecords.map((r) => JSON.stringify(r, null, 2)) : [EMPTY_RECORD_TEMPLATE]
   );
@@ -131,33 +137,58 @@ export function LedgerRecordsEditor({
       </p>
 
       <div className="flex flex-col gap-3">
-        {jsonTexts.map((text, i) => (
-          <div key={i} className="flex flex-col gap-1">
-            <div className="flex items-center justify-between text-sm">
-              <span>{recordLabels?.[i] ?? `Record ${i + 1}`}</span>
-              {allowAddRemove && jsonTexts.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeRecord(i)}
-                  className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
-                >
-                  Remove
-                </button>
+        {jsonTexts.map((text, i) => {
+          const showingRaw = showRawJson.has(i);
+          // Parse the current JSON text back to an object for the formatted card.
+          let record: Record<string, unknown> | null = null;
+          try { record = JSON.parse(text) as Record<string, unknown>; } catch { /* keep null */ }
+          return (
+            <div key={i} className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-sm">
+                <span>{recordLabels?.[i] ?? `Record ${i + 1}`}</span>
+                <div className="flex items-center gap-2">
+                  {formattedView && record && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = new Set(showRawJson);
+                        if (next.has(i)) next.delete(i); else next.add(i);
+                        setShowRawJson(next);
+                      }}
+                      className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                    >
+                      {showingRaw ? "Show formatted view" : "Show raw JSON"}
+                    </button>
+                  )}
+                  {allowAddRemove && jsonTexts.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeRecord(i)}
+                      className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+              {formattedView && record && !showingRaw ? (
+                <LedgerRecordFormattedCard record={record} />
+              ) : (
+                <textarea
+                  value={text}
+                  onChange={(e) => {
+                    const next = [...jsonTexts];
+                    next[i] = e.target.value;
+                    setJsonTexts(next);
+                    setDiff(null);
+                  }}
+                  rows={12}
+                  className="rounded-md border border-zinc-300 px-3 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                />
               )}
             </div>
-            <textarea
-              value={text}
-              onChange={(e) => {
-                const next = [...jsonTexts];
-                next[i] = e.target.value;
-                setJsonTexts(next);
-                setDiff(null);
-              }}
-              rows={12}
-              className="rounded-md border border-zinc-300 px-3 py-1.5 font-mono text-xs dark:border-zinc-700 dark:bg-zinc-900"
-            />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {allowAddRemove && (
