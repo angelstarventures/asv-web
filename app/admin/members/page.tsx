@@ -3,7 +3,6 @@ import { NewMemberForm } from "@/components/NewMemberForm";
 import { MembersTable } from "@/components/MembersTable";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { getCurrentMember } from "@/lib/auth/currentMember";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { tenantConfig } from "@/lib/config/tenant";
 
 // Wireframe 5's members table. Provisioning a login/reset/status live on the per-member
@@ -13,7 +12,6 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminMembersPage() {
   const [{ members }, current] = await Promise.all([listAllMembers(), getCurrentMember()]);
-  const siteAdminModeOn = isSiteAdminModeOn(current?.role, current?.siteAdminMode);
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
@@ -25,7 +23,7 @@ export default async function AdminMembersPage() {
 
       <NewMemberForm callerRole={current?.role} />
 
-      <MembersTable members={members} siteAdminModeOn={siteAdminModeOn} callerRole={current?.role} />
+      <MembersTable members={members} callerRole={current?.role} />
     </div>
   );
 }

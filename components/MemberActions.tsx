@@ -7,11 +7,10 @@ import {
   deleteMember,
   adminSendPasswordReset,
   adminSetTemporaryPassword,
-  setMemberStatus,
   setMemberRole,
 } from "@/lib/functions/adminMembers";
 
-// The provisionMember/adminTriggerPasswordReset/setMemberStatus/setMemberRole contract point
+// The provisionMember/adminTriggerPasswordReset/setMemberRole contract point
 // (plan §4) — each is a real Cloud Functions callable, invoked with the signed-in admin's own
 // Firebase ID token via the client SDK (never proxied through a Next.js API route), since the
 // callable protocol needs that token to populate request.auth server-side.
@@ -20,18 +19,17 @@ export function MemberActions({
   email,
   displayName,
   isLinked,
-  status,
   role,
-  viewerIsSiteAdmin,
+  viewerRole,
 }: {
   memberId: string;
   email: string;
   displayName?: string;
   isLinked: boolean;
-  status: "active" | "disabled";
   role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
-  viewerIsSiteAdmin: boolean;
+  viewerRole?: string;
 }) {
+  const viewerIsSiteAdmin = viewerRole === "site_admin" || viewerRole === "dev_site_admin" || viewerRole === "developer";
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -86,21 +84,6 @@ export function MemberActions({
       setSettingPassword(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not set a temporary password.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleToggleStatus() {
-    setError(null);
-    setNotice(null);
-    setBusy(true);
-    const next = status === "active" ? "disabled" : "active";
-    try {
-      await setMemberStatus({ memberId, status: next });
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update status.");
     } finally {
       setBusy(false);
     }
@@ -215,14 +198,6 @@ export function MemberActions({
                 Set temporary password
               </button>
             )}
-            <button
-              type="button"
-              onClick={handleToggleStatus}
-              disabled={busy}
-              className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-            >
-              {status === "active" ? "Disable member" : "Re-activate member"}
-            </button>
             {viewerIsSiteAdmin ? (
               <label className="flex items-center gap-2 text-sm">
                 Role
