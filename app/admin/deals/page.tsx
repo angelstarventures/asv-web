@@ -40,7 +40,7 @@ export default async function AdminDealsPage() {
         pitchDeckUrlByDealId={buildDealPitchDeckUrlMap(dealDocuments)}
         detailHrefBase="/admin/deals"
         isAdmin
-        isSiteAdmin={current?.role === "site_admin"}
+        isSiteAdmin={current?.role === "site_admin" || current?.role === "dev_site_admin"}
       />
     </div>
   );

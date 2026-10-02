@@ -185,7 +185,7 @@ export const aiPortfolioQuery = onCall<AiPortfolioQueryInput, Promise<AiPortfoli
     if (!message || (scope !== "mine" && scope !== "asv")) {
       throw new HttpsError("invalid-argument", "message and a valid scope ('mine' or 'asv') are required.");
     }
-    const isAdmin = caller.role === "admin" || caller.role === "site_admin";
+    const isAdmin = caller.role === "admin" || caller.role === "site_admin" || caller.role === "dev_site_admin";
     const chatHistory = history ?? [];
 
     const providerSetting = await getAiProviderSetting("portfolio_chat");

@@ -21,7 +21,7 @@ export default async function MemberDealDetailPage({ params }: { params: Promise
   const { dealId } = await params;
   const current = await getCurrentMember();
   if (!current) notFound();
-  const isAdmin = current.role === "admin" || current.role === "site_admin";
+  const isAdmin = current.role === "admin" || current.role === "site_admin" || current.role === "dev_site_admin";
 
   const [{ deal }, { dealDocuments }, { dealRatings }, { dealFundingRoundEntries }] = await Promise.all([
     getDealById({ dealId }),

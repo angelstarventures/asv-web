@@ -43,7 +43,10 @@ export const MEMBER_ORGANIZATION_FEATURE_KEYS: readonly MemberOrganizationFeatur
   "MEMBERSHIP_DUES", "COSTS",
 ];
 
-// An organization with no explicit row for a feature key defaults to false (disabled).
+// An organization with no explicit row for a feature key defaults to true (enabled).
+// This avoids hiding UI tabs or blocking server-side flows before the seed script
+// has been run. Use the seed script (seed-organization-features.js) to explicitly
+// disable features once they're ready for controlled rollout.
 export async function getOrganizationFeature(
   organizationId: string,
   featureKey: OrganizationFeatureKey
@@ -52,10 +55,10 @@ export async function getOrganizationFeature(
     `SELECT enabled FROM "organization_feature" WHERE "organization_id" = $1 AND "feature_key" = $2`,
     [organizationId, featureKey]
   );
-  return rows[0]?.enabled ?? false;
+  return rows[0]?.enabled ?? true;
 }
 
-// Get all feature states for an organization (missing keys = false).
+// Get all feature states for an organization (missing keys default to true).
 export interface OrganizationFeatureState {
   featureKey: OrganizationFeatureKey;
   enabled: boolean;
@@ -68,7 +71,7 @@ export async function getAllOrganizationFeatures(organizationId: string): Promis
   const result: OrganizationFeatureState[] = [];
   for (const key of ORGANIZATION_FEATURE_KEYS) {
     const row = rows.find((r) => r.featureKey === key);
-    result.push({ featureKey: key, enabled: row?.enabled ?? false });
+    result.push({ featureKey: key, enabled: row?.enabled ?? true });
   }
   return result;
 }
