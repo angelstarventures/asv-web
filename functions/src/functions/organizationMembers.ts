@@ -36,10 +36,13 @@ export interface AssignOrganizationMemberInput {
   roleInOrganization?: string;
 }
 
-// dev_site_admin only (see requireExactRole's comment for why not requireDevSiteAdmin).
+// developer or dev_site_admin — VentureDesk platform roles that can assign members to orgs.
 export const assignOrganizationMember = onCall<AssignOrganizationMemberInput, Promise<{ ok: true }>>(
   async (request) => {
-    await requireExactRole(request, "dev_site_admin");
+    const caller = await requireCaller(request);
+    if (caller.role !== "developer" && caller.role !== "dev_site_admin") {
+      throw new HttpsError("permission-denied", "Developer or dev-site-admin role required.");
+    }
 
     const { memberId, organizationId, roleInOrganization } = request.data;
     if (!memberId || !organizationId) {
@@ -73,10 +76,13 @@ export interface RemoveOrganizationMemberInput {
   memberId: string;
 }
 
-// dev_site_admin only, same boundary as assignOrganizationMember.
+// developer or dev_site_admin, same boundary as assignOrganizationMember.
 export const removeOrganizationMember = onCall<RemoveOrganizationMemberInput, Promise<{ ok: true }>>(
   async (request) => {
-    await requireExactRole(request, "dev_site_admin");
+    const caller = await requireCaller(request);
+    if (caller.role !== "developer" && caller.role !== "dev_site_admin") {
+      throw new HttpsError("permission-denied", "Developer or dev-site-admin role required.");
+    }
 
     const { memberId } = request.data;
     if (!memberId) {

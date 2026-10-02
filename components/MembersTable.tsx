@@ -8,7 +8,8 @@ import {
   updateMemberDuesStatus,
   type ScenarioLockValue,
 } from "@/lib/functions/adminMembers";
-import { getOrganizationMemberIds, getOrganizationMemberships } from "@/lib/functions/organizationMembers";
+import { getOrganizationMemberIds, getOrganizationMemberships, listOrganizations, assignOrganizationMember } from "@/lib/functions/organizationMembers";
+import { setMemberRole } from "@/lib/functions/adminMembers";
 
 export interface MemberRow {
   id: string;
@@ -235,6 +236,41 @@ export function MembersTable({
       .catch(() => {});
   }, [showOrgColumn]);
 
+  // Fetch orgs list for inline editing (only for devs/dev-site-admins).
+  const editable = callerRole === "developer" || callerRole === "dev_site_admin";
+  const [orgList, setOrgList] = useState<{ id: string; name: string }[] | null>(null);
+  const [editState, setEditState] = useState<Record<string, { role?: string; orgId?: string }>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!editable) return;
+    listOrganizations().then(({ organizations }) => setOrgList(organizations)).catch(() => {});
+  }, [editable]);
+
+  function getRowState(m: MemberRow) {
+    const s = editState[m.id] ?? {};
+    return { role: s.role ?? m.role, orgId: s.orgId ?? null, isDirty: s.role !== undefined || s.orgId !== undefined };
+  }
+
+  async function handleSave(m: MemberRow) {
+    const s = editState[m.id];
+    if (!s) return;
+    setSaving(m.id);
+    setSaveError(null);
+    try {
+      if (s.role) await setMemberRole({ memberId: m.id, role: s.role as any });
+      if (s.orgId) await assignOrganizationMember({ memberId: m.id, organizationId: s.orgId });
+      const newEdit = { ...editState };
+      delete newEdit[m.id];
+      setEditState(newEdit);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed.");
+    } finally {
+      setSaving(null);
+    }
+  }
+
   // Filter the member list when org member IDs are available and caller is admin.
   const displayMembers = orgMemberIds !== null
     ? members.filter((m) => orgMemberIds.has(m.id))
@@ -317,12 +353,41 @@ export function MembersTable({
               {showOrgColumn && (
                 <div>
                   <dt className="text-xs text-zinc-500">Organization</dt>
-                  <dd>{orgNames[m.id] ?? "—"}</dd>
+                  <dd>
+                    {editable && orgList ? (
+                      <select
+                        value={editState[m.id]?.orgId ?? orgList.find((o) => o.name === orgNames[m.id])?.id ?? ""}
+                        onChange={(e) => setEditState({ ...editState, [m.id]: { ...editState[m.id], orgId: e.target.value } })}
+                        className="rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                      >
+                        <option value="">—</option>
+                        {orgList.map((o) => (<option key={o.id} value={o.id}>{o.name}</option>))}
+                      </select>
+                    ) : (
+                      orgNames[m.id] ?? "—"
+                    )}
+                  </dd>
                 </div>
               )}
               <div>
                 <dt className="text-xs text-zinc-500">Role</dt>
-                <dd>{m.role}</dd>
+                <dd>
+                  {editable ? (
+                    <select
+                      value={editState[m.id]?.role ?? m.role}
+                      onChange={(e) => setEditState({ ...editState, [m.id]: { ...editState[m.id], role: e.target.value } })}
+                      className="rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      <option value="developer">developer</option>
+                      <option value="dev_site_admin">dev_site_admin</option>
+                      <option value="site_admin">site_admin</option>
+                      <option value="admin">admin</option>
+                      <option value="user">user</option>
+                    </select>
+                  ) : (
+                    m.role
+                  )}
+                </dd>
               </div>
               <div>
                 <dt className="text-xs text-zinc-500">Account</dt>
@@ -344,6 +409,16 @@ export function MembersTable({
               <MemberDuesControls member={m} />
             </div>
             <div className="mt-3 flex flex-wrap gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-900">
+              {editable && editState[m.id] && (
+                <button
+                  type="button"
+                  onClick={() => handleSave(m)}
+                  disabled={saving !== null}
+                  className="rounded-full border border-green-500 px-2 py-0.5 text-xs text-green-700 disabled:opacity-50 dark:border-green-900 dark:text-green-400"
+                >
+                  {saving === m.id ? "Saving..." : "Save"}
+                </button>
+              )}
               <Link href={`/admin/members/${m.id}`} className="text-sm text-zinc-600 underline underline-offset-2 dark:text-zinc-400">
                 Manage
               </Link>
@@ -389,9 +464,40 @@ export function MembersTable({
               <td className="py-2 text-zinc-500 dark:text-zinc-500">{m.investingEntityName}</td>
               <td className="py-2 text-zinc-500 dark:text-zinc-500">{m.email}</td>
               <td className="py-2">{m.membershipType}</td>
-              <td className="py-2">{m.role}</td>
+              {editable ? (
+                <td className="py-2">
+                  <select
+                    value={editState[m.id]?.role ?? m.role}
+                    onChange={(e) => setEditState({ ...editState, [m.id]: { ...editState[m.id], role: e.target.value } })}
+                    className="rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                  >
+                    <option value="developer">developer</option>
+                    <option value="dev_site_admin">dev_site_admin</option>
+                    <option value="site_admin">site_admin</option>
+                    <option value="admin">admin</option>
+                    <option value="user">user</option>
+                  </select>
+                </td>
+              ) : (
+                <td className="py-2">{m.role}</td>
+              )}
               {showOrgColumn && (
-                <td className="py-2 text-zinc-500 dark:text-zinc-500">{orgNames[m.id] ?? "—"}</td>
+                editable && orgList ? (
+                  <td className="py-2">
+                    <select
+                      value={editState[m.id]?.orgId ?? orgList.find((o) => o.name === orgNames[m.id])?.id ?? ""}
+                      onChange={(e) => setEditState({ ...editState, [m.id]: { ...editState[m.id], orgId: e.target.value } })}
+                      className="rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+                    >
+                      <option value="">—</option>
+                      {orgList.map((o) => (
+                        <option key={o.id} value={o.id}>{o.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                ) : (
+                  <td className="py-2 text-zinc-500 dark:text-zinc-500">{orgNames[m.id] ?? "—"}</td>
+                )
               )}
               <td className="py-2">
                 <span className={m.status === "ACTIVE" ? "text-zinc-700 dark:text-zinc-300" : "text-red-600 dark:text-red-400"}>
@@ -414,6 +520,16 @@ export function MembersTable({
                 <MemberDuesControls member={m} />
               </td>
               <td className="py-2 text-right">
+                {editable && editState[m.id] && (
+                  <button
+                    type="button"
+                    onClick={() => handleSave(m)}
+                    disabled={saving !== null}
+                    className="rounded-full border border-green-500 px-2 py-0.5 text-xs text-green-700 disabled:opacity-50 dark:border-green-900 dark:text-green-400"
+                  >
+                    {saving === m.id ? "Saving..." : "Save"}
+                  </button>
+                )}
                 <Link href={`/admin/members/${m.id}`} className="text-zinc-600 underline underline-offset-2 dark:text-zinc-400">
                   Manage
                 </Link>
