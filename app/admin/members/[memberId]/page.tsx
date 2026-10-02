@@ -35,18 +35,6 @@ export default async function AdminMemberDetailPage({
             <dd>{member.email}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-zinc-500 dark:text-zinc-400">Role</dt>
-            <dd>{member.role}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-zinc-500 dark:text-zinc-400">Status</dt>
-            <dd>{member.status}</dd>
-          </div>
-          <div className="flex justify-between">
-            <dt className="text-zinc-500 dark:text-zinc-400">Account</dt>
-            <dd>{member.authUid ? "Linked" : "Not provisioned"}</dd>
-          </div>
-          <div className="flex justify-between">
             <dt className="text-zinc-500 dark:text-zinc-400">Membership</dt>
             <dd>{member.membershipType}</dd>
           </div>
@@ -56,6 +44,9 @@ export default async function AdminMemberDetailPage({
             {member.profileText}
           </p>
         )}
+        <div className="mt-4 border-t border-zinc-200 pt-4 text-xs text-zinc-500 dark:border-zinc-800">
+          {member.authUid ? "Account linked" : "Account not yet provisioned"} &middot; {member.status}
+        </div>
       </div>
 
       <EditMemberForm
@@ -76,9 +67,8 @@ export default async function AdminMemberDetailPage({
         email={member.email}
         displayName={member.displayName}
         isLinked={Boolean(member.authUid)}
-        status={member.status === "ACTIVE" ? "active" : "disabled"}
         role={member.role.toLowerCase() as "developer" | "dev_site_admin" | "site_admin" | "admin" | "user"}
-        viewerIsSiteAdmin={viewer?.role === "site_admin"}
+        viewerRole={viewer?.role}
       />
     </div>
   );
