@@ -10,6 +10,9 @@ export interface CreateMemberInput {
   email: string;
   role: "developer" | "dev_site_admin" | "site_admin" | "admin" | "user";
   membershipType?: MembershipType;
+  // Which organization this member belongs to. Required for dev/dev_site_admin callers;
+  // omitted or auto-resolved for admin callers (always the venture group).
+  organizationId?: string;
 }
 export interface CreateMemberOutput {
   memberId: string;

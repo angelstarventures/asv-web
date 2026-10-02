@@ -100,6 +100,26 @@ export interface ListOrganizationMembersOutput {
 
 // dev_site_admin or site_admin — read-only, useful for both tiers to audit assignments
 // (unlike the mutating functions above, this doesn't need the narrower exact-role boundary).
+export interface GetOrganizationMembershipsOutput {
+  memberships: { memberId: string; organizationId: string; organizationName: string }[];
+}
+
+// Returns all member→organization mappings. Any authenticated caller can use this.
+// Used by the members table to show each member's org (visible to devs/dev-site-admins only;
+// the page-layer UI gate is the caller-role check).
+export const getOrganizationMemberships = onCall<
+  Record<string, never>,
+  Promise<GetOrganizationMembershipsOutput>
+>(async (request) => {
+  await requireCaller(request);
+  const rows = await query<{ memberId: string; organizationId: string; organizationName: string }>(
+    `SELECT om."member_id" AS "memberId", o.id AS "organizationId", o.name AS "organizationName"
+     FROM "organization_member" om
+     JOIN "organization" o ON o.id = om."organization_id"`
+  );
+  return { memberships: rows };
+});
+
 export interface GetOrganizationMemberIdsOutput {
   memberIds: string[];
 }

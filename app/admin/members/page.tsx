@@ -2,7 +2,6 @@ import { listAllMembers } from "@/lib/dataconnect/client";
 import { NewMemberForm } from "@/components/NewMemberForm";
 import { MembersTable } from "@/components/MembersTable";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
-import { AdminOrganizationMembers } from "@/components/AdminOrganizationMembers";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { tenantConfig } from "@/lib/config/tenant";
@@ -24,9 +23,7 @@ export default async function AdminMembersPage() {
 
       <h1 className="text-xl font-semibold tracking-tight">Members</h1>
 
-      {current?.role === "dev_site_admin" && <AdminOrganizationMembers members={members} />}
-
-      <NewMemberForm />
+      <NewMemberForm callerRole={current?.role} />
 
       <MembersTable members={members} siteAdminModeOn={siteAdminModeOn} callerRole={current?.role} />
     </div>

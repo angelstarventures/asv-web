@@ -8,7 +8,7 @@ import {
   updateMemberDuesStatus,
   type ScenarioLockValue,
 } from "@/lib/functions/adminMembers";
-import { getOrganizationMemberIds } from "@/lib/functions/organizationMembers";
+import { getOrganizationMemberIds, getOrganizationMemberships } from "@/lib/functions/organizationMembers";
 
 export interface MemberRow {
   id: string;
@@ -203,7 +203,9 @@ export function MembersTable({
   callerRole?: string;
 }) {
   const [orgMemberIds, setOrgMemberIds] = useState<Set<string> | null>(null);
+  const [orgNames, setOrgNames] = useState<Record<string, string>>({});
   const [filterError, setFilterError] = useState<string | null>(null);
+  const showOrgColumn = callerRole === "developer" || callerRole === "dev_site_admin";
 
   // For admin-role callers, fetch org member IDs client-side and filter the list to only
   // show members who belong to the org. Global roles (site_admin/dev_site_admin) see all.
@@ -221,15 +223,30 @@ export function MembersTable({
       });
   }, [callerRole]);
 
+  // Fetch org memberships for the organization column (only for devs).
+  useEffect(() => {
+    if (!showOrgColumn) return;
+    getOrganizationMemberships()
+      .then(({ memberships }) => {
+        const map: Record<string, string> = {};
+        for (const m of memberships) map[m.memberId] = m.organizationName;
+        setOrgNames(map);
+      })
+      .catch(() => {});
+  }, [showOrgColumn]);
+
   // Filter the member list when org member IDs are available and caller is admin.
   const displayMembers = orgMemberIds !== null
     ? members.filter((m) => orgMemberIds.has(m.id))
     : members;
 
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "id", dir: "asc" });
+  const baseWithOrg = showOrgColumn
+    ? [...BASE_COLUMNS, { key: "id" as SortKey, label: "Organization" }]
+    : BASE_COLUMNS;
   const columns = siteAdminModeOn
-    ? [...BASE_COLUMNS, { key: "id" as SortKey, label: "AI settings" }, { key: "id" as SortKey, label: "Dues" }]
-    : [...BASE_COLUMNS, { key: "id" as SortKey, label: "Dues" }];
+    ? [...baseWithOrg, { key: "id" as SortKey, label: "AI settings" }, { key: "id" as SortKey, label: "Dues" }]
+    : [...baseWithOrg, { key: "id" as SortKey, label: "Dues" }];
 
   const sortedMembers = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
@@ -297,6 +314,12 @@ export function MembersTable({
                 <dt className="text-xs text-zinc-500">Membership</dt>
                 <dd>{m.membershipType}</dd>
               </div>
+              {showOrgColumn && (
+                <div>
+                  <dt className="text-xs text-zinc-500">Organization</dt>
+                  <dd>{orgNames[m.id] ?? "—"}</dd>
+                </div>
+              )}
               <div>
                 <dt className="text-xs text-zinc-500">Role</dt>
                 <dd>{m.role}</dd>
@@ -367,6 +390,9 @@ export function MembersTable({
               <td className="py-2 text-zinc-500 dark:text-zinc-500">{m.email}</td>
               <td className="py-2">{m.membershipType}</td>
               <td className="py-2">{m.role}</td>
+              {showOrgColumn && (
+                <td className="py-2 text-zinc-500 dark:text-zinc-500">{orgNames[m.id] ?? "—"}</td>
+              )}
               <td className="py-2">
                 <span className={m.status === "ACTIVE" ? "text-zinc-700 dark:text-zinc-300" : "text-red-600 dark:text-red-400"}>
                   {m.status}

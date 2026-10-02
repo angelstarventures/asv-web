@@ -71,3 +71,15 @@ export async function getOrganizationMemberIds(): Promise<GetOrganizationMemberI
   const res = await call({});
   return res.data;
 }
+
+export interface GetOrganizationMembershipsOutput {
+  memberships: { memberId: string; organizationId: string; organizationName: string }[];
+}
+export async function getOrganizationMemberships(): Promise<GetOrganizationMembershipsOutput> {
+  const call = httpsCallable<Record<string, never>, GetOrganizationMembershipsOutput>(
+    functions,
+    "getOrganizationMemberships"
+  );
+  const res = await call({});
+  return res.data;
+}

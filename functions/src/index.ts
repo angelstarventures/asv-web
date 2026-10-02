@@ -49,4 +49,4 @@ export { documentsShareCompanyUpdate } from "./functions/documents-shareCompanyU
 export { dealsFindReviewers } from "./functions/deals-findReviewers";
 export { ledgerRebalanceMemberValuations } from "./functions/ledger-rebalanceMemberValuations";
 export { updateOrganizationFeature, getOrganizationFeatures, updateMemberOrganizationFeature, getMemberOrganizationFeatures } from "./functions/organizationFeatures";
-export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers, getMyOrganizationMembership, getOrganizationMemberIds } from "./functions/organizationMembers";
+export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers, getMyOrganizationMembership, getOrganizationMemberIds, getOrganizationMemberships } from "./functions/organizationMembers";
