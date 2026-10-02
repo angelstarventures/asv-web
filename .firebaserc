@@ -1,5 +1,6 @@
 {
   "projects": {
-    "default": "angelstar-investments"
+    "default": "angelstar-investments",
+    "asv": "angelstar-investments"
   }
 }
