@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { memberOrganizationFeatureKeys, type MemberOrganizationFeatureKey } from "@/lib/auth/permissions";
+import { listOrganizations } from "@/lib/functions/organizationMembers";
 import { getOrganizationFeatures, updateMemberOrganizationFeature, getMemberOrganizationFeatures } from "@/lib/functions/organizationFeatures";
 import { OrganizationFeatureToggles } from "@/components/OrganizationFeatureToggles";
 
@@ -94,27 +95,50 @@ export function MemberOrganizationFeaturesPanel({
   organizationName,
   members,
 }: {
-  organizationId: string;
-  organizationName: string;
+  organizationId?: string;
+  organizationName?: string;
   members: MemberRow[];
 }) {
+  const [resolvedOrgId, setResolvedOrgId] = useState<string | undefined>(organizationId);
+  const [resolvedOrgName, setResolvedOrgName] = useState<string | undefined>(organizationName);
   const [selectedMember, setSelectedMember] = useState<string | "">("");
   const [orgEnabledKeys, setOrgEnabledKeys] = useState<ReadonlySet<string> | null>(null);
 
+  // If no orgId was provided (Server Component can't call Cloud Functions), look it up
+  // client-side where Firebase Auth is available.
   useEffect(() => {
-    getOrganizationFeatures(organizationId).then(({ features }) => {
+    if (organizationId) { setResolvedOrgId(organizationId); setResolvedOrgName(organizationName); return; }
+    (async () => {
+      try {
+        const { organizations } = await listOrganizations();
+        const org = organizations[0];
+        if (org) {
+          setResolvedOrgId(org.id);
+          setResolvedOrgName(org.name);
+        }
+      } catch { /* org unavailable — panel stays empty */ }
+    })();
+  }, [organizationId]);
+
+  useEffect(() => {
+    if (!resolvedOrgId) return;
+    getOrganizationFeatures(resolvedOrgId).then(({ features }) => {
       setOrgEnabledKeys(new Set(features.filter((f) => f.enabled).map((f) => f.featureKey)));
     });
-  }, [organizationId]);
+  }, [resolvedOrgId]);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h3 className="mb-2 text-sm font-medium">Organization-level features ({organizationName})</h3>
+        <h3 className="mb-2 text-sm font-medium">Organization-level features ({resolvedOrgName ?? "—"})</h3>
         <p className="mb-2 text-xs text-zinc-500">
           Read-only here — change these at <code className="text-xs">/developer/features</code>.
         </p>
-        <OrganizationFeatureToggles organizationId={organizationId} editable={false} />
+        {resolvedOrgId ? (
+          <OrganizationFeatureToggles organizationId={resolvedOrgId} editable={false} />
+        ) : (
+          <p className="text-xs text-zinc-500">Loading organization…</p>
+        )}
       </div>
 
       <div>
@@ -131,10 +155,10 @@ export function MemberOrganizationFeaturesPanel({
             </option>
           ))}
         </select>
-        {selectedMember && orgEnabledKeys && (
+        {selectedMember && resolvedOrgId && orgEnabledKeys && (
           <PerMemberFeatureToggles
             memberId={selectedMember}
-            organizationId={organizationId}
+            organizationId={resolvedOrgId}
             orgEnabledKeys={orgEnabledKeys}
           />
         )}

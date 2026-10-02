@@ -1,4 +1,6 @@
+import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { query } from "./dataconnect-admin";
+import { requireCaller, type CallerContext } from "./auth";
 
 // ── Types mirroring the Data Connect enums ──────────────────────────────────
 
@@ -122,4 +124,108 @@ export async function getAllMemberOrganizationFeatures(
     result.push({ featureKey: key, enabled: row?.enabled ?? true });
   }
   return result;
+}
+
+// ── Sole-organization ID lookup (cached) ────────────────────────────────────
+// Under template-per-deployment there is exactly one Organization row. Cache its ID
+// after the first lookup so subsequent calls don't re-query.
+
+let _cachedOrgId: string | null = null;
+
+export async function getSoleOrganizationId(): Promise<string> {
+  if (_cachedOrgId) return _cachedOrgId;
+  const rows = await query<{ id: string }>(`SELECT id FROM "organization" LIMIT 1`);
+  if (rows.length === 0) {
+    throw new Error("No Organization row found — has schema migration 005 been applied?");
+  }
+  _cachedOrgId = rows[0].id;
+  return _cachedOrgId;
+}
+
+// ── Feature-enforcement helper for callables ─────────────────────────────────
+// Rollout is controlled by FEATURE_ENFORCE_MODE env var:
+//   "log"      — log would-be denials and allow (safe default during rollout)
+//   "enforce"  — actually throw failed-precondition
+// Defaults to "log".
+//
+// Caller must have already passed requireAdmin (or higher) — this only checks the
+// feature gate, not the role. Global roles (developer/dev_site_admin/site_admin)
+// are never blocked by this helper (the toggle UIs themselves remain accessible;
+// only the gated feature behind the toggle affects them).
+const FEATURE_ENFORCE_MODE =
+  (process.env.FEATURE_ENFORCE_MODE ?? "log") === "enforce" ? "enforce" : "log";
+
+// Convenience wrapper: looks up the sole org ID and calls requireFeature.
+// Use this in any callable that doesn't already have the orgId from context.
+export async function requireFeatureEnabled(
+  caller: CallerContext,
+  featureKey: OrganizationFeatureKey
+): Promise<void> {
+  const orgId = await getSoleOrganizationId();
+  return requireFeature(orgId, caller, featureKey);
+}
+
+// Convenience wrapper for member-level features — same sole-org lookup.
+export async function requireMemberFeatureEnabled(
+  memberId: string,
+  caller: CallerContext,
+  featureKey: MemberOrganizationFeatureKey
+): Promise<void> {
+  const orgId = await getSoleOrganizationId();
+  return requireMemberFeature(memberId, orgId, caller, featureKey);
+}
+
+export async function requireFeature(
+  organizationId: string,
+  caller: CallerContext,
+  featureKey: OrganizationFeatureKey
+): Promise<void> {
+  // Global roles bypass feature gating entirely.
+  if (caller.role !== "admin" && caller.role !== "user") return;
+
+  const enabled = await getOrganizationFeature(organizationId, featureKey);
+
+  if (enabled) return; // Feature is on — allowed.
+
+  if (FEATURE_ENFORCE_MODE === "log") {
+    console.warn(
+      `[FEATURE_GATE] would-deny: memberId=${caller.memberId} role=${caller.role} ` +
+      `featureKey=${featureKey} orgId=${organizationId}. Allowing in log mode. ` +
+      `Set FEATURE_ENFORCE_MODE=enforce once seed is confirmed complete.`
+    );
+    return;
+  }
+
+  throw new HttpsError(
+    "failed-precondition",
+    `This feature is not available. Ask a developer or dev-site-admin to enable it.`
+  );
+}
+
+export async function requireMemberFeature(
+  memberId: string,
+  organizationId: string,
+  caller: CallerContext,
+  featureKey: MemberOrganizationFeatureKey
+): Promise<void> {
+  // Global roles bypass per-member feature gating (but still subject to org-level gate
+  // via the underlying getMemberOrganizationFeature call, which checks org-level first).
+  if (caller.role !== "admin" && caller.role !== "user") return;
+
+  const enabled = await getMemberOrganizationFeature(memberId, organizationId, featureKey);
+
+  if (enabled) return; // Feature is on — allowed.
+
+  if (FEATURE_ENFORCE_MODE === "log") {
+    console.warn(
+      `[FEATURE_GATE] would-deny (member-level): memberId=${memberId} caller=${caller.memberId} ` +
+      `role=${caller.role} featureKey=${featureKey} orgId=${organizationId}. Allowing in log mode.`
+    );
+    return;
+  }
+
+  throw new HttpsError(
+    "failed-precondition",
+    `This feature is not available for your account.`
+  );
 }

@@ -46,3 +46,28 @@ export async function listOrganizationMembers(
   const res = await call(input);
   return res.data;
 }
+export interface GetMyOrganizationMembershipOutput {
+  hasMembership: boolean;
+  organizationId: string | null;
+  organizationName: string | null;
+}
+export async function getMyOrganizationMembership(): Promise<GetMyOrganizationMembershipOutput> {
+  const call = httpsCallable<Record<string, never>, GetMyOrganizationMembershipOutput>(
+    functions,
+    "getMyOrganizationMembership"
+  );
+  const res = await call({});
+  return res.data;
+}
+
+export interface GetOrganizationMemberIdsOutput {
+  memberIds: string[];
+}
+export async function getOrganizationMemberIds(): Promise<GetOrganizationMemberIdsOutput> {
+  const call = httpsCallable<Record<string, never>, GetOrganizationMemberIdsOutput>(
+    functions,
+    "getOrganizationMemberIds"
+  );
+  const res = await call({});
+  return res.data;
+}

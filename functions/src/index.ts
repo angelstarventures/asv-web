@@ -4,8 +4,9 @@ import { setGlobalOptions } from "firebase-functions/v2";
 initializeApp();
 
 // Same region as the Data Connect Cloud SQL instance (dataconnect/dataconnect.yaml) — every
-// function-to-Postgres call would otherwise cross regions on every request.
-setGlobalOptions({ region: "us-east1" });
+// function-to-Postgres call would otherwise cross regions on every request. Defaults to
+// us-east1 (ASV's region); a new tenant overrides via TENANT_FUNCTIONS_REGION env var.
+setGlobalOptions({ region: process.env.TENANT_FUNCTIONS_REGION ?? "us-east1" });
 
 export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, deleteMember, adminSendPasswordReset, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode, setDevSiteAdminMode, validatePasswordResetToken } from "./functions/users-onCreateProvision";
 export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
@@ -48,4 +49,4 @@ export { documentsShareCompanyUpdate } from "./functions/documents-shareCompanyU
 export { dealsFindReviewers } from "./functions/deals-findReviewers";
 export { ledgerRebalanceMemberValuations } from "./functions/ledger-rebalanceMemberValuations";
 export { updateOrganizationFeature, getOrganizationFeatures, updateMemberOrganizationFeature, getMemberOrganizationFeatures } from "./functions/organizationFeatures";
-export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers } from "./functions/organizationMembers";
+export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers, getMyOrganizationMembership, getOrganizationMemberIds } from "./functions/organizationMembers";

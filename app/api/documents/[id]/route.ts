@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getDocumentById, listMemberAllocationsAllScenarios, listMemberValuationsAllScenarios } from "@/lib/dataconnect/client";
 import { canViewDocument } from "@/lib/auth/documentAccess";
+import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
 import { streamDriveFile } from "@/lib/serverDrive";
 
 // API routes are NOT covered by proxy.ts's matcher — independently re-verifies the session,
@@ -32,7 +33,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     allocations.some((a) => a.ledgerEntry.company.id === document.company.id) ||
     memberValuations.some((v) => v.ledgerEntry.company.id === document.company.id);
 
-  if (!canViewDocument(member.role, document.docType, hasHeldAllocation)) {
+  // Admin callers must also have org membership to access documents (org-gate rollout).
+  // Non-admin callers don't need this check; the default isOrgMember=true preserves existing behavior.
+  const isOrgMember = member.role === "admin"
+    ? (await getMyOrganizationMembership()).hasMembership
+    : true;
+
+  if (!canViewDocument(member.role, document.docType, hasHeldAllocation, isOrgMember)) {
     return NextResponse.json({ error: "You don't have access to this document." }, { status: 403 });
   }
 

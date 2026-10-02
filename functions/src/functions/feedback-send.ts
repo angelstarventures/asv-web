@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { sendEmail } from "../lib/gmail";
 import { driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // Sends member feedback to the configured recipient using the same OAuth identity
 // that already has gmail.send scope. Called from the member-facing Feedback button.
@@ -23,7 +24,7 @@ export const feedbackSend = onCall<FeedbackSendInput, Promise<FeedbackSendOutput
 
     try {
       await sendEmail({
-        to: "angelstarventures@gmail.com",
+        to: tenantConfig.feedbackRecipient,
         subject: `Feedback from ${name}`,
         body: comment,
       });

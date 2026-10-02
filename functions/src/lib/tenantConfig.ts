@@ -3,7 +3,10 @@
 // later phases of the templatization plan actually wire call sites through it.
 export interface FunctionsTenantConfig {
   orgAbbreviation: string; // casual body-copy abbreviation, e.g. "ASV" — used in AI prompts/guardrail text
+  orgDisplayName: string; // full display name — used in email subjects/bodies/signatures
+  appDomain: string; // Firebase Hosting domain — used for password-reset links
   fromAddress: string; // Gmail send-as address (functions/src/lib/gmail.ts)
+  driveServiceAccountEmail: string; // Cloud Functions runtime service account (functions/src/lib/dealsDrive.ts)
   feedbackRecipient: string; // functions/src/functions/feedback-send.ts
   dealsDriveRootFolderId: string;
   companyUpdatesDriveRootFolderId: string;
@@ -16,7 +19,11 @@ export interface FunctionsTenantConfig {
 
 export const tenantConfig: FunctionsTenantConfig = {
   orgAbbreviation: process.env.TENANT_ORG_ABBREVIATION ?? "ASV",
+  orgDisplayName: process.env.TENANT_ORG_DISPLAY_NAME ?? "AngelStar Ventures",
+  appDomain: process.env.TENANT_APP_DOMAIN ?? "https://angelstar-investments.firebaseapp.com",
   fromAddress: process.env.TENANT_GMAIL_FROM_ADDRESS ?? "angelstarventures@gmail.com",
+  driveServiceAccountEmail:
+    process.env.TENANT_DRIVE_SERVICE_ACCOUNT_EMAIL ?? "345219246308-compute@developer.gserviceaccount.com",
   feedbackRecipient: process.env.TENANT_FEEDBACK_RECIPIENT ?? "angelstarinvestments@gmail.com",
   dealsDriveRootFolderId: process.env.DEALS_DRIVE_ROOT_FOLDER_ID ?? "",
   companyUpdatesDriveRootFolderId: process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID ?? "",

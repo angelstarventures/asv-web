@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { tenantConfig } from "@/lib/config/tenant";
 import type { Scenario } from "@/lib/scenarioTypes";
 
 const LABELS: Record<Scenario, string> = {
@@ -27,7 +28,7 @@ export function DownloadFullLedgerButton({ scenario }: { scenario: Scenario }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `asv-ledger-${scenario}.json`;
+      a.download = `${tenantConfig.orgAbbreviation.toLowerCase()}-ledger-${scenario}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {

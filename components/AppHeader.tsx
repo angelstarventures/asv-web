@@ -2,11 +2,27 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { LogoutButton } from "@/components/LogoutButton";
 import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { tenantConfig } from "@/lib/config/tenant";
+import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
+import { getOrganizationFeatures } from "@/lib/functions/organizationFeatures";
+
+// Tabs gated by org feature flags. A tab whose feature key is absent from this map or
+// set to true is shown; one explicitly set to false is hidden. Same pattern as AdminSubNav.
+const HEADER_FEATURE_GATED_TABS: Record<string, string[]> = {
+  "/member/deals": ["DEALS"],
+};
+
+function isHeaderTabVisible(href: string, enabledFeatures: Record<string, boolean> | undefined): boolean {
+  if (!enabledFeatures) return true;
+  const requiredFeatures = HEADER_FEATURE_GATED_TABS[href];
+  if (!requiredFeatures) return true;
+  return requiredFeatures.every((key) => enabledFeatures[key] !== false);
+}
 
 // Reports lives inside the Portfolio tab now (?tab=reports), not as its own top-level tab —
 // every panel that used to be on /member/reports moved there (lib/portfolioView.tsx).
@@ -25,16 +41,37 @@ export function AppHeader({
   isDeveloper,
   displayName,
   photoUrl,
+  enabledFeatures,
 }: {
   isAdmin: boolean;
   isDeveloper?: boolean;
   displayName?: string;
   photoUrl?: string | null;
+  enabledFeatures?: Record<string, boolean>;
 }) {
   const pathname = usePathname();
+  const [resolvedFeatures, setResolvedFeatures] = useState<Record<string, boolean> | undefined>(enabledFeatures);
+
+  // If the layout didn't pass enabledFeatures, compute them client-side.
+  useEffect(() => {
+    if (enabledFeatures) { setResolvedFeatures(enabledFeatures); return; }
+    (async () => {
+      try {
+        const membership = await getMyOrganizationMembership();
+        const orgId = membership.organizationId;
+        if (!orgId) return;
+        const { features } = await getOrganizationFeatures(orgId);
+        const result: Record<string, boolean> = {};
+        for (const f of features) result[f.featureKey] = f.enabled;
+        setResolvedFeatures(result);
+      } catch { /* show all tabs as safe fallback */ }
+    })();
+  }, [enabledFeatures]);
+
+  const visibleMemberTabs = MEMBER_TABS.filter((tab) => isHeaderTabVisible(tab.href, resolvedFeatures));
   const baseTabs = isDeveloper
-    ? [...MEMBER_TABS, { href: "/developer", label: "Developer View" }]
-    : MEMBER_TABS;
+    ? [...visibleMemberTabs, { href: "/developer", label: "Developer View" }]
+    : visibleMemberTabs;
   const tabs = isAdmin ? [...baseTabs, { href: "/admin/members", label: "Admin View" }] : baseTabs;
   const isTabActive = (href: string) => {
     if (href === "/admin/members") return pathname.startsWith("/admin");

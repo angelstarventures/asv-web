@@ -1,5 +1,6 @@
 import { getAuth } from "firebase-admin/auth";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
+import { query } from "./dataconnect-admin";
 
 // The full set of app-level roles. Stored on Member.role + Firebase Auth custom claims.
 // Hierarchy (higher = more permissions): developer < dev_site_admin ≈ site_admin < admin < user
@@ -123,6 +124,68 @@ export async function requireExactRole(request: CallableRequest, role: Role): Pr
     throw new HttpsError("permission-denied", `${role} role required.`);
   }
   return caller;
+}
+
+// ── Organization/VentureDesk affiliation helpers ────────────────────────────
+// Each deployment has two organizations: VentureDesk (the platform company) and the
+// venture group (the angel fund). A member's organization determines which roles are valid:
+//   VentureDesk → developer, dev_site_admin (and site_admin)
+//   Venture group → admin, user (and site_admin)
+
+export type AffiliationOrg = "venture_desk" | "venture_group";
+
+// Returns which org a role belongs in. site_admin can be in either.
+export function roleAffiliation(role: Role): AffiliationOrg | "either" {
+  switch (role) {
+    case "developer":
+    case "dev_site_admin":
+      return "venture_desk";
+    case "admin":
+    case "user":
+      return "venture_group";
+    case "site_admin":
+      return "either";
+  }
+}
+
+// Throws if a role cannot be held by someone in the given organization.
+export function validateRoleForOrganization(role: Role, orgName: string): void {
+  const expected = roleAffiliation(role);
+  const isVentureDesk = orgName.toLowerCase().includes("venturedesk");
+  if (expected === "venture_desk" && !isVentureDesk) {
+    throw new HttpsError(
+      "permission-denied",
+      "The developer and dev-site-admin roles can only be assigned to VentureDesk members."
+    );
+  }
+  if (expected === "venture_group" && isVentureDesk) {
+    throw new HttpsError(
+      "permission-denied",
+      "The admin and user roles cannot be assigned to VentureDesk members."
+    );
+  }
+  // site_admin is allowed in either org.
+}
+
+// ── Org lookup helper (for role × org validation) ────────────────────────────
+
+let _orgNameCache: Record<string, string> = {};
+
+// Returns the organization name for a given org ID. Uses a per-request module cache
+// so repeated calls within the same request don't re-query the DB.
+export async function getOrgName(orgId: string): Promise<string> {
+  if (_orgNameCache[orgId]) return _orgNameCache[orgId];
+  const rows = await query<{ name: string }>(`SELECT name FROM "organization" WHERE id = $1`, [orgId]);
+  if (rows.length === 0) {
+    throw new HttpsError("not-found", `No Organization row for id "${orgId}".`);
+  }
+  _orgNameCache[orgId] = rows[0].name;
+  return rows[0].name;
+}
+
+// Clear the cache between requests (call at the start of each callable that uses it).
+export function clearOrgNameCache(): void {
+  _orgNameCache = {};
 }
 
 // developer or dev_site_admin — EXCLUDES site_admin, unlike every other tier checker above

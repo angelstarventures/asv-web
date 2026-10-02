@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireSiteAdmin } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { withTransaction } from "../lib/dataconnect-admin";
 
 // The only write path for ai_prompt_setting (plan: Phase 2 AI) — backs the admin
@@ -15,6 +16,7 @@ export interface UpdateAiPromptSettingInput {
 
 export const updateAiPromptSetting = onCall<UpdateAiPromptSettingInput, Promise<{ ok: true }>>(async (request) => {
   const caller = await requireSiteAdmin(request);
+  await requireFeatureEnabled(caller, "AI_MODEL_PROMPT_CONFIG");
 
   const { key, prompt } = request.data;
   if (!VALID_KEYS.includes(key) || !prompt?.trim()) {

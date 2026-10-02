@@ -36,13 +36,25 @@ export interface AccessCheckResult {
 // Admin / site_admin / dev_site_admin gets everything; PITCH_DECK/DD_REPORT are open to any
 // active member; DATA_ROOM/COMPANY_UPDATE_DOC require having held an allocation;
 // SPA/ALLOCATION_SCHEDULE are admin-only, unconditionally (plan §3).
+//
+// isOrgMember only matters for admin-role callers: an admin without an organization_member row
+// is denied, consistent with the org-gate rollout. site_admin/dev_site_admin are always global
+// and bypass this check. Defaults to true for callers that don't have this info.
 export async function checkDocumentAccess(
   role: Role,
   memberId: string,
   companyId: string,
-  docType: DocumentType
+  docType: DocumentType,
+  isOrgMember: boolean = true
 ): Promise<AccessCheckResult> {
-  if (role === "admin" || role === "site_admin" || role === "dev_site_admin") {
+  // Admin-tier roles get everything, but an admin without org membership is denied.
+  if (role === "admin") {
+    if (!isOrgMember) {
+      return { granted: false, reason: "admin without organization membership" };
+    }
+    return { granted: true, reason: "admin" };
+  }
+  if (role === "site_admin" || role === "dev_site_admin") {
     return { granted: true, reason: "admin" };
   }
 

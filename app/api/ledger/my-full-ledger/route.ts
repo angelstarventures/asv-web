@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentMember } from "@/lib/auth/currentMember";
+import { tenantConfig } from "@/lib/config/tenant";
 import {
   listCompanyUpdatesForScenario,
   listComplianceFlagDetailsForScenario,
@@ -117,7 +118,7 @@ export async function GET(request: Request) {
     status: 200,
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="asv-ledger-${scenario}-${member.memberId}.json"`,
+      "Content-Disposition": `attachment; filename="${tenantConfig.orgAbbreviation.toLowerCase()}-ledger-${scenario}-${member.memberId}.json"`,
     },
   });
 }

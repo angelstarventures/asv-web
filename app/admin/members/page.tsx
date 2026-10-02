@@ -28,7 +28,7 @@ export default async function AdminMembersPage() {
 
       <NewMemberForm />
 
-      <MembersTable members={members} siteAdminModeOn={siteAdminModeOn} />
+      <MembersTable members={members} siteAdminModeOn={siteAdminModeOn} callerRole={current?.role} />
     </div>
   );
 }

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS "public"."organization_member" (
 CREATE INDEX IF NOT EXISTS "organization_member_memberId_idx" ON "public"."organization_member" ("member_id");
 CREATE INDEX IF NOT EXISTS "organization_member_organizationId_idx" ON "public"."organization_member" ("organization_id");
 
-INSERT INTO "public"."organization" ("name") VALUES ('AngelStar Ventures') ON CONFLICT ("name") DO NOTHING;
+-- Seed the Organization row is handled by the bootstrap script (scripts/seed-organization.js)
+-- so a new tenant can seed their own name. This file remains pure DDL.
 
 DROP TABLE IF EXISTS "public"."company_member";

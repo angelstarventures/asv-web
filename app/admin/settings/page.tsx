@@ -5,6 +5,7 @@ import { AiProviderSettingsForm } from "@/components/AiProviderSettingsForm";
 import { AppSettingsForm } from "@/components/AppSettingsForm";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
+import { tenantConfig } from "@/lib/config/tenant";
 import type { AiProvider, SearchBackend } from "@/lib/functions/adminSettings";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export default async function AdminSettingsPage() {
         associateAnnualDuesAmount={appByKey.get("associate_annual_dues_amount") ?? ""}
         duesReminderTemplate={
           appByKey.get("dues_reminder_template") ??
-          "Hi {name}, this is a reminder that your ${amount} annual ASV membership dues for {year} are due. Thank you!"
+          tenantConfig.duesReminderTemplateDefault
         }
       />
 

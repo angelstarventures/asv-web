@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ledgerMassExport, ledgerGetSchema } from "@/lib/functions/massIO";
+import { tenantConfig } from "@/lib/config/tenant";
 import type { Scenario } from "@/lib/scenarioTypes";
 
 const SCENARIO_BUTTONS: { scenario: Scenario | undefined; label: string }[] = [
@@ -37,7 +38,7 @@ export default function LedgerExportPage() {
       const { records } = await ledgerMassExport(scenario);
       setNotice(`Exported ${records.length} record(s) (${scenario ?? "combined"}).`);
       const suffix = scenario ?? "combined";
-      downloadJson(records, `asv-ledger-${suffix}-${new Date().toISOString().slice(0, 10)}.json`);
+      downloadJson(records, `${tenantConfig.orgAbbreviation.toLowerCase()}-ledger-${suffix}-${new Date().toISOString().slice(0, 10)}.json`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Export failed.");
     } finally {

@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { ApiError } from "@google/genai";
 import { requireCaller } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { query } from "../lib/dataconnect-admin";
 import { createContextCache, generateChatReply, generateGroundedContent, type ChatTurn } from "../lib/vertexAi";
 import { generateChatReply as openRouterGenerateChatReply } from "../lib/openRouter";
@@ -179,6 +180,7 @@ export const aiPortfolioQuery = onCall<AiPortfolioQueryInput, Promise<AiPortfoli
   { timeoutSeconds: 540, secrets: [openRouterKeyPortfolioChat, serperApiKey] },
   async (request) => {
     const caller = await requireCaller(request);
+    await requireFeatureEnabled(caller, "AI_CHAT");
     const { message, scope, cachedContentName, history } = request.data;
     if (!message || (scope !== "mine" && scope !== "asv")) {
       throw new HttpsError("invalid-argument", "message and a valid scope ('mine' or 'asv') are required.");

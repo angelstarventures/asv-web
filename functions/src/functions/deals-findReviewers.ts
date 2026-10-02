@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { query, withTransaction } from "../lib/dataconnect-admin";
 import { dispatchGenerateContent } from "../lib/aiDispatch";
 import { openRouterKeyDealKeywordGeneration, openRouterKeyDealReviewerMatching } from "../lib/openRouterSecrets";
@@ -113,6 +114,7 @@ export const dealsFindReviewers = onCall<DealsFindReviewersInput, Promise<DealsF
   },
   async (request) => {
     const caller = await requireAdmin(request);
+    await requireFeatureEnabled(caller, "AI_DEAL_MATCHING");
     const { dealId } = request.data;
     if (!dealId) {
       throw new HttpsError("invalid-argument", "dealId is required.");

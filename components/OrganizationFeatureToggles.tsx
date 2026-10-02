@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { organizationFeatureKeys, type OrganizationFeatureKey } from "@/lib/auth/permissions";
+import { listOrganizations } from "@/lib/functions/organizationMembers";
 import { updateOrganizationFeature, getOrganizationFeatures } from "@/lib/functions/organizationFeatures";
 
 // The master switch for the deployment — a feature disabled here is unavailable to
@@ -14,17 +15,27 @@ export function OrganizationFeatureToggles({
   organizationId,
   editable,
 }: {
-  organizationId: string;
+  organizationId?: string;
   editable: boolean;
 }) {
+  const [resolvedOrgId, setResolvedOrgId] = useState<string | undefined>(organizationId);
   const [features, setFeatures] = useState<{ featureKey: string; enabled: boolean }[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
+  // If no orgId was provided (e.g. called from a Server Component that can't call Cloud
+  // Functions), look it up client-side where auth is available.
   const load = useCallback(async () => {
     try {
-      const { features: f } = await getOrganizationFeatures(organizationId);
+      let orgId = organizationId;
+      if (!orgId) {
+        const { organizations } = await listOrganizations();
+        orgId = organizations[0]?.id;
+        if (!orgId) throw new Error("No organization found.");
+        setResolvedOrgId(orgId);
+      }
+      const { features: f } = await getOrganizationFeatures(orgId);
       setFeatures(f);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load features.");
@@ -36,12 +47,12 @@ export function OrganizationFeatureToggles({
   }, [load]);
 
   async function toggle(key: OrganizationFeatureKey) {
-    if (!features || !editable) return;
+    if (!features || !editable || !resolvedOrgId) return;
     setBusy(key);
     setError(null);
     const current = features.find((f) => f.featureKey === key)?.enabled ?? false;
     try {
-      await updateOrganizationFeature({ organizationId, featureKey: key, enabled: !current });
+      await updateOrganizationFeature({ organizationId: resolvedOrgId, featureKey: key, enabled: !current });
       setFeatures((prev) => prev?.map((f) => (f.featureKey === key ? { ...f, enabled: !current } : f)) ?? null);
       router.refresh();
     } catch (err) {
@@ -51,7 +62,10 @@ export function OrganizationFeatureToggles({
     }
   }
 
-  if (features === null) return <span className="text-xs text-zinc-500">Loading…</span>;
+  if (features === null) {
+    if (error) return <p className="text-xs text-red-600 dark:text-red-400">{error}</p>;
+    return <span className="text-xs text-zinc-500">Loading…</span>;
+  }
 
   return (
     <div className="flex flex-col gap-1">

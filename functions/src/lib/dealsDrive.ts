@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 import { Readable } from "node:stream";
 import { defineSecret } from "firebase-functions/params";
+import { tenantConfig } from "./tenantConfig";
 
 // OAuth-delegated Drive client for the personal (non-Workspace) Google account that actually
 // has real Drive storage quota — a bare service account (lib/drive.ts's client, used for the
@@ -23,8 +24,9 @@ export const driveOAuthRefreshToken = defineSecret("DRIVE_OAUTH_REFRESH_TOKEN");
 // (used by documents-getAccessUrl.ts to serve every Document row's download, regardless of
 // which upload path created it) reads as this identity, so any folder a NEW company subfolder
 // is created in via the OAuth account below must also grant this account view access, or the
-// existing member-facing Documents view/download flow can't read files placed here.
-const DRIVE_SERVICE_ACCOUNT_EMAIL = "345219246308-compute@developer.gserviceaccount.com";
+// existing member-facing Documents view/download flow can't read files placed here. Sourced from
+// tenant config so a new deployment with a different GCP project uses its own compute email.
+const DRIVE_SERVICE_ACCOUNT_EMAIL = tenantConfig.driveServiceAccountEmail;
 
 function getDealsDriveClient() {
   const clientId = process.env.DRIVE_OAUTH_CLIENT_ID;

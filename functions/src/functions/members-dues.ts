@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { query, withTransaction } from "../lib/dataconnect-admin";
 import { getAppSetting } from "../lib/appSettings";
 import { sendEmail } from "../lib/gmail";
@@ -37,7 +38,8 @@ export interface MembersSendDuesReminderOutput {
 export const membersSendDuesReminder = onCall<MembersSendDuesReminderInput, Promise<MembersSendDuesReminderOutput>>(
   { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
   async (request) => {
-    await requireAdmin(request);
+    const caller = await requireAdmin(request);
+    await requireFeatureEnabled(caller, "MEMBERSHIP_DUES");
     const { memberId, channel } = request.data;
     if (!memberId || (channel !== "whatsapp" && channel !== "email")) {
       throw new HttpsError("invalid-argument", 'memberId and channel ("whatsapp" | "email") are required.');
@@ -80,7 +82,8 @@ export interface UpdateMemberDuesStatusInput {
 // silently fail to land (wrong number, bounce), so this is never auto-set on send; the admin
 // confirms it actually went out.
 export const updateMemberDuesStatus = onCall<UpdateMemberDuesStatusInput, Promise<{ ok: true }>>(async (request) => {
-  await requireAdmin(request);
+  const caller = await requireAdmin(request);
+  await requireFeatureEnabled(caller, "MEMBERSHIP_DUES");
   const { memberId, sent } = request.data;
   if (!memberId || typeof sent !== "boolean") {
     throw new HttpsError("invalid-argument", "memberId and sent are required.");

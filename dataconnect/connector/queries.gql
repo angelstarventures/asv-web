@@ -682,3 +682,16 @@ query ListDealFundingRoundsByDeal($dealId: UUID!) @auth(level: USER, insecureRea
     currency
   }
 }
+# Backs the admin-layout org-membership gate. Checks whether a member has at least one
+# organization_member row (i.e. has been assigned to "the" organization). Returns zero rows
+# for an unassigned admin, whose admin-layout then redirects to /member/dashboard.
+# site_admin/dev_site_admin never reach this check (they bypass in the layout code).
+query GetOrganizationMembership($memberId: String!) @auth(level: USER, insecureReason: "Called from the admin layout (admin-tier gated by proxy.ts). Returns the caller's own org membership — no other member's data is exposed.") {
+  organizationMembers(where: { memberId: { eq: $memberId } }, limit: 1) {
+    id
+    organization {
+      id
+      name
+    }
+  }
+}

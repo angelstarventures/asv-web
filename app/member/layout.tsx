@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { AppHeader } from "@/components/AppHeader";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getMemberById } from "@/lib/dataconnect/client";
+import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
 
 // proxy.ts is the real enforcement point for everything under /member/* — role isn't
 // restricted here at all (only /admin/* checks role), so an admin who is also a real
@@ -10,6 +11,10 @@ import { getMemberById } from "@/lib/dataconnect/client";
 export default async function MemberLayout({ children }: { children: ReactNode }) {
   const current = await getCurrentMember();
   const isAdmin = current?.role === "admin" || current?.role === "site_admin" || current?.role === "dev_site_admin";
+
+  // Feature flags are computed client-side in AppHeader (Server Components can't authenticate
+  // Cloud Function calls). The header handles its own feature fetching.
+
   const { member } = current ? await getMemberById({ id: current.memberId }) : { member: undefined };
 
   return (

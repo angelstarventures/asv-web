@@ -353,6 +353,20 @@ export interface GetMemberByIdVariables {
   id: string;
 }
 
+export interface GetOrganizationMembershipData {
+  organizationMembers: ({
+    id: UUIDString;
+    organization: {
+      id: UUIDString;
+      name: string;
+    } & Organization_Key;
+  } & OrganizationMember_Key)[];
+}
+
+export interface GetOrganizationMembershipVariables {
+  memberId: string;
+}
+
 export interface GetPortfolioRollupData {
   rollupCaches: ({
     moic: number;
@@ -1533,4 +1547,16 @@ export const listDealFundingRoundsByDealRef: ListDealFundingRoundsByDealRef;
 
 export function listDealFundingRoundsByDeal(vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
 export function listDealFundingRoundsByDeal(dc: DataConnect, vars: ListDealFundingRoundsByDealVariables, options?: ExecuteQueryOptions): QueryPromise<ListDealFundingRoundsByDealData, ListDealFundingRoundsByDealVariables>;
+
+interface GetOrganizationMembershipRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetOrganizationMembershipVariables): QueryRef<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetOrganizationMembershipVariables): QueryRef<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+  operationName: string;
+}
+export const getOrganizationMembershipRef: GetOrganizationMembershipRef;
+
+export function getOrganizationMembership(vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+export function getOrganizationMembership(dc: DataConnect, vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
 

@@ -1,0 +1,32 @@
+{
+  "organizationName": "Demo Angel Group",
+  "members": [
+    { "id": "00001", "displayName": "Alice Admin",    "email": "alice@demo.org",    "role": "ADMIN",        "membershipType": "BOARD_MEMBER" },
+    { "id": "00002", "displayName": "Bob Builder",    "email": "bob@demo.org",      "role": "ADMIN",        "membershipType": "MEMBER" },
+    { "id": "00003", "displayName": "Carol Connector", "email": "carol@demo.org",   "role": "USER",         "membershipType": "MEMBER" },
+    { "id": "00004", "displayName": "Dave Developer", "email": "dave@demo.org",     "role": "USER",         "membershipType": "ASSOCIATE" },
+    { "id": "00005", "displayName": "Eve Evaluator",  "email": "eve@demo.org",      "role": "USER",         "membershipType": "MEMBER" },
+    { "id": "00006", "displayName": "Frank Founder",  "email": "frank@demo.org",    "role": "USER",         "membershipType": "MEMBER" },
+    { "id": "00007", "displayName": "Grace Guardian", "email": "grace@demo.org",    "role": "SITE_ADMIN",   "membershipType": "BOARD_MEMBER" },
+    { "id": "00008", "displayName": "Hank Helper",    "email": "hank@demo.org",     "role": "DEV_SITE_ADMIN", "membershipType": "MEMBER" },
+    { "id": "00009", "displayName": "Ivy Investor",   "email": "ivy@demo.org",      "role": "USER",         "membershipType": "MEMBER" },
+    { "id": "00010", "displayName": "Jack Judge",     "email": "jack@demo.org",     "role": "USER",         "membershipType": "MEMBER" }
+  ],
+  "companies": [
+    { "name": "NovaTech Solutions",  "tradeName": "NovaTech",   "sector": "Technology",       "tagline": "AI-driven supply chain optimization" },
+    { "name": "GreenLeaf Bio",       "tradeName": "GreenLeaf",  "sector": "Biotech",          "tagline": "Sustainable agricultural biotechnology" },
+    { "name": "MedCore Devices",     "tradeName": "MedCore",    "sector": "Medical",          "tagline": "Next-gen diagnostic imaging" },
+    { "name": "Quantum Builders",    "tradeName": "Quantum",    "sector": "Build-Tech",       "tagline": "Modular construction robotics" },
+    { "name": "PureHealth Pharma",   "tradeName": "PureHealth", "sector": "Pharma",           "tagline": "Novel drug delivery platforms" },
+    { "name": "DataForge Analytics", "tradeName": "DataForge",  "sector": "IT",               "tagline": "Real-time big data analytics" },
+    { "name": "ChemSynth Labs",      "tradeName": "ChemSynth",  "sector": "Chemicals",        "tagline": "Green chemistry manufacturing" },
+    { "name": "AlgoTrading Systems", "tradeName": "AlgoTrading", "sector": "Financial Services", "tagline": "Algorithmic trading infrastructure" },
+    { "name": "HealthTrack AI",      "tradeName": "HealthTrack", "sector": "Health",          "tagline": "AI-powered patient monitoring" },
+    { "name": "EcoPack Materials",   "tradeName": "EcoPack",    "sector": "Materials",        "tagline": "Biodegradable packaging solutions" }
+  ],
+  "featureKeys": [
+    "DEALS", "AI_DEAL_MATCHING", "AI_CHAT", "AI_DOCUMENT_ANALYSIS",
+    "MULTIPLE_LEDGERS", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
+    "MEMBERSHIP_DUES", "COSTS"
+  ]
+}

@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireSiteAdmin } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { AI_FEATURE_KEYS, type AiFeatureKey, type AiProvider, type SearchBackend } from "../lib/aiProviderSettings";
 
@@ -23,6 +24,7 @@ const SEARCH_BACKEND_KEYS: readonly AiFeatureKey[] = ["document_analysis", "port
 
 export const updateAiProviderSetting = onCall<UpdateAiProviderSettingInput, Promise<{ ok: true }>>(async (request) => {
   const caller = await requireSiteAdmin(request);
+  await requireFeatureEnabled(caller, "AI_MODEL_SELECTION");
 
   const { key, provider } = request.data;
   if (!AI_FEATURE_KEYS.includes(key)) {

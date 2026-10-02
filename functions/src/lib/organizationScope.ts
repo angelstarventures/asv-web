@@ -1,6 +1,6 @@
-import { HttpsError } from "firebase-functions/v2/https";
+import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { query } from "./dataconnect-admin";
-import type { CallerContext } from "./auth";
+import { requireAdmin, type CallerContext } from "./auth";
 
 // Organization-scoping helpers for the "admin" role. The Organization is the angel
 // fund/tenant itself (see schema.gql's comment) — distinct from Company, a portfolio
@@ -46,4 +46,44 @@ export async function requireOrganizationScopedAccess(
 export async function getOrganizationFilterForCaller(caller: CallerContext): Promise<string[] | undefined> {
   if (caller.role === "site_admin" || caller.role === "dev_site_admin") return undefined;
   return getCallerOrganizationIds(caller);
+}
+
+// ── Central admin gate ──────────────────────────────────────────────────────
+// Every admin-tier callable uses this instead of bare requireAdmin. For admin-role
+// callers it additionally checks they have at least one organization_member row (i.e.
+// they've been assigned to the org). site_admin/dev_site_admin bypass the check.
+//
+// Rollout is controlled by ORG_GATE_MODE env var:
+//   "log"      — log would-be denials and allow (safe default during rollout)
+//   "enforce"  — actually throw permission-denied
+// Defaults to "log" so an incomplete backfill never silently locks someone out.
+const ORG_GATE_MODE = (process.env.ORG_GATE_MODE ?? "log") === "enforce" ? "enforce" : "log";
+
+export async function requireOrgAdmin(request: CallableRequest): Promise<CallerContext> {
+  const caller = await requireAdmin(request);
+
+  // site_admin/dev_site_admin are always global — no org-scoping check needed.
+  if (caller.role === "site_admin" || caller.role === "dev_site_admin") {
+    return caller;
+  }
+
+  const orgIds = await getCallerOrganizationIds(caller);
+  if (orgIds.length > 0) {
+    return caller; // Has at least one org assignment — allowed.
+  }
+
+  // No org_member row found.
+  if (ORG_GATE_MODE === "log") {
+    console.warn(
+      `[ORG_GATE] would-deny: memberId=${caller.memberId} role=${caller.role} ` +
+      `uid=${caller.uid} — no organization_member row. Allowing in log mode. ` +
+      `Set ORG_GATE_MODE=enforce once backfill is confirmed complete.`
+    );
+    return caller;
+  }
+
+  throw new HttpsError(
+    "permission-denied",
+    "Your account isn't assigned to the organization yet. Ask a dev-site-admin to add you."
+  );
 }

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { CostsSummaryPanel } from "@/components/CostsSummaryPanel";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
+import { tenantConfig } from "@/lib/config/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,7 @@ export default async function AdminCostsPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium">Firebase / Google Cloud</h2>
           <a
-            href="https://console.cloud.google.com/billing?project=angelstar-investments"
+            href={`https://console.cloud.google.com/billing?project=${tenantConfig.billingConsoleProjectId}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-zinc-500 underline underline-offset-2 hover:text-foreground"

@@ -50,6 +50,7 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListDealPitchDecks*](#listdealpitchdecks)
   - [*ListDealPublicReviewsByDeal*](#listdealpublicreviewsbydeal)
   - [*ListDealFundingRoundsByDeal*](#listdealfundingroundsbydeal)
+  - [*GetOrganizationMembership*](#getorganizationmembership)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -4780,6 +4781,121 @@ console.log(data.dealFundingRoundEntries);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.dealFundingRoundEntries);
+});
+```
+
+## GetOrganizationMembership
+You can execute the `GetOrganizationMembership` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+getOrganizationMembership(vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+
+interface GetOrganizationMembershipRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetOrganizationMembershipVariables): QueryRef<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+}
+export const getOrganizationMembershipRef: GetOrganizationMembershipRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+getOrganizationMembership(dc: DataConnect, vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+
+interface GetOrganizationMembershipRef {
+  ...
+  (dc: DataConnect, vars: GetOrganizationMembershipVariables): QueryRef<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+}
+export const getOrganizationMembershipRef: GetOrganizationMembershipRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getOrganizationMembershipRef:
+```typescript
+const name = getOrganizationMembershipRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `GetOrganizationMembership` query requires an argument of type `GetOrganizationMembershipVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface GetOrganizationMembershipVariables {
+  memberId: string;
+}
+```
+### Return Type
+Recall that executing the `GetOrganizationMembership` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `GetOrganizationMembershipData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface GetOrganizationMembershipData {
+  organizationMembers: ({
+    id: UUIDString;
+    organization: {
+      id: UUIDString;
+      name: string;
+    } & Organization_Key;
+  } & OrganizationMember_Key)[];
+}
+```
+### Using `GetOrganizationMembership`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, getOrganizationMembership, GetOrganizationMembershipVariables } from '@asv/dataconnect-generated';
+
+// The `GetOrganizationMembership` query requires an argument of type `GetOrganizationMembershipVariables`:
+const getOrganizationMembershipVars: GetOrganizationMembershipVariables = {
+  memberId: ..., 
+};
+
+// Call the `getOrganizationMembership()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await getOrganizationMembership(getOrganizationMembershipVars);
+// Variables can be defined inline as well.
+const { data } = await getOrganizationMembership({ memberId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await getOrganizationMembership(dataConnect, getOrganizationMembershipVars);
+
+console.log(data.organizationMembers);
+
+// Or, you can use the `Promise` API.
+getOrganizationMembership(getOrganizationMembershipVars).then((response) => {
+  const data = response.data;
+  console.log(data.organizationMembers);
+});
+```
+
+### Using `GetOrganizationMembership`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, getOrganizationMembershipRef, GetOrganizationMembershipVariables } from '@asv/dataconnect-generated';
+
+// The `GetOrganizationMembership` query requires an argument of type `GetOrganizationMembershipVariables`:
+const getOrganizationMembershipVars: GetOrganizationMembershipVariables = {
+  memberId: ..., 
+};
+
+// Call the `getOrganizationMembershipRef()` function to get a reference to the query.
+const ref = getOrganizationMembershipRef(getOrganizationMembershipVars);
+// Variables can be defined inline as well.
+const ref = getOrganizationMembershipRef({ memberId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = getOrganizationMembershipRef(dataConnect, getOrganizationMembershipVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.organizationMembers);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.organizationMembers);
 });
 ```
 

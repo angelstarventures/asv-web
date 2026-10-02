@@ -1,5 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { requireExactRole, requireDevSiteAdmin } from "../lib/auth";
+import { requireExactRole, requireDevSiteAdmin, requireCaller } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
 
 // ── Organization membership assignment ──────────────────────────────────────
@@ -19,9 +19,14 @@ export interface ListOrganizationsOutput {
 // without hardcoding it.
 export const listOrganizations = onCall<Record<string, never>, Promise<ListOrganizationsOutput>>(
   async (request) => {
-    await requireDevSiteAdmin(request);
-    const rows = await query<{ id: string; name: string }>(`SELECT id, name FROM "organization" ORDER BY name`);
-    return { organizations: rows };
+    try {
+      await requireDevSiteAdmin(request);
+      const rows = await query<{ id: string; name: string }>(`SELECT id, name FROM "organization" ORDER BY name`);
+      return { organizations: rows };
+    } catch (err) {
+      console.error(`listOrganizations error:`, err);
+      throw err;
+    }
   }
 );
 
@@ -95,6 +100,69 @@ export interface ListOrganizationMembersOutput {
 
 // dev_site_admin or site_admin — read-only, useful for both tiers to audit assignments
 // (unlike the mutating functions above, this doesn't need the narrower exact-role boundary).
+export interface GetOrganizationMemberIdsOutput {
+  memberIds: string[];
+}
+
+// Returns the set of member IDs that have organization_member rows for the sole org.
+// Any authenticated caller can use this — it only reveals which members belong to the org,
+// not any sensitive data about them. Used by the admin members page to filter the member
+// list to org members only.
+export const getOrganizationMemberIds = onCall<
+  Record<string, never>,
+  Promise<GetOrganizationMemberIdsOutput>
+>(async (request) => {
+  await requireCaller(request);
+  const rows = await query<{ memberId: string }>(
+    `SELECT "member_id" AS "memberId" FROM "organization_member"`
+  );
+  return { memberIds: rows.map((r) => r.memberId) };
+});
+
+export interface GetMyOrganizationMembershipOutput {
+  hasMembership: boolean;
+  organizationId: string | null;
+  organizationName: string | null;
+}
+
+// Returns whether the caller has an organization_member row. Any signed-in user can call this
+// for themselves — it derives memberId from the verified session, not from request data, so an
+// admin can't probe another member's membership status. Used by the admin-layout gate to decide
+// whether to redirect unassigned admins; returns hasMembership=false for non-admin roles too
+// (those roles never reach the admin layout, but this callable is safe for any caller).
+export const getMyOrganizationMembership = onCall<
+  Record<string, never>,
+  Promise<GetMyOrganizationMembershipOutput>
+>(async (request) => {
+  const caller = await requireCaller(request);
+
+  const rows = await query<{ id: string; name: string }>(
+    `SELECT o.id, o.name
+     FROM "organization_member" om
+     JOIN "organization" o ON o.id = om."organization_id"
+     WHERE om."member_id" = $1
+     LIMIT 1`,
+    [caller.memberId]
+  );
+
+  if (rows.length > 0) {
+    return { hasMembership: true, organizationId: rows[0].id, organizationName: rows[0].name };
+  }
+
+  // No org_member row found. For global roles (site_admin/dev_site_admin/developer) that don't
+  // need org-scoping, fall back to the sole organization so feature-flag computation still works.
+  if (caller.role === "site_admin" || caller.role === "dev_site_admin" || caller.role === "developer") {
+    const orgRows = await query<{ id: string; name: string }>(
+      `SELECT id, name FROM "organization" LIMIT 1`
+    );
+    if (orgRows.length > 0) {
+      return { hasMembership: false, organizationId: orgRows[0].id, organizationName: orgRows[0].name };
+    }
+  }
+
+  return { hasMembership: false, organizationId: null, organizationName: null };
+});
+
 export const listOrganizationMembers = onCall<
   ListOrganizationMembersInput,
   Promise<ListOrganizationMembersOutput>

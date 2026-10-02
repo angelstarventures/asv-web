@@ -1,13 +1,17 @@
 import { google } from "googleapis";
 import { driveOAuthClientSecret, driveOAuthRefreshToken } from "./dealsDrive";
+import { tenantConfig } from "./tenantConfig";
 
-// Reuses the SAME OAuth-delegated identity as dealsDrive.ts (angelstarventures@gmail.com) —
-// one refresh token, requested with drive.file + gmail.send together via
-// scripts/get-drive-oauth-token.js, rather than a second Google account/credential set. Sending
-// email as this account requires that refresh token to actually carry the gmail.send scope
-// (granted via a one-time re-consent — see that script's own header comment); until that's
-// done, calls here fail with an insufficient-scope error from Google, not from this code.
-const FROM_ADDRESS = "angelstarventures@gmail.com";
+// Reuses the SAME OAuth-delegated identity as dealsDrive.ts — one refresh token, requested with
+// drive.file + gmail.send together via scripts/get-drive-oauth-token.js, rather than a second
+// Google account/credential set. Sending email as this account requires that refresh token to
+// actually carry the gmail.send scope (granted via a one-time re-consent — see that script's
+// own header comment); until that's done, calls here fail with an insufficient-scope error from
+// Google, not from this code.
+
+// Name used in the From header; sourced from tenant config so a new deployment identifies
+// itself correctly without forking this file.
+const FROM_ADDRESS = tenantConfig.fromAddress;
 
 function getGmailClient() {
   const clientId = process.env.DRIVE_OAUTH_CLIENT_ID;

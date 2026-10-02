@@ -1,16 +1,18 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getAuth } from "firebase-admin/auth";
-import { requireAdmin, requireCaller, requireSiteAdmin } from "../lib/auth";
+import { requireAdmin, requireCaller, requireSiteAdmin, validateRoleForOrganization, clearOrgNameCache, getOrgName } from "../lib/auth";
 import { query, withTransaction } from "../lib/dataconnect-admin";
 import { sendEmail } from "../lib/gmail";
 import { driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // The ONLY path that ever sets role/status custom claims (plan §3/§4). Backs the admin
 // "add member" flow at app/admin/members/page.tsx.
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const APP_DOMAIN = "https://angelstar-investments.firebaseapp.com";
+const APP_DOMAIN = tenantConfig.appDomain;
+const ORG_NAME = tenantConfig.orgDisplayName;
 
 // Generates a random token and stores it with a 48-hour expiry on the member row.
 // Returns the custom link the user will receive via email.
@@ -40,18 +42,18 @@ async function sendPasswordSetEmail(
 
   await sendEmail({
     to: email,
-    subject: `Set your AngelStar Ventures account password`,
+    subject: `Set your ${ORG_NAME} account password`,
     body: [
       `Hi ${displayName},`,
       "",
-      "An admin has created an account for you on the AngelStar Ventures member portal.",
+      `An admin has created an account for you on the ${ORG_NAME} member portal.`,
       "Click the link below to set your password and sign in:",
       "",
       customLink,
       "",
       "This link expires in 48 hours. If you didn't expect this email, you can safely ignore it.",
       "",
-      "— AngelStar Ventures",
+      `— ${ORG_NAME}`,
     ].join("\n"),
   });
 }
@@ -67,18 +69,18 @@ async function sendPasswordResetEmail(
 
   await sendEmail({
     to: email,
-    subject: `Password reset request for AngelStar Ventures`,
+    subject: `Password reset request for ${ORG_NAME}`,
     body: [
       `Hi ${displayName},`,
       "",
-      "An admin has requested that you reset your AngelStar Ventures member portal password.",
+      `An admin has requested that you reset your ${ORG_NAME} member portal password.`,
       "Click the link below to choose a new password and sign in:",
       "",
       customLink,
       "",
       "This link expires in 48 hours. If you didn't request this, you can safely ignore this email.",
       "",
-      "— AngelStar Ventures",
+      `— ${ORG_NAME}`,
     ].join("\n"),
   });
 }
@@ -98,7 +100,19 @@ export interface ProvisionMemberOutput {
 export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMemberOutput>>(
   { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
   async (request) => {
-    await requireAdmin(request);
+    const caller = await requireAdmin(request);
+
+    // Admin callers can only provision "user" or "admin" roles — no escalation to
+    // site_admin/dev_site_admin/developer (those require explicit site_admin/dev_site_admin action).
+    if (caller.role === "admin") {
+      const ALLOWED_FOR_ADMIN = ["user", "admin"] as const;
+      if (!ALLOWED_FOR_ADMIN.includes(request.data.role as typeof ALLOWED_FOR_ADMIN[number])) {
+        throw new HttpsError(
+          "permission-denied",
+          "As an admin, you can only provision regular members (user or admin role)."
+        );
+      }
+    }
 
     const { memberId, email, role, displayName } = request.data;
     if (!memberId || !email || !role || !displayName) {
@@ -165,6 +179,10 @@ export interface CreateMemberInput {
   // created via the admin UI are regular members; this only needs to be set explicitly for a
   // batch/import path adding an Associate or Emeritus member directly.
   membershipType?: MembershipType;
+  // Which organization this member belongs to. When omitted:
+  //   - developer/dev_site_admin callers: must specify (no default)
+  //   - admin callers: defaults to the venture group (the non-VentureDesk org)
+  organizationId?: string;
 }
 
 export interface CreateMemberOutput {
@@ -176,15 +194,61 @@ export interface CreateMemberOutput {
 // creates the row; linking a Firebase Auth account is still a separate provisionMember call,
 // same as it is for every migrated member.
 export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput>>(async (request) => {
-  await requireAdmin(request);
+  const caller = await requireAdmin(request);
 
-  const { displayName, email, role, membershipType } = request.data;
+  // Admin callers can only create "user" or "admin" roles (same restriction as provisionMember)
+  if (caller.role === "admin") {
+    const ALLOWED_FOR_ADMIN = ["user", "admin"] as const;
+    if (!ALLOWED_FOR_ADMIN.includes(request.data.role as typeof ALLOWED_FOR_ADMIN[number])) {
+      throw new HttpsError(
+        "permission-denied",
+        "As an admin, you can only assign regular member roles (user or admin)."
+      );
+    }
+  }
+
+  const { displayName, email, role, membershipType, organizationId } = request.data;
   if (!displayName?.trim() || !email?.trim() || !role) {
     throw new HttpsError("invalid-argument", "displayName, email, and role are required.");
   }
   if (membershipType && !MEMBERSHIP_TYPES.includes(membershipType)) {
     throw new HttpsError("invalid-argument", `membershipType must be one of: ${MEMBERSHIP_TYPES.join(", ")}.`);
   }
+
+  // ── Resolve organization ──────────────────────────────────────────────────
+  // Admin callers always create venture-group members (non-VentureDesk org).
+  // Dev/dev_site_admin callers must specify the organization explicitly.
+  let resolvedOrgId = organizationId;
+  if (caller.role === "admin") {
+    if (resolvedOrgId) {
+      // Admin specified an org — validate it's not VentureDesk (admins can only create
+      // venture group members).
+      const orgName = await getOrgName(resolvedOrgId);
+      if (orgName.toLowerCase().includes("venturedesk")) {
+        throw new HttpsError(
+          "permission-denied",
+          "As an admin, you can only create members for the venture group, not VentureDesk."
+        );
+      }
+    } else {
+      // Default to the non-VentureDesk org (the venture group).
+      const orgRows = await query<{ id: string }>(
+        `SELECT id FROM "organization" WHERE LOWER(name) != 'venturedesk' LIMIT 1`
+      );
+      if (orgRows.length === 0) throw new HttpsError("failed-precondition", "No venture group organization found.");
+      resolvedOrgId = orgRows[0].id;
+    }
+  } else {
+    // Dev/dev_site_admin callers: organizationId is required.
+    if (!resolvedOrgId) {
+      throw new HttpsError("invalid-argument", "organizationId is required when creating members as a developer or dev-site-admin.");
+    }
+  }
+
+  // ── Validate role × organization compatibility ────────────────────────────
+  clearOrgNameCache();
+  const orgName = await getOrgName(resolvedOrgId);
+  validateRoleForOrganization(role, orgName);
 
   const memberId = await withTransaction(async (client) => {
     // Member.id is a zero-padded 5-digit string (plan §2) with gaps from the legacy import —
@@ -213,6 +277,15 @@ export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput
       }
       throw err;
     }
+
+    // Create the organization_member row linking this new member to their org
+    // (VentureDesk or venture group). Since the member was just created, there is no
+    // existing row to conflict with.
+    await client.query(
+      `INSERT INTO "organization_member" ("organization_id", "member_id", "role_in_organization", "created_at")
+       VALUES ($1, $2, $3, now())`,
+      [resolvedOrgId, nextId, role === "developer" ? "Developer" : role === "dev_site_admin" ? "Dev Site Admin" : "Member"]
+    );
 
     return nextId;
   });
@@ -626,11 +699,10 @@ export const deleteMember = onCall<DeleteMemberInput, Promise<{ ok: true }>>(asy
 
     const authUid = member.authUid;
 
-    // Clean up optional references (may not exist for test members)
-    try { await query(`DELETE FROM "organization_member" WHERE "member_id" = $1`, [memberId]); } catch {}
-
-    // Delete the member row
+    // Delete the member row and clean up optional references in one transaction
+    // (organization_member may not exist for test members — skip if not found)
     await withTransaction(async (client) => {
+      await client.query(`DELETE FROM "organization_member" WHERE "member_id" = $1`, [memberId]);
       await client.query(`DELETE FROM "member" WHERE id = $1`, [memberId]);
     });
 
@@ -809,6 +881,16 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     throw new HttpsError("failed-precondition", "This member has not been provisioned with a login yet.");
   }
 
+  // Admin callers may only grant "user" or "admin" roles — no escalation to developer/site_admin tiers.
+  // This is checked before the site_admin/dev_site_admin guard below because admin should never even
+  // reach those checks; the overlap case (admin trying to set site_admin) would also be caught here.
+  if (caller.role === "admin" && role !== "user" && role !== "admin") {
+    throw new HttpsError(
+      "permission-denied",
+      "As an admin, you can only assign user or admin roles."
+    );
+  }
+
   // Granting OR revoking the top tiers (site_admin, dev_site_admin) is restricted:
   //   - Only a site_admin can grant/revoke site_admin
   //   - Only a dev_site_admin or site_admin can grant/revoke dev_site_admin
@@ -825,8 +907,34 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     throw new HttpsError("permission-denied", "Only a dev-site-admin or site-admin can grant or revoke the dev-site-admin role.");
   }
 
+  const wasAdmin = targetRole === "ADMIN";
+  const becomingAdmin = role === "admin";
+
   await withTransaction(async (client) => {
     await client.query(`UPDATE "member" SET role = $1 WHERE id = $2`, [role.toUpperCase(), memberId]);
+
+    // Auto-assign on promotion to admin: insert organization_member row so the newly promoted
+    // admin isn't locked out by org-scoping. Demotion from admin removes the row.
+    if (!wasAdmin && becomingAdmin) {
+      const orgs = await client.query<{ id: string }>(`SELECT id FROM "organization" LIMIT 1`);
+      if (orgs.rows.length > 0) {
+        const orgId = orgs.rows[0].id;
+        // Idempotent: skip if already assigned (e.g. re-promotion after manual reassignment)
+        const existing = await client.query<{ id: string }>(
+          `SELECT id FROM "organization_member" WHERE "member_id" = $1`,
+          [memberId]
+        );
+        if (existing.rows.length === 0) {
+          await client.query(
+            `INSERT INTO "organization_member" ("organization_id", "member_id", "role_in_organization", "created_at")
+             VALUES ($1, $2, NULL, now())`,
+            [orgId, memberId]
+          );
+        }
+      }
+    } else if (wasAdmin && !becomingAdmin) {
+      await client.query(`DELETE FROM "organization_member" WHERE "member_id" = $1`, [memberId]);
+    }
   });
 
   const user = await getAuth().getUser(authUid);

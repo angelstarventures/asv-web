@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { tenantConfig } from "./tenantConfig";
 
 // "Has Lead"/"Halal" are auto-managed tags: unlike the admin-only manual tags (deals-manageTag.ts/
 // deals-assignTag.ts), these always reflect the deal's own current field state — every submit/
@@ -44,13 +45,17 @@ async function setAssignment(client: PoolClient, dealId: string, tagId: string, 
 // willHaveInterestBearingDebtAfterClose already means; pre-existing debt is a separate signal.
 export async function syncAutoTagsForDeal(client: PoolClient, dealId: string, flags: DealAutoTagFlags): Promise<void> {
   const hasLeadTagId = await resolveTagId(client, AUTO_TAG_NAMES.HAS_LEAD);
-  const halalTagId = await resolveTagId(client, AUTO_TAG_NAMES.HALAL);
-
   await setAssignment(client, dealId, hasLeadTagId, flags.hasLeadInvestor);
-  await setAssignment(
-    client,
-    dealId,
-    halalTagId,
-    !flags.willHaveInterestBearingDebtAfterClose && !flags.hasRestrictedBusinessLines
-  );
+
+  // Halal/Shariah compliance auto-tag — only runs when compliance screening is enabled for this
+  // deployment. A disabled tenant never gets the tag created at all, not just relabeled.
+  if (tenantConfig.complianceScreening.enabled) {
+    const halalTagId = await resolveTagId(client, AUTO_TAG_NAMES.HALAL);
+    await setAssignment(
+      client,
+      dealId,
+      halalTagId,
+      !flags.willHaveInterestBearingDebtAfterClose && !flags.hasRestrictedBusinessLines
+    );
+  }
 }

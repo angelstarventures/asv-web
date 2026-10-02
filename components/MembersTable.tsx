@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   updateMemberAiSettings,
@@ -8,6 +8,7 @@ import {
   updateMemberDuesStatus,
   type ScenarioLockValue,
 } from "@/lib/functions/adminMembers";
+import { getOrganizationMemberIds } from "@/lib/functions/organizationMembers";
 
 export interface MemberRow {
   id: string;
@@ -192,7 +193,39 @@ function MemberAiSettingsControls({ member }: { member: MemberRow }) {
 
 // Client-rendered so column headers can drive sort state, same pattern as
 // CompanyRollupTable/ManageLedgerTable.
-export function MembersTable({ members, siteAdminModeOn }: { members: MemberRow[]; siteAdminModeOn: boolean }) {
+export function MembersTable({
+  members,
+  siteAdminModeOn,
+  callerRole,
+}: {
+  members: MemberRow[];
+  siteAdminModeOn: boolean;
+  callerRole?: string;
+}) {
+  const [orgMemberIds, setOrgMemberIds] = useState<Set<string> | null>(null);
+  const [filterError, setFilterError] = useState<string | null>(null);
+
+  // For admin-role callers, fetch org member IDs client-side and filter the list to only
+  // show members who belong to the org. Global roles (site_admin/dev_site_admin) see all.
+  useEffect(() => {
+    if (callerRole !== "admin") {
+      setOrgMemberIds(null); // No filtering for global roles
+      return;
+    }
+    getOrganizationMemberIds()
+      .then(({ memberIds }) => setOrgMemberIds(new Set(memberIds)))
+      .catch((err) => {
+        console.warn("Failed to fetch org member IDs:", err);
+        setFilterError("Could not load organization membership data.");
+        setOrgMemberIds(null); // Fall back to showing all
+      });
+  }, [callerRole]);
+
+  // Filter the member list when org member IDs are available and caller is admin.
+  const displayMembers = orgMemberIds !== null
+    ? members.filter((m) => orgMemberIds.has(m.id))
+    : members;
+
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({ key: "id", dir: "asc" });
   const columns = siteAdminModeOn
     ? [...BASE_COLUMNS, { key: "id" as SortKey, label: "AI settings" }, { key: "id" as SortKey, label: "Dues" }]
@@ -200,14 +233,14 @@ export function MembersTable({ members, siteAdminModeOn }: { members: MemberRow[
 
   const sortedMembers = useMemo(() => {
     const dir = sort.dir === "asc" ? 1 : -1;
-    return [...members].sort((a, b) => {
+    return [...displayMembers].sort((a, b) => {
       const av = sortValue(a, sort.key);
       const bv = sortValue(b, sort.key);
       if (av < bv) return -1 * dir;
       if (av > bv) return 1 * dir;
       return 0;
     });
-  }, [members, sort]);
+  }, [displayMembers, sort]);
 
   function toggleSort(key: SortKey) {
     setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));

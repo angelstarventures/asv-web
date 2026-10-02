@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { setDealRanks, findReviewers } from "@/lib/functions/deals";
 import { StarRatingDisplay } from "@/components/StarRatingDisplay";
 import { ROUND_OPTIONS } from "@/components/dealFormShared";
+import { tenantConfig } from "@/lib/config/tenant";
 import { truncateBlurb, type DealReviewerMatchInfo } from "@/lib/deals";
 
 export interface DealRow {
@@ -45,7 +46,10 @@ const STAGE_LABELS: Record<string, string> = {
 // The pre-checked-by-default tag names for item (g)'s pre-filter — matched by name against
 // whatever tags exist, so this works whether or not the "Has Lead"/"Halal" DealTag rows have
 // already been seeded (functions/src/lib/dealAutoTags.ts creates them lazily on first sync).
-const DEFAULT_CHECKED_TAG_NAMES = ["Has Lead", "Halal"];
+// "Halal" is only pre-checked when compliance screening is enabled for this deployment.
+const DEFAULT_CHECKED_TAG_NAMES = tenantConfig.complianceScreening.enabled
+  ? ["Has Lead", "Halal"]
+  : ["Has Lead"];
 
 type SortKey = "rank" | "companyName" | "ratingAvg";
 

@@ -1,0 +1,11 @@
+specVersion: "v1"
+serviceId: "{{SERVICE_ID}}"
+location: "{{LOCATION}}"
+schema:
+  source: "schema"
+  datasource:
+    postgresql:
+      database: "{{DATABASE}}"
+      cloudSql:
+        instanceId: "{{INSTANCE_ID}}"
+connectorDirs: ["connector"]

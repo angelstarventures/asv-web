@@ -1,5 +1,6 @@
 import { onCall } from "firebase-functions/v2/https";
 import { requireSiteAdmin } from "../lib/auth";
+import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { query } from "../lib/dataconnect-admin";
 import { AI_FEATURE_KEYS, type AiFeatureKey } from "../lib/aiProviderSettings";
 import {
@@ -71,7 +72,8 @@ export const costsGetSummary = onCall<void, Promise<CostsSummaryOutput>>(
     ],
   },
   async (request) => {
-    await requireSiteAdmin(request);
+    const caller = await requireSiteAdmin(request);
+    await requireFeatureEnabled(caller, "COSTS");
 
     const byFeature = await Promise.all(
       AI_FEATURE_KEYS.map((feature) => fetchOpenRouterKeyUsage(feature, OPENROUTER_SECRET_BY_FEATURE[feature].value()))

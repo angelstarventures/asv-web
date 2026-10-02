@@ -1,4 +1,5 @@
 import { formatCurrencyCompact } from "@/components/StatTile";
+import { tenantConfig } from "@/lib/config/tenant";
 import type {
   ListCompanyUpdatesForScenarioData,
   ListComplianceFlagDetailsForScenarioData,
@@ -118,17 +119,22 @@ export function buildEventDetailIndex(sources: EventDetailSources): Map<string, 
     );
   }
 
-  for (const d of sources.complianceFlagDetails) {
-    byEntry.set(
-      d.ledgerEntry.id,
-      fields(
-        ["Status", humanize(d.status)],
-        ["Flagged date", d.flaggedDate],
-        ["Reason", d.reason],
-        ["Audit type", humanize(d.auditType)],
-        ["Officer notes", d.complianceOfficerNotes]
-      )
-    );
+  // Compliance-audit display (Halal/Shariah screening audit trail) — only shown when compliance
+  // screening is enabled for this deployment. When disabled the section is hidden entirely,
+  // not just relabeled, since the underlying compliance events may not exist for non-ASV tenants.
+  if (tenantConfig.complianceScreening.enabled) {
+    for (const d of sources.complianceFlagDetails) {
+      byEntry.set(
+        d.ledgerEntry.id,
+        fields(
+          ["Status", humanize(d.status)],
+          ["Flagged date", d.flaggedDate],
+          ["Reason", d.reason],
+          ["Audit type", humanize(d.auditType)],
+          ["Officer notes", d.complianceOfficerNotes]
+        )
+      );
+    }
   }
 
   for (const d of sources.companyUpdateDetails) {

@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 import { NextResponse, type NextRequest } from "next/server";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getTaxDocumentById } from "@/lib/dataconnect/client";
+import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
 import { streamDriveFile } from "@/lib/serverDrive";
 
 // Mirrors app/api/documents/[id]/route.ts's shape, but with a much simpler access rule: a tax
@@ -20,7 +21,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   }
 
   const isOwnDocument = taxDocument.member.id === member.memberId;
-  const isAdmin = member.role === "admin" || member.role === "site_admin";
+  // Admin callers without org membership are denied (org-gate rollout).
+const isOrgMember = member.role === "admin"
+  ? (await getMyOrganizationMembership()).hasMembership
+  : true;
+const isAdmin = (member.role === "admin" ? isOrgMember : false) || member.role === "site_admin" || member.role === "dev_site_admin";
   if (!isOwnDocument && !isAdmin) {
     return NextResponse.json({ error: "You don't have access to this document." }, { status: 403 });
   }

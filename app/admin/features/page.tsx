@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { listAllMembers } from "@/lib/dataconnect/client";
-import { listOrganizations } from "@/lib/functions/organizationMembers";
 import { MemberOrganizationFeaturesPanel } from "@/components/MemberOrganizationFeaturesPanel";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
@@ -13,11 +12,9 @@ export default async function AdminFeaturesPage() {
     redirect("/admin/members");
   }
 
-  const [{ members: allMembers }, { organizations }] = await Promise.all([
-    listAllMembers(),
-    listOrganizations(),
-  ]);
-  const org = organizations[0];
+  // listAllMembers is a Data Connect query (works server-side with admin trust).
+  // Organization lookup happens client-side in MemberOrganizationFeaturesPanel.
+  const { members: allMembers } = await listAllMembers();
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
@@ -26,10 +23,10 @@ export default async function AdminFeaturesPage() {
         Per-member feature overrides. Changes take effect immediately.
       </p>
 
-      {org ? (
-        <MemberOrganizationFeaturesPanel organizationId={org.id} organizationName={org.name} members={allMembers} />
+      {allMembers.length > 0 ? (
+        <MemberOrganizationFeaturesPanel members={allMembers} />
       ) : (
-        <p className="text-sm text-red-600 dark:text-red-400">No organization found.</p>
+        <p className="text-sm text-red-600 dark:text-red-400">No members found.</p>
       )}
     </div>
   );
