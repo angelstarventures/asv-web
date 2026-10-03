@@ -30,12 +30,15 @@ export default async function AdminPortfoliosPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const scope = parseScope(params.scope);
   const tab = parsePortfolioTab(params.tab);
   const selectedId = typeof params.memberId === "string" ? params.memberId : undefined;
 
   const { members } = await listAllMembers();
   const selectedMember = selectedId ? members.find((m) => m.id === selectedId) : undefined;
+
+  // When the selected member has no linked auth account, force "asv" scope
+  // (the organization-wide view) since "mine" requires an authUid to query.
+  const scope = selectedMember?.authUid ? parseScope(params.scope) : "asv";
 
   // Same "locked scenario overrides the URL param" enforcement as /member/dashboard, using the
   // SELECTED member's own lock — viewing-as should show exactly what they'd see, not what the
@@ -53,18 +56,11 @@ export default async function AdminPortfoliosPage({
         selectedId={selectedId}
       />
 
-      {selectedMember && !selectedMember.authUid && (
-        <p className="text-sm text-zinc-500">
-          {selectedMember.displayName} hasn&apos;t linked an account yet — there&apos;s no portfolio view
-          available for them until they do.
-        </p>
-      )}
-
-      {selectedMember?.authUid && (
+      {selectedMember && (
         <>
           <WelcomeBanner subtitle={`Viewing as ${selectedMember.displayName}`} />
           <PortfolioView
-            authUid={selectedMember.authUid}
+            authUid={selectedMember.authUid ?? ""}
             scope={scope}
             scenario={scenario}
             lockedScenario={lockedScenario}
