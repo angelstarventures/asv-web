@@ -177,17 +177,34 @@ export function MemberActions({
         </form>
       ) : (
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-3">
-            {!settingPassword && (
-              <button
-                type="button"
-                onClick={handleSendPasswordReset}
-                disabled={busy}
-                className="rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
-              >
-                {busy ? "Sending..." : "Send password reset"}
+          <button
+            type="button"
+            onClick={handleSendPasswordReset}
+            disabled={busy}
+            className="self-start rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            {busy ? "Sending..." : "Send password reset"}
+          </button>
+          <details className="text-xs text-zinc-500">
+            <summary className="cursor-pointer underline">Re-send invitation</summary>
+            <p className="mt-1 text-zinc-600">
+              Use this if the member&apos;s Firebase Auth account was deleted or needs to be recreated.
+              Their existing auth account (if any) will be deleted and a new one created.
+            </p>
+            <form onSubmit={handleProvision} className="mt-2 flex flex-col gap-2 rounded-lg border border-zinc-200 bg-card p-3 dark:border-zinc-800">
+              <label className="flex flex-col gap-1 text-xs">
+                Display name
+                <input type="text" name="displayName" required minLength={2} defaultValue={displayName} className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs">
+                Email
+                <input type="email" name="email" required defaultValue={email} className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900" />
+              </label>
+              <button type="submit" disabled={busy} className="self-start rounded-full border border-red-400 px-3 py-1 text-xs font-medium text-red-600 disabled:opacity-50">
+                {busy ? "Sending..." : "Re-send invitation"}
               </button>
-            )}
+            </form>
+          </details>
             {!settingPassword && (
               <button
                 type="button"
@@ -226,7 +243,6 @@ export function MemberActions({
                 {role === "admin" ? "Demote to user" : "Promote to admin"}
               </button>
             )}
-          </div>
 
           {settingPassword && (
             <form

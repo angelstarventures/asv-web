@@ -126,8 +126,18 @@ export const provisionMember = onCall<ProvisionMemberInput, Promise<ProvisionMem
     if (members.length === 0) {
       throw new HttpsError("not-found", `No Member row for id "${memberId}". Create the member row first.`);
     }
-    if (members[0].authUid) {
-      throw new HttpsError("already-exists", `Member "${memberId}" is already linked to an auth account.`);
+    const existingAuthUid = members[0].authUid;
+    if (existingAuthUid) {
+      // Member already has an auth account — delete the old one first so it can be
+      // re-created with the (possibly updated) email. This handles the case where the
+      // Firebase Auth user was deleted from the console but the member row still has
+      // a stale authUid, or the admin is changing the email and wants a fresh account.
+      try {
+        await getAuth().deleteUser(existingAuthUid);
+      } catch (err) {
+        console.warn(`provisionMember: failed to delete old auth user ${existingAuthUid}:`, err);
+        // Continue — the old account may already be gone.
+      }
     }
 
     // Generate a random temporary password for the Firebase Auth account — the member will
