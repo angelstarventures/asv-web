@@ -891,20 +891,18 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     );
   }
 
-  // Granting OR revoking the top tiers (site_admin, dev_site_admin) is restricted:
-  //   - Only a site_admin can grant/revoke site_admin
-  //   - Only a dev_site_admin or site_admin can grant/revoke dev_site_admin
+  // Granting OR revoking any role requires developer, dev_site_admin, or site_admin.
   const targetRole = members[0].role;
   const targetIsSiteAdmin = targetRole === "SITE_ADMIN";
   const targetIsDevSiteAdmin = targetRole === "DEV_SITE_ADMIN";
   const roleIsSiteAdmin = role === "site_admin";
   const roleIsDevSiteAdmin = role === "dev_site_admin";
 
-  if ((roleIsSiteAdmin || targetIsSiteAdmin) && caller.role !== "site_admin") {
-    throw new HttpsError("permission-denied", "Only a site-admin can grant or revoke the site-admin role.");
+  if ((roleIsSiteAdmin || targetIsSiteAdmin) && caller.role !== "site_admin" && caller.role !== "dev_site_admin" && caller.role !== "developer") {
+    throw new HttpsError("permission-denied", "Only a developer, dev-site-admin, or site-admin can grant or revoke the site-admin role.");
   }
-  if ((roleIsDevSiteAdmin || targetIsDevSiteAdmin) && caller.role !== "site_admin" && caller.role !== "dev_site_admin") {
-    throw new HttpsError("permission-denied", "Only a dev-site-admin or site-admin can grant or revoke the dev-site-admin role.");
+  if ((roleIsDevSiteAdmin || targetIsDevSiteAdmin) && caller.role !== "site_admin" && caller.role !== "dev_site_admin" && caller.role !== "developer") {
+    throw new HttpsError("permission-denied", "Only a developer, dev-site-admin, or site-admin can grant or revoke the dev-site-admin role.");
   }
 
   const wasAdmin = targetRole === "ADMIN";
