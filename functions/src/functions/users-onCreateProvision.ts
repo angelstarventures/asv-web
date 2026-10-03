@@ -1032,7 +1032,9 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     await client.query(`UPDATE "member" SET role = $1 WHERE id = $2`, [role.toUpperCase(), memberId]);
 
     // Auto-assign on promotion to admin: insert organization_member row so the newly promoted
-    // admin isn't locked out by org-scoping. Demotion from admin removes the row.
+    // admin isn't locked out by org-scoping. Only remove the row on demotion to user — an admin
+    // promoted to site_admin or dev_site_admin keeps their org membership (those are still
+    // angel-investing-group roles, not VentureDesk).
     if (!wasAdmin && becomingAdmin) {
       const orgs = await client.query<{ id: string }>(`SELECT id FROM "organization" LIMIT 1`);
       if (orgs.rows.length > 0) {
@@ -1050,7 +1052,7 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
           );
         }
       }
-    } else if (wasAdmin && !becomingAdmin) {
+    } else if (wasAdmin && role === "user") {
       await client.query(`DELETE FROM "organization_member" WHERE "member_id" = $1`, [memberId]);
     }
   });
