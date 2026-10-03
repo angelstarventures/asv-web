@@ -338,7 +338,9 @@ export interface UpdateMemberInput {
 // an existing Member row's name/investing-entity/membership-type/profile-text fields after
 // creation. membershipType is an org classification (board member/member/associate/emeritus),
 // admin-only, distinct from Role (a pure app-permission level).
-export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(async (request) => {
+export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(
+  { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
+  async (request) => {
   await requireAdmin(request);
 
   const {
@@ -363,10 +365,17 @@ export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(asy
     throw new HttpsError("invalid-argument", `membershipType must be one of: ${MEMBERSHIP_TYPES.join(", ")}.`);
   }
 
-  const members = await query<{ id: string }>(`SELECT id FROM "member" WHERE id = $1`, [memberId]);
+  const members = await query<{ id: string; email: string; authUid: string | null; role: string }>(
+    `SELECT id, email, "auth_uid" AS "authUid", role FROM "member" WHERE id = $1`,
+    [memberId]
+  );
   if (members.length === 0) {
     throw new HttpsError("not-found", `No Member row for id "${memberId}".`);
   }
+  const member = members[0];
+  const oldEmail = member.email;
+  const authUid = member.authUid;
+  const newEmail = email?.trim();
 
   await withTransaction(async (client) => {
     try {
@@ -381,7 +390,7 @@ export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(asy
           membershipType,
           profileText?.trim() || null,
           phoneNumber?.trim() || null,
-          email?.trim() || null,
+          newEmail,
           professionalProfileUrl?.trim() || null,
           interests && interests.length > 0 ? interests : null,
           expertise && expertise.length > 0 ? expertise : null,
@@ -391,11 +400,62 @@ export const updateMember = onCall<UpdateMemberInput, Promise<{ ok: true }>>(asy
     } catch (err) {
       const code = err instanceof Error ? (err as NodeJS.ErrnoException).code : undefined;
       if (code === "23505") {
-        throw new HttpsError("already-exists", `Email "${email}" is already in use.`);
+        throw new HttpsError("already-exists", `Email "${newEmail}" is already in use.`);
       }
       throw err;
     }
   });
+
+  // ── Sync Firebase Auth when email changes ─────────────────────────────────
+  if (!newEmail) {
+    // No email change — nothing more to do.
+    return { ok: true };
+  }
+
+  const emailChanged = newEmail !== oldEmail;
+
+  if (authUid && emailChanged) {
+    // Member had an Auth account with the old email — delete it so the old email
+    // can be reused and no orphaned account remains.
+    try {
+      await getAuth().deleteUser(authUid);
+    } catch (err) {
+      console.warn(`updateMember: failed to delete old Firebase Auth user ${authUid}:`, err);
+      // Continue — the old account may already be gone. We'll create a new one.
+    }
+  }
+
+  if (!authUid || emailChanged) {
+    // Create a Firebase Auth account (new or with the updated email).
+    const temporaryPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 16) + "A1!";
+    try {
+      const userRecord = await getAuth().createUser({ email: newEmail, password: temporaryPassword });
+
+      await getAuth().setCustomUserClaims(userRecord.uid, {
+        role: members[0].role.toLowerCase(),
+        status: "active",
+        memberId,
+        mustChangePassword: true,
+      });
+
+      await withTransaction(async (client) => {
+        await client.query(
+          `UPDATE "member" SET "auth_uid" = $1 WHERE id = $2`,
+          [userRecord.uid, memberId]
+        );
+      });
+
+      try {
+        await sendPasswordSetEmail(newEmail, displayName.trim(), memberId);
+      } catch (err) {
+        console.error("updateMember: failed to send invitation email", err);
+      }
+    } catch (err) {
+      console.error(`updateMember: failed to create Firebase Auth user for ${newEmail}:`, err);
+      // Don't fail the whole request — the DB was already updated. The admin
+      // can re-provision from the member detail page.
+    }
+  }
 
   return { ok: true };
 });
