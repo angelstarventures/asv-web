@@ -16,6 +16,7 @@ export interface CreateMemberInput {
 }
 export interface CreateMemberOutput {
   memberId: string;
+  authUid: string;
 }
 export async function createMember(input: CreateMemberInput): Promise<CreateMemberOutput> {
   const call = httpsCallable<CreateMemberInput, CreateMemberOutput>(functions, "createMember");

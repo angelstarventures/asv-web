@@ -187,13 +187,16 @@ export interface CreateMemberInput {
 
 export interface CreateMemberOutput {
   memberId: string;
+  authUid: string;
 }
 
 // Member rows otherwise only ever come from the legacy migration (functions/scripts/
-// migrate-legacy-data.ts) — this is the only path that inserts a brand-new one. It only
-// creates the row; linking a Firebase Auth account is still a separate provisionMember call,
-// same as it is for every migrated member.
-export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput>>(async (request) => {
+// migrate-legacy-data.ts) — this is the only path that inserts a brand-new one.
+// Auto-provisions the Firebase Auth account so the member can sign in immediately,
+// rather than requiring a separate provisionMember call.
+export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput>>(
+  { secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] },
+  async (request) => {
   const caller = await requireAdmin(request);
 
   // Admin callers can only create "user" or "admin" roles (same restriction as provisionMember)
@@ -290,7 +293,32 @@ export const createMember = onCall<CreateMemberInput, Promise<CreateMemberOutput
     return nextId;
   });
 
-  return { memberId };
+  // ── Auto-provision Firebase Auth account ──────────────────────────────────
+  const temporaryPassword = crypto.randomUUID().replace(/-/g, "").slice(0, 16) + "A1!";
+  const userRecord = await getAuth().createUser({ email: email.trim(), password: temporaryPassword });
+
+  await getAuth().setCustomUserClaims(userRecord.uid, {
+    role,
+    status: "active",
+    memberId,
+    mustChangePassword: true,
+  });
+
+  await withTransaction(async (client) => {
+    await client.query(
+      `UPDATE "member" SET "auth_uid" = $1 WHERE id = $2`,
+      [userRecord.uid, memberId]
+    );
+  });
+
+  try {
+    await sendPasswordSetEmail(email.trim(), displayName.trim(), memberId);
+  } catch (err) {
+    console.error("createMember: failed to send invitation email", err);
+    // Don't fail — the auth account exists, the admin can retry the email from the member detail page.
+  }
+
+  return { memberId, authUid: userRecord.uid };
 });
 
 export interface UpdateMemberInput {

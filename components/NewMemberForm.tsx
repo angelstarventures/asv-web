@@ -5,9 +5,8 @@ import { useRouter } from "next/navigation";
 import { createMember } from "@/lib/functions/adminMembers";
 import { listOrganizations } from "@/lib/functions/organizationMembers";
 
-// Backs the "add a member" gap on app/admin/members/page.tsx — createMember only inserts the
-// Member row (auto-generated id); linking a login is still the separate provisionMember step
-// on the member's own detail page, same as every migrated member.
+// Backs the "add a member" gap on app/admin/members/page.tsx — createMember inserts the Member row
+// AND auto-provisions the Firebase Auth account, so every new member can sign in immediately.
 //
 // callerRole controls organization picker visibility:
 //   developer / dev_site_admin — show org picker (VentureDesk or venture group)
