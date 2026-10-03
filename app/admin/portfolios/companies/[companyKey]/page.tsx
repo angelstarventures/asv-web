@@ -1,9 +1,7 @@
-import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getMemberById } from "@/lib/dataconnect/client";
 import { Scenario, type Scenario as ScenarioType } from "@/lib/dataconnect/generated";
 import { SCENARIOS, SCOPES, type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { getCompanyDetail } from "@/lib/portfolioView";
 import { CompanyDetailView } from "@/components/CompanyDetailView";
 
@@ -32,11 +30,6 @@ export default async function AdminCompanyDetailPage({
   params: Promise<{ companyKey: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const current = await getCurrentMember();
-  if (!isSiteAdminModeOn(current?.role, current?.siteAdminMode)) {
-    redirect("/admin/members");
-  }
-
   const { companyKey } = await params;
   const search = await searchParams;
   const scenario = parseScenario(search.scenario);
