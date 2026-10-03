@@ -856,16 +856,38 @@ export const validatePasswordResetToken = onCall<
 
   // Clear the mustChangePassword flag so the user isn't redirected to the
   // change-password page after resetting via the Firebase link.
-  const user = await getAuth().getUserByEmail(member.email);
+  let user;
+  try {
+    user = await getAuth().getUserByEmail(member.email);
+  } catch (err) {
+    console.error(`validatePasswordResetToken: Firebase Auth user not found for ${member.email}:`, err);
+    throw new HttpsError(
+      "failed-precondition",
+      "This member does not have a login account yet. Ask an admin to send a new invitation from the member detail page."
+    );
+  }
   const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
-  await getAuth().setCustomUserClaims(user.uid, { ...existingClaims, mustChangePassword: false });
+  try {
+    await getAuth().setCustomUserClaims(user.uid, { ...existingClaims, mustChangePassword: false });
+  } catch (err) {
+    console.error(`validatePasswordResetToken: failed to update claims for ${user.uid}:`, err);
+  }
 
   // Generate a fresh Firebase password reset link (1-hour expiry from now, which is
   // fine — the user is clicking at this moment)
-  const resetLink = await getAuth().generatePasswordResetLink(member.email, {
-    url: `${APP_DOMAIN}/login`,
-    handleCodeInApp: false,
-  });
+  let resetLink: string;
+  try {
+    resetLink = await getAuth().generatePasswordResetLink(member.email, {
+      url: `${APP_DOMAIN}/login`,
+      handleCodeInApp: false,
+    });
+  } catch (err) {
+    console.error(`validatePasswordResetToken: failed to generate reset link for ${member.email}:`, err);
+    throw new HttpsError(
+      "internal",
+      "Could not generate a password reset link. The member may not have a Firebase Auth account."
+    );
+  }
 
   return { resetLink };
 });
