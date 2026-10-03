@@ -54,7 +54,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Root-mode surfaces — site_admin or dev_site_admin only
-  const rootSurfaces = ["/admin/settings", "/admin/portfolios", "/admin/features"];
+  const rootSurfaces = ["/admin/settings", "/admin/features"];
   if (
     rootSurfaces.some((p) => request.nextUrl.pathname.startsWith(p)) &&
     claims.role !== "site_admin" &&

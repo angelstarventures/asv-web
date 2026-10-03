@@ -31,10 +31,10 @@ const BASE_ADMIN_TABS = [
   { href: "/admin/deals", label: "Deals" },
   { href: "/admin/documents", label: "Document uploads" },
   { href: "/admin/costs", label: "Costs" },
+  { href: "/admin/portfolios", label: "Portfolios" },
 ];
 const ROOT_MODE_TABS = [
   { href: "/admin/features", label: "Features" },
-  { href: "/admin/portfolios", label: "Portfolios" },
   { href: "/admin/settings", label: "Settings" },
 ];
 
