@@ -963,10 +963,27 @@ export const setMemberRole = onCall<SetMemberRoleInput, Promise<{ ok: true }>>(a
     }
   });
 
-  const user = await getAuth().getUser(authUid);
+  let user;
+  try {
+    user = await getAuth().getUser(authUid);
+  } catch (err) {
+    console.error(`setMemberRole: Firebase Auth user ${authUid} not found:`, err);
+    throw new HttpsError(
+      "failed-precondition",
+      "The member's Firebase Auth account does not exist. You may need to re-provision them first."
+    );
+  }
   const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
-  await getAuth().setCustomUserClaims(authUid, { ...existingClaims, role });
-  await getAuth().revokeRefreshTokens(authUid);
+  try {
+    await getAuth().setCustomUserClaims(authUid, { ...existingClaims, role });
+    await getAuth().revokeRefreshTokens(authUid);
+  } catch (err) {
+    console.error(`setMemberRole: failed to update Firebase Auth for ${authUid}:`, err);
+    throw new HttpsError(
+      "internal",
+      "Member role was updated in the database but could not be synced to Firebase Auth. The role change will take effect on next sign-in."
+    );
+  }
 
   return { ok: true };
 });
