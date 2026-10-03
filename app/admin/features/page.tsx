@@ -1,17 +1,9 @@
-import { redirect } from "next/navigation";
 import { listAllMembers } from "@/lib/dataconnect/client";
 import { MemberOrganizationFeaturesPanel } from "@/components/MemberOrganizationFeaturesPanel";
-import { getCurrentMember } from "@/lib/auth/currentMember";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminFeaturesPage() {
-  const current = await getCurrentMember();
-  if (!isSiteAdminModeOn(current?.role, current?.siteAdminMode)) {
-    redirect("/admin/members");
-  }
-
   // listAllMembers is a Data Connect query (works server-side with admin trust).
   // Organization lookup happens client-side in MemberOrganizationFeaturesPanel.
   const { members: allMembers } = await listAllMembers();

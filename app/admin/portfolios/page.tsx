@@ -1,9 +1,6 @@
-import { redirect } from "next/navigation";
-import { getCurrentMember } from "@/lib/auth/currentMember";
 import { listAllMembers } from "@/lib/dataconnect/client";
 import { Scenario, type Scenario as ScenarioType } from "@/lib/dataconnect/generated";
 import { SCENARIOS, SCOPES, type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { MemberPortfolioPicker } from "@/components/MemberPortfolioPicker";
 import { PortfolioView } from "@/lib/portfolioView";
@@ -27,18 +24,11 @@ function parseScope(value: string | string[] | undefined): Scope {
 // see it, reusing lib/portfolioView.tsx's PortfolioView (same component /member/dashboard uses)
 // with the picked member's authUid instead of the viewer's own — see that file's header comment
 // for how the underlying queries support impersonating any authUid from trusted server code.
-// proxy.ts already redirects non-root-mode requests away from this whole route; the check here
-// is defense in depth for direct navigation/back-button edge cases within the same request.
 export default async function AdminPortfoliosPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const current = await getCurrentMember();
-  if (!isSiteAdminModeOn(current?.role, current?.siteAdminMode)) {
-    redirect("/admin/members");
-  }
-
   const params = await searchParams;
   const scope = parseScope(params.scope);
   const tab = parsePortfolioTab(params.tab);

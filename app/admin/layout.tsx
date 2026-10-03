@@ -4,7 +4,6 @@ import { AppHeader } from "@/components/AppHeader";
 import { AdminSubNav } from "@/components/AdminSubNav";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getMemberById } from "@/lib/dataconnect/client";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
 // Rollout mode for the org-membership gate — mirrors ORG_GATE_MODE on the functions side.
 // "log"     — warn and allow (safe default during rollout)
@@ -50,12 +49,11 @@ export default async function AdminLayout({ children }: { children: ReactNode })
 
   const { member } = current ? await getMemberById({ id: current.memberId }) : { member: undefined };
   const isSiteAdminRole = current?.role === "site_admin" || current?.role === "dev_site_admin";
-  const siteAdminModeOn = isSiteAdminModeOn(current?.role, current?.siteAdminMode);
 
   return (
     <div className="flex min-h-full flex-1 flex-col">
       <AppHeader isAdmin displayName={member?.displayName} photoUrl={member?.photoUrl} isDeveloper={current?.role === "developer" || current?.role === "dev_site_admin"} />
-      <AdminSubNav isSiteAdminRole={isSiteAdminRole} siteAdminModeOn={siteAdminModeOn} />
+      <AdminSubNav isSiteAdminRole={isSiteAdminRole} />
       <main className="flex flex-1 flex-col">{children}</main>
     </div>
   );

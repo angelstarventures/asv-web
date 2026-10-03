@@ -1,23 +1,13 @@
-import { redirect } from "next/navigation";
 import { listAiPromptSettings, listAiProviderSettings, listAppSettings } from "@/lib/dataconnect/client";
 import { AiPromptSettingsForm } from "@/components/AiPromptSettingsForm";
 import { AiProviderSettingsForm } from "@/components/AiProviderSettingsForm";
 import { AppSettingsForm } from "@/components/AppSettingsForm";
-import { getCurrentMember } from "@/lib/auth/currentMember";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import { tenantConfig } from "@/lib/config/tenant";
 import type { AiProvider, SearchBackend } from "@/lib/functions/adminSettings";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  // Defense in depth — proxy.ts already gates /admin/settings to site-admin root mode, but this
-  // page doesn't only trust the middleware, matching the pattern elsewhere in the admin surface.
-  const current = await getCurrentMember();
-  if (!isSiteAdminModeOn(current?.role, current?.siteAdminMode)) {
-    redirect("/admin/members");
-  }
-
   const [{ aiPromptSettings }, { aiProviderSettings }, { appSettings }] = await Promise.all([
     listAiPromptSettings(),
     listAiProviderSettings(),

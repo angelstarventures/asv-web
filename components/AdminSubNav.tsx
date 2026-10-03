@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase/client";
-import { exchangeIdTokenForSession } from "@/lib/auth/session-client";
-import { setSiteAdminMode } from "@/lib/functions/adminMembers";
+import { usePathname } from "next/navigation";
 import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
 import { getOrganizationFeatures, getMemberOrganizationFeatures } from "@/lib/functions/organizationFeatures";
 
@@ -41,27 +38,20 @@ const ROOT_MODE_TABS = [
   { href: "/admin/settings", label: "Settings" },
 ];
 
-// isSiteAdminRole: the viewer genuinely holds the site_admin role (controls whether the toggle
-// itself renders at all — a regular admin never sees it). siteAdminModeOn: that role AND the
-// siteAdminMode custom claim are both on (controls whether the root-only tabs show) — see
-// lib/siteAdminMode.ts for why this claim is a pure UI gate, never a security boundary on its
-// own, and why it's a claim rather than a second cookie (Firebase Hosting only forwards
-// `__session` to the SSR backend).
+// isSiteAdminRole: the viewer holds site_admin or dev_site_admin role — controls whether the
+// root-only tabs (Features, Portfolios, Settings) are shown in the nav. Regular admins see
+// only BASE_ADMIN_TABS.
 //
 // enabledFeatures: feature-key → boolean map computed server-side. Tabs for disabled features
 // are hidden. Undefined = no feature data (show everything for safety / fresh tenant setup).
 export function AdminSubNav({
   isSiteAdminRole,
-  siteAdminModeOn,
   enabledFeatures,
 }: {
   isSiteAdminRole: boolean;
-  siteAdminModeOn: boolean;
   enabledFeatures?: Record<string, boolean>;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
   const [resolvedFeatures, setResolvedFeatures] = useState<Record<string, boolean> | undefined>(enabledFeatures);
 
   // If the layout didn't pass enabledFeatures (Server Components can't call Cloud Functions
@@ -88,25 +78,8 @@ export function AdminSubNav({
     })();
   }, [enabledFeatures]);
 
-  const allTabs = siteAdminModeOn ? [...BASE_ADMIN_TABS, ...ROOT_MODE_TABS] : BASE_ADMIN_TABS;
+  const allTabs = isSiteAdminRole ? [...BASE_ADMIN_TABS, ...ROOT_MODE_TABS] : BASE_ADMIN_TABS;
   const tabs = allTabs.filter((tab) => isTabVisible(tab.href, resolvedFeatures));
-
-  async function toggleSiteAdminMode() {
-    setBusy(true);
-    try {
-      await setSiteAdminMode({ on: !siteAdminModeOn });
-      const user = auth.currentUser;
-      if (!user) throw new Error("Not signed in.");
-      // The new claim only lands in a FRESH ID token, and only reaches proxy.ts/server
-      // components once that's re-minted into the session cookie — same pattern as
-      // ForcedPasswordChangeScreen clearing mustChangePassword.
-      const idToken = await user.getIdToken(true);
-      await exchangeIdTokenForSession(idToken);
-      router.refresh();
-    } finally {
-      setBusy(false);
-    }
-  }
 
   return (
     <nav className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 px-4 py-3 text-sm sm:px-6">
@@ -129,20 +102,6 @@ export function AdminSubNav({
           );
         })}
       </div>
-      {isSiteAdminRole && (
-        <button
-          type="button"
-          onClick={toggleSiteAdminMode}
-          disabled={busy}
-          className={
-            siteAdminModeOn
-              ? "shrink-0 rounded-full border border-amber-500 px-3 py-1.5 text-xs font-medium text-amber-700 disabled:opacity-50 dark:text-amber-400"
-              : "shrink-0 rounded-full border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400"
-          }
-        >
-          Site-admin mode: {siteAdminModeOn ? "On" : "Off"}
-        </button>
-      )}
     </nav>
   );
 }

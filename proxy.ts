@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE_NAME, verifySessionCookie } from "@/lib/firebase/session";
-import { isSiteAdminModeOn } from "@/lib/siteAdminMode";
 import type { Role } from "@/lib/auth/claims";
 
 // The only real enforcement point in the app — `useAuth` (client context) is UI polish
@@ -54,11 +53,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/member/dashboard", request.url));
   }
 
-  // Root-mode surfaces — site_admin-only with siteAdminMode toggle ON
+  // Root-mode surfaces — site_admin or dev_site_admin only
   const rootSurfaces = ["/admin/settings", "/admin/portfolios", "/admin/features"];
   if (
     rootSurfaces.some((p) => request.nextUrl.pathname.startsWith(p)) &&
-    !isSiteAdminModeOn(claims.role, claims.siteAdminMode)
+    claims.role !== "site_admin" &&
+    claims.role !== "dev_site_admin"
   ) {
     return NextResponse.redirect(new URL("/admin/members", request.url));
   }
