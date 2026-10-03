@@ -266,7 +266,7 @@ async function researchMarketContext(
 // portfolio schema, and Gemini's own response time varies; seen timing out at the default
 // under real use, not just in theory.
 export const documentsAnalyze = onCall<DocumentsAnalyzeInput, Promise<DocumentsAnalyzeOutput>>(
-  { timeoutSeconds: 300, secrets: [openRouterKeyDocumentAnalysis, serperApiKey] },
+  { timeoutSeconds: 300, memory: "512MiB", secrets: [openRouterKeyDocumentAnalysis, serperApiKey] },
   async (request) => {
     try {
       return await documentsAnalyzeImpl(request);
