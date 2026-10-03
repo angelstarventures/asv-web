@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 import { getMemberById } from "@/lib/dataconnect/client";
 import { Scenario, type Scenario as ScenarioType } from "@/lib/dataconnect/generated";
@@ -43,7 +44,10 @@ export default async function AdminCompanyDetailPage({
   }
 
   const detail = await getCompanyDetail(scenario, companyKey, scope, authUid);
-  if (!detail) redirect(`/admin/portfolios?tab=details${memberId ? `&memberId=${memberId}` : ""}`);
+  if (!detail) {
+    redirect(`/admin/portfolios?tab=details${memberId ? `&memberId=${memberId}` : ""}`);
+    return;
+  }
 
   return (
     <CompanyDetailView
