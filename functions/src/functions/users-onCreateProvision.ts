@@ -901,7 +901,18 @@ export const validatePasswordResetToken = onCall<
 
   const member = rows[0];
 
-  if (!member.passwordResetExpiresAt || new Date(member.passwordResetExpiresAt) < new Date()) {
+  // Log the stored expiry for debugging
+  console.log(`validatePasswordResetToken: member=${member.id} expiresAt=${member.passwordResetExpiresAt} now=${new Date().toISOString()}`);
+
+  if (!member.passwordResetExpiresAt) {
+    console.error(`validatePasswordResetToken: token ${token} has no expiry for member ${member.id}`);
+    throw new HttpsError("invalid-argument", "This link was not stored correctly. Ask an admin to send a new one.");
+  }
+
+  const expiresAt = new Date(member.passwordResetExpiresAt).getTime();
+  const now = Date.now();
+
+  if (Number.isNaN(expiresAt) || expiresAt < now) {
     // Token expired — still clear it so it can't be reused
     await withTransaction(async (client) => {
       await client.query(
