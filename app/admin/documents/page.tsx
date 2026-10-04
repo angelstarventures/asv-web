@@ -46,7 +46,7 @@ export default async function AdminDocumentsPage() {
       <DocumentsTabs
         companyTab={
           <div className="flex flex-col gap-6">
-            <AdminDocumentsFlow companies={companies} />
+            <AdminDocumentsFlow companies={companies} members={members} />
             <SyncDocumentsPanel companies={companies} />
           </div>
         }

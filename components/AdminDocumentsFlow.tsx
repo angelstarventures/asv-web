@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { DocumentDropzone, type AnalyzedFile } from "@/components/DocumentDropzone";
 import { LedgerRecordsEditor } from "@/components/LedgerRecordsEditor";
 import { UnknownMemberReferences } from "@/components/UnknownMemberReferences";
@@ -108,9 +108,16 @@ function CompanyUpdateShareButton({
 // commit time via LedgerRecordsEditor's expandForSubmit hook.
 export function AdminDocumentsFlow({
   companies,
+  members,
 }: {
   companies: { id: string; name: string; tradeName?: string | null }[];
+  members: { id: string; displayName: string; investingEntityName?: string | null }[];
 }) {
+  const memberNames = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const m of members) map[m.id] = m.displayName;
+    return map;
+  }, [members]);
   const [proposedRecords, setProposedRecords] = useState<Record<string, unknown>[] | null>(null);
   const [groups, setGroups] = useState<RecordGroup[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -364,6 +371,7 @@ export function AdminDocumentsFlow({
             onCommitted={handleCommitted}
             onDiffResult={setLastCheckErrors}
             formattedView
+            memberNames={memberNames}
           />
         </div>
       )}

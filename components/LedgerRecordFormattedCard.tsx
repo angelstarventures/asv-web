@@ -40,7 +40,7 @@ function listField(label: string, items: unknown, fullWidth?: boolean): Field | 
   };
 }
 
-function buildAllocationsField(allocations: unknown): Field | null {
+function buildAllocationsField(allocations: unknown, memberNames?: Record<string, string>): Field | null {
   if (allocations === null || allocations === undefined) return null;
   if (typeof allocations === "object") {
     const entries = Object.entries(allocations);
@@ -48,15 +48,17 @@ function buildAllocationsField(allocations: unknown): Field | null {
     return {
       label: "Allocations",
       value: entries.map(([memberId, amount]) => {
-        if (typeof amount === "number") return `  ${memberId}: ${formatCurrencyCompact(amount)}`;
-        return `  ${memberId}: ${String(amount)}`;
+        const name = memberNames?.[memberId];
+        const label = name ? `${name} (${memberId})` : memberId;
+        if (typeof amount === "number") return `  ${label}: ${formatCurrencyCompact(amount)}`;
+        return `  ${label}: ${String(amount)}`;
       }).join("\n"),
       fullWidth: true,
     };
   }
   return null;
 }
-function buildFields(type: string, record: Record<string, unknown>): Field[] {
+function buildFields(type: string, record: Record<string, unknown>, memberNames?: Record<string, string>): Field[] {
   switch (type) {
     case "Participating_PricedRound":
     case "Participating_SAFERound":
@@ -77,7 +79,7 @@ function buildFields(type: string, record: Record<string, unknown>): Field[] {
         pricePerShare ? field("Price per share", pricePerShare) : null,
         discount ? field("Discount", `${discount}%`) : null,
         notes ? field("Notes", notes, true) : null,
-        buildAllocationsField(allocations),
+        buildAllocationsField(allocations, memberNames),
       ].filter((f) => f !== null) as Field[];
     }
 
@@ -151,14 +153,14 @@ function buildFields(type: string, record: Record<string, unknown>): Field[] {
 }
 // Renders a single AI-drafted ledger record as a formatted card rather than raw JSON,
 // matching the look of the company detail view's rounds/updates sections.
-export function LedgerRecordFormattedCard({ record }: { record: Record<string, unknown> }) {
+export function LedgerRecordFormattedCard({ record, memberNames }: { record: Record<string, unknown>; memberNames?: Record<string, string> }) {
   const type = String(record.type ?? "");
   const date = String(record.date ?? "");
   const company = String(record.company ?? "");
   const scenario = String(record.scenario ?? "");
   const typeLabel = ROUND_TYPE_LABEL[type] ?? type;
 
-  const fields = buildFields(type, record);
+  const fields = buildFields(type, record, memberNames);
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-card p-4 text-sm dark:border-zinc-800">

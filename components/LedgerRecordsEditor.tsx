@@ -24,6 +24,7 @@ export function LedgerRecordsEditor({
   onCommitted,
   onDiffResult,
   formattedView = false,
+  memberNames,
 }: {
   initialRecords: Record<string, unknown>[];
   allowAddRemove?: boolean;
@@ -49,6 +50,9 @@ export function LedgerRecordsEditor({
   // When true, records render as formatted cards by default with a "Show raw JSON" toggle.
   // Defaults to false (raw JSON textareas, the original import-flow behavior).
   formattedView?: boolean;
+  // Maps member IDs to display names — used by the formatted card to show
+  // names alongside member IDs in allocations/valuations.
+  memberNames?: Record<string, string>;
 }) {
   const [showRawJson, setShowRawJson] = useState<Set<number>>(new Set());
   const [jsonTexts, setJsonTexts] = useState<string[]>(
@@ -172,7 +176,7 @@ export function LedgerRecordsEditor({
                 </div>
               </div>
               {formattedView && record && !showingRaw ? (
-                <LedgerRecordFormattedCard record={record} />
+                <LedgerRecordFormattedCard record={record} memberNames={memberNames} />
               ) : (
                 <textarea
                   value={text}
