@@ -182,20 +182,41 @@ const TRAJECTORY_LABEL: Record<CompanyTrajectory, string> = {
 };
 
 function buildSavedUpdateMessage(companyName: string, update: CompanyDetailUpdate): string {
-  const date = new Intl.DateTimeFormat("en-US", {
+  const dateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
-  }).format(new Date(`${update.eventDate}T00:00:00Z`));
+  });
+  const formatDate = (date: string) => dateFormatter.format(new Date(`${date}T00:00:00Z`));
+  const currencyFormatter = new Intl.NumberFormat("en-US", {
+    style: "currency", currency: "USD", minimumFractionDigits: 0, maximumFractionDigits: 2,
+  });
   const section = (title: string, items: string[]) => {
     const bullets = items.map((item) => item.trim()).filter(Boolean)
       .map((item) => `• ${item.replace(/\r?\n/g, "\n  ")}`);
     return bullets.length > 0 ? `*${title}*\n${bullets.join("\n")}` : null;
   };
   return [
-    `*${companyName} — Company update*\n${date}`,
+    `*${companyName} — Company update*\n${formatDate(update.eventDate)}`,
     `*Health:* ${HEALTH_LABEL[update.health]}\n*Trajectory:* ${TRAJECTORY_LABEL[update.trajectory]}`,
     section("Highlights", update.highlights),
     section("Lowlights", update.lowlights),
     section("Upcoming plans", update.upcomingPlans),
+    ...update.internalValuations.map((assessment, index) => {
+      const title = update.internalValuations.length > 1
+        ? `Internal valuation change ${index + 1} of ${update.internalValuations.length}`
+        : "Internal valuation change";
+      return [
+        `*${title}*`,
+        [
+          `*Assessment date:* ${formatDate(assessment.eventDate)}`,
+          `*${tenantConfig.orgAbbreviation} fair market value:* ${currencyFormatter.format(assessment.fairMarketValue)}`,
+          assessment.impliedEnterpriseValue != null
+            ? `*Implied enterprise value:* ${currencyFormatter.format(assessment.impliedEnterpriseValue)}` : null,
+        ].filter(Boolean).join("\n"),
+        assessment.rationale?.trim() ? `*Rationale*\n${assessment.rationale.trim()}` : null,
+        assessment.valuationImpactSummary?.trim() ? `*Valuation impact*\n${assessment.valuationImpactSummary.trim()}` : null,
+        assessment.marketResearchGrounding?.trim() ? `*Supporting research*\n${assessment.marketResearchGrounding.trim()}` : null,
+      ].filter(Boolean).join("\n\n");
+    }),
     update.driveUrl ? `*Update document*\n${update.driveUrl}` : null,
   ].filter(Boolean).join("\n\n");
 }

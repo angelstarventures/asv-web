@@ -79,3 +79,67 @@ test("malformed round IDs are rejected before database or Drive lookup", async (
   }
   assert.equal(route.lookups.length, 0);
 });
+
+function roundLookup({ assigned = true, membershipError = false } = {}) {
+  let driveReads = 0;
+  const source = readFileSync(path.join(__dirname, "../lib/roundDocuments.ts"), "utf8");
+  const javascript = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const enums = require("../lib/dataconnect/generated");
+  const dependencies = {
+    "server-only": {},
+    "firebase-admin/data-connect": { getDataConnect: () => ({ executeGraphqlRead: async (query, options) => {
+      // Production's deployed schema has the SQL membership table, but does not
+      // expose organizationMembers as a GraphQL root field.
+      if (/\borganizationMembers\s*\(/.test(query)) throw new Error('Cannot query field "organizationMembers" on type "Query".');
+      assert.equal(options.variables.memberId, "00001");
+      if (membershipError) throw new Error("Membership lookup failed");
+      return { data: {
+        ledgerEntry: { type: "PARTICIPATING_SAFE_ROUND", scenario: "BALANCED", company: { id: "company" } },
+        pricedRoundDetails: [], safeRoundDetails: [{ driveFolderId: "stored-round-folder" }], nonParticipatingRoundDetails: [],
+        member: { lockedScenario: null }, organizationMembers: assigned ? [{ id: "membership" }] : [],
+      } };
+    } }) },
+    "@/lib/firebase/admin": { adminApp: {} },
+    "@/lib/dataconnect/generated": enums,
+    "@/lib/auth/documentAccess": { canViewDocument: () => true },
+    "@/lib/dataconnect/client": {
+      listMemberAllocationsAllScenarios: async () => ({ allocations: [] }),
+      listMemberValuationsAllScenarios: async () => ({ memberValuations: [] }),
+    },
+    "@/lib/serverDrive": { listDriveFolderFiles: async folderId => {
+      driveReads++;
+      assert.equal(folderId, "stored-round-folder");
+      return [];
+    } },
+  };
+  const exports = {};
+  vm.runInNewContext(javascript, { exports, require: id => dependencies[id] });
+  return { ...exports, driveReads: () => driveReads };
+}
+
+test("round lookup supports the deployed schema without organizationMembers GraphQL field", async () => {
+  const lookup = roundLookup();
+  const files = await lookup.getRoundDocuments(compactId, { memberId: "00001", authUid: "verified-member", role: "user" });
+  assert.equal(files.length, 0);
+  assert.equal(lookup.driveReads(), 1);
+});
+
+test("assigned administrators can list round files using SQL membership lookup", async () => {
+  const lookup = roundLookup();
+  await lookup.getRoundDocuments(compactId, { memberId: "00001", role: "admin" });
+  assert.equal(lookup.driveReads(), 1);
+});
+
+test("unassigned administrators remain denied before accessing Drive", async () => {
+  const lookup = roundLookup({ assigned: false });
+  await assert.rejects(lookup.getRoundDocuments(compactId, { memberId: "00001", role: "admin" }), error => error.status === 403);
+  assert.equal(lookup.driveReads(), 0);
+});
+
+test("membership lookup failures never bypass document authorization", async () => {
+  const lookup = roundLookup({ membershipError: true });
+  await assert.rejects(lookup.getRoundDocuments(compactId, { memberId: "00001", role: "admin" }), /Membership lookup failed/);
+  assert.equal(lookup.driveReads(), 0);
+});

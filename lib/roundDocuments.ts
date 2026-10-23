@@ -26,6 +26,8 @@ function dc() {
 
 // These server-only Admin SDK reads use the existing schema. No new public connector
 // operations are needed; authorization is derived from the verified session below.
+// Organization membership was introduced by SQL post-migrations and may not be in
+// the deployed GraphQL schema. Use a parameterized read of that existing table.
 export async function getRoundDocuments(ledgerEntryId: string, member: CurrentMember) {
   const { data } = await dc().executeGraphqlRead<RoundSource, { entryId: string; memberId: string }>(`
     query RoundDocumentSource($entryId: UUID!, $memberId: String!) {
@@ -34,7 +36,10 @@ export async function getRoundDocuments(ledgerEntryId: string, member: CurrentMe
       safeRoundDetails(where: {ledgerEntry: {id: {eq: $entryId}}}, limit: 1) { driveFolderId }
       nonParticipatingRoundDetails(where: {ledgerEntry: {id: {eq: $entryId}}}, limit: 1) { driveFolderId }
       member(key: {id: $memberId}) { lockedScenario }
-      organizationMembers(where: {memberId: {eq: $memberId}}, limit: 1) { id }
+      organizationMembers: _select(
+        sql: "SELECT id FROM organization_member WHERE member_id = $1 LIMIT 1"
+        params: [$memberId]
+      )
     }
   `, { variables: { entryId: ledgerEntryId, memberId: member.memberId } });
   const entry = data.ledgerEntry;
