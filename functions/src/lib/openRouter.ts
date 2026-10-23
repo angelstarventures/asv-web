@@ -73,6 +73,19 @@ async function callOpenRouter(
     });
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
+      console.error(`callOpenRouter: request failed (${res.status})`, errText.slice(0, 1000));
+      if (res.status === 402) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The OpenRouter account for this feature has insufficient credits for this request (file inputs need at least $0.50). Add credits at openrouter.ai/settings/credits, or switch this feature's provider in Settings."
+        );
+      }
+      if (res.status === 401 || res.status === 403) {
+        throw new HttpsError(
+          "failed-precondition",
+          "The OpenRouter API key for this feature was rejected (invalid, revoked, or restricted). Check the key in Secret Manager."
+        );
+      }
       throw new HttpsError("internal", `OpenRouter request failed (${res.status}): ${errText.slice(0, 300)}`);
     }
     const json = (await res.json()) as {

@@ -170,6 +170,14 @@ interface MarketResearchResult {
   sources: string[];
 }
 
+const RESEARCH_UNAVAILABLE_TEXT = "Market research unavailable for this analysis.";
+
+// The drafting prompt tells the model research is "supplied separately", but the drafting call
+// itself never receives any — the real research runs afterwards and overwrites those fields. So
+// the model reliably emits a "no research was supplied" warning that is stale by the time the
+// admin sees it. Matched loosely since the wording varies by model.
+const STALE_RESEARCH_WARNING_RE = /market[_ ]research|valuation[_ ]impact|search[- ]grounded|grounded research/i;
+
 const RESEARCH_FORMAT_INSTRUCTIONS = [
   "Respond in EXACTLY this plain-text format, nothing else (no JSON, no markdown, no extra commentary):",
   "MARKET_RESEARCH_GROUNDING: <2-4 sentence summary of your findings and how they relate to this company>",
@@ -209,7 +217,7 @@ async function researchMarketContext(
   searchBackend: SearchBackend
 ): Promise<MarketResearchResult> {
   const fallback: MarketResearchResult = {
-    marketResearchGrounding: "Market research unavailable for this analysis.",
+    marketResearchGrounding: RESEARCH_UNAVAILABLE_TEXT,
     impactByScenario: {
       Optimistic: "No additional assessment.",
       Balanced: "No additional assessment.",
@@ -529,6 +537,14 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   const needsResearch = proposedRecords.some((record) => VIEWPOINT_TYPES.has(record.type as string));
   if (needsResearch) {
     const research = await researchMarketContext(companyName, fileParts, providerSetting.searchBackend);
+    // Drop the model's stale "no research supplied" warning either way; if research really did
+    // fail, replace it with an accurate one so the admin isn't misled in the other direction.
+    aiWarnings = aiWarnings.filter((w) => !STALE_RESEARCH_WARNING_RE.test(w));
+    if (research.marketResearchGrounding === RESEARCH_UNAVAILABLE_TEXT) {
+      aiWarnings.push(
+        "Market research could not be retrieved for this analysis (search or synthesis step failed — see function logs); market_research_grounding and valuation_impact_summary are placeholders."
+      );
+    }
     for (const record of proposedRecords) {
       const type = record.type as string;
       if (!VIEWPOINT_TYPES.has(type)) continue;
