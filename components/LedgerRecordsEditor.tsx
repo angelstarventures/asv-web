@@ -22,6 +22,7 @@ export function LedgerRecordsEditor({
   recordLabels,
   expandForSubmit,
   onCommitted,
+  documentActions = false,
   onDiffResult,
   formattedView = false,
   memberNames,
@@ -35,14 +36,17 @@ export function LedgerRecordsEditor({
   // flow uses this to expand each edited representative back into its full set of per-scenario
   // copies and to silently splice in any scenario copies that were never shown for review.
   expandForSubmit?: (records: Record<string, unknown>[]) => Record<string, unknown>[];
-  // Called after a successful commit — the AI document-review flow uses this to reset back to a
-  // clean upload screen rather than leaving stale, already-committed JSON sitting in the editor
+  // Awaited after a successful commit — the AI document-review flow saves original update
+  // documents to Drive before resetting the upload screen. Failures can retry this callback
+  // without repeating the ledger commit. This also avoids leaving stale JSON in the editor
   // (a caller that re-analyzes a second document without discarding first would otherwise keep
   // checking/committing against whatever was here from the prior analysis, since this
   // component's own state only initializes once per mount, not on every `initialRecords` change —
   // callers should also remount this component, e.g. via a changing `key`, when starting a
   // genuinely new review rather than relying on this callback alone).
-  onCommitted?: () => void;
+  onCommitted?: (records: Record<string, unknown>[], shareWindow?: Window) => void | Promise<void>;
+  // Document analysis offers a checked save-and-share action beside the ledger-only action.
+  documentActions?: boolean;
   // Called with the flattened validation errors after every Check — the AI document-review
   // flow's "ask for a change" box feeds these back to the model verbatim on the next
   // regeneration, so it sees the exact validation failure rather than the admin's own paraphrase.
@@ -63,6 +67,46 @@ export function LedgerRecordsEditor({
   const [parseError, setParseError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pendingDocuments, setPendingDocuments] = useState<Record<string, unknown>[] | null>(null);
+  const [documentError, setDocumentError] = useState<string | null>(null);
+  const [pendingShare, setPendingShare] = useState(false);
+
+  function openShareWindow(): Window | null {
+    // Reserve the tab during the click so browsers don't block it after async saving.
+    const shareWindow = window.open("about:blank", "_blank");
+    if (shareWindow) shareWindow.opener = null;
+    else setError("Allow pop-ups to open WhatsApp, then try again.");
+    return shareWindow;
+  }
+
+  // Keep the committed records and source files available if Drive fails. Retrying this
+  // step must never call ledgerMassImportCommit again.
+  async function finishCommit(records: Record<string, unknown>[], shareWindow?: Window) {
+    setDocumentError(null);
+    setPendingDocuments(records);
+    setPendingShare(Boolean(shareWindow));
+    try {
+      await onCommitted?.(records, shareWindow);
+      setPendingDocuments(null);
+      setPendingShare(false);
+    } catch (err) {
+      shareWindow?.close();
+      setDocumentError(`Ledger records are committed, but completing the document update failed: ${err instanceof Error ? err.message : "Please try again."}`);
+    }
+  }
+
+  async function retryDocuments() {
+    if (!pendingDocuments) return;
+    setError(null);
+    const shareWindow = pendingShare ? openShareWindow() : undefined;
+    if (pendingShare && !shareWindow) return;
+    setBusy(true);
+    try {
+      await finishCommit(pendingDocuments, shareWindow ?? undefined);
+    } finally {
+      setBusy(false);
+    }
+  }
 
   function parseAll(): Record<string, unknown>[] | null {
     try {
@@ -94,6 +138,7 @@ export function LedgerRecordsEditor({
   }
 
   async function handleCheck() {
+    setDiff(null);
     const records = parseAll();
     if (!records) return;
     setError(null);
@@ -113,17 +158,22 @@ export function LedgerRecordsEditor({
     }
   }
 
-  async function handleCommit() {
+  async function handleCommit(share = false) {
+    if (busy || pendingDocuments || !diff || hasValidationErrors) return;
     const records = parseAll();
     if (!records) return;
     setError(null);
+    const shareWindow = share ? openShareWindow() : undefined;
+    if (share && !shareWindow) return;
     setBusy(true);
     try {
-      const commitResult = await ledgerMassImportCommit(expandForSubmit ? expandForSubmit(records) : records);
+      const expandedRecords = expandForSubmit ? expandForSubmit(records) : records;
+      const commitResult = await ledgerMassImportCommit(expandedRecords);
       setResult(commitResult);
       setDiff(null);
-      onCommitted?.();
+      await finishCommit(expandedRecords, shareWindow ?? undefined);
     } catch (err) {
+      shareWindow?.close();
       setError(err instanceof Error ? err.message : "Commit failed.");
     } finally {
       setBusy(false);
@@ -168,6 +218,7 @@ export function LedgerRecordsEditor({
                     <button
                       type="button"
                       onClick={() => removeRecord(i)}
+                      disabled={busy || pendingDocuments !== null}
                       className="text-xs text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
                     >
                       Remove
@@ -180,6 +231,7 @@ export function LedgerRecordsEditor({
               ) : (
                 <textarea
                   value={text}
+                  disabled={busy || pendingDocuments !== null}
                   onChange={(e) => {
                     const next = [...jsonTexts];
                     next[i] = e.target.value;
@@ -199,6 +251,7 @@ export function LedgerRecordsEditor({
         <button
           type="button"
           onClick={addRecord}
+          disabled={busy || pendingDocuments !== null}
           className="self-start rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium dark:border-zinc-700"
         >
           Add another record
@@ -219,7 +272,7 @@ export function LedgerRecordsEditor({
       <button
         type="button"
         onClick={handleCheck}
-        disabled={busy}
+        disabled={busy || pendingDocuments !== null}
         className="self-start rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
       >
         {busy ? "Checking..." : "Check"}
@@ -233,14 +286,28 @@ export function LedgerRecordsEditor({
             {diff.filter((d) => d.classification === "UNCHANGED").length} unchanged.
           </p>
           <ImportDiffTable diff={diff} />
-          <button
-            type="button"
-            onClick={handleCommit}
-            disabled={busy || toCommitCount === 0 || hasValidationErrors}
-            className="self-start rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
-          >
-            {busy ? "Committing..." : `Commit ${toCommitCount} record(s)`}
-          </button>
+          {!hasValidationErrors && (
+            <div className="flex flex-wrap items-center gap-3">
+              {documentActions && diff.some((item) => item.record.type === "CompanyUpdate") && (
+                <button
+                  type="button"
+                  onClick={() => handleCommit(true)}
+                  disabled={busy}
+                  className="rounded-full border border-green-600 px-5 py-2 text-sm font-medium text-green-700 disabled:opacity-50 dark:border-green-500 dark:text-green-400"
+                >
+                  {busy ? "Saving..." : "Save ledger & send via WhatsApp"}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => handleCommit()}
+                disabled={busy || toCommitCount === 0}
+                className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
+              >
+                {busy ? "Saving..." : documentActions ? "Update ledger only" : `Commit ${toCommitCount} record(s)`}
+              </button>
+            </div>
+          )}
         </>
       )}
 
@@ -248,6 +315,19 @@ export function LedgerRecordsEditor({
         <p className="text-sm text-zinc-700 dark:text-zinc-300">
           Committed. Inserted {result.inserted}, skipped {result.skipped} (already unchanged).
         </p>
+      )}
+      {documentError && (
+        <div className="flex flex-col gap-2">
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{documentError}</p>
+          <button
+            type="button"
+            onClick={retryDocuments}
+            disabled={busy}
+            className="self-start rounded-full border border-zinc-300 px-4 py-1.5 text-sm font-medium disabled:opacity-50 dark:border-zinc-700"
+          >
+            {busy ? "Saving documents..." : pendingShare ? "Retry saving documents & opening WhatsApp" : "Retry saving documents to Drive"}
+          </button>
+        </div>
       )}
     </div>
   );

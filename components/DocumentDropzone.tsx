@@ -4,8 +4,8 @@ import { useState, type FormEvent } from "react";
 import { documentsAnalyze, type RecordGroup } from "@/lib/functions/documents";
 import { readFileAsBase64 } from "@/lib/files";
 
-// Sends file(s) straight to documentsAnalyze for AI drafting — no Drive persistence yet
-// (deferred until real OAuth is set up for the personal-Gmail-owned Drive folder).
+// Sends files to documentsAnalyze for drafting. AdminDocumentsFlow saves the original
+// company-update files to Drive once the reviewed ledger records have been committed.
 export interface AnalyzedFile {
   filename: string;
   mimeType: string;

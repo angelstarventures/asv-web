@@ -5,9 +5,10 @@ import Link from "next/link";
 import { CompanyHealth, CompanyStatus, CompanyTrajectory, LedgerEntryType } from "@/lib/dataconnect/generated";
 import { HealthDot } from "@/components/HealthDot";
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
-import type { CompanyDetail } from "@/lib/portfolioView";
+import type { CompanyDetail, CompanyDetailUpdate } from "@/lib/portfolioView";
 import type { Scope } from "@/lib/scenarioTypes";
 import { tenantConfig } from "@/lib/config/tenant";
+import { RoundDocumentsButton } from "@/components/RoundDocumentsButton";
 
 const STATUS_LABEL: Record<CompanyStatus, { label: string; className: string }> = {
   [CompanyStatus.ACTIVE]: { label: "Active", className: "text-green-600 dark:text-green-400" },
@@ -82,7 +83,7 @@ export function CompanyDetailView({ detail, scope, backHref }: { detail: Company
 
       {tab === "overview" && <OverviewSection detail={detail} />}
       {tab === "rounds" && <RoundsSection detail={detail} scope={scope} />}
-      {tab === "updates" && <UpdatesSection detail={detail} />}
+      {tab === "updates" && <UpdatesSection detail={detail} scope={scope} />}
     </div>
   );
 }
@@ -160,14 +161,7 @@ function RoundsSection({ detail, scope }: { detail: CompanyDetail; scope: Scope 
           </div>
           {r.driveFolderId && (
             <div className="mt-2">
-              <a
-                href={`https://drive.google.com/drive/folders/${r.driveFolderId}`}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs text-blue-600 underline underline-offset-2 dark:text-blue-400"
-              >
-                View round documents ↗
-              </a>
+              <RoundDocumentsButton ledgerEntryId={r.ledgerEntryId} roundName={r.roundName} />
             </div>
           )}
         </div>
@@ -187,7 +181,26 @@ const TRAJECTORY_LABEL: Record<CompanyTrajectory, string> = {
   [CompanyTrajectory.DECLINING]: "Declining",
 };
 
-function UpdatesSection({ detail }: { detail: CompanyDetail }) {
+function buildSavedUpdateMessage(companyName: string, update: CompanyDetailUpdate): string {
+  const date = new Intl.DateTimeFormat("en-US", {
+    month: "short", day: "numeric", year: "numeric", timeZone: "UTC",
+  }).format(new Date(`${update.eventDate}T00:00:00Z`));
+  const section = (title: string, items: string[]) => {
+    const bullets = items.map((item) => item.trim()).filter(Boolean)
+      .map((item) => `• ${item.replace(/\r?\n/g, "\n  ")}`);
+    return bullets.length > 0 ? `*${title}*\n${bullets.join("\n")}` : null;
+  };
+  return [
+    `*${companyName} — Company update*\n${date}`,
+    `*Health:* ${HEALTH_LABEL[update.health]}\n*Trajectory:* ${TRAJECTORY_LABEL[update.trajectory]}`,
+    section("Highlights", update.highlights),
+    section("Lowlights", update.lowlights),
+    section("Upcoming plans", update.upcomingPlans),
+    update.driveUrl ? `*Update document*\n${update.driveUrl}` : null,
+  ].filter(Boolean).join("\n\n");
+}
+
+function UpdatesSection({ detail, scope }: { detail: CompanyDetail; scope: Scope }) {
   if (detail.updates.length === 0) {
     return <p className="text-sm text-zinc-500 dark:text-zinc-500">No updates recorded yet.</p>;
   }
@@ -202,12 +215,61 @@ function UpdatesSection({ detail }: { detail: CompanyDetail }) {
             <span className="text-zinc-500">{HEALTH_LABEL[u.health]}</span>
             <span className="text-zinc-400">·</span>
             <span className="text-zinc-500">{TRAJECTORY_LABEL[u.trajectory]}</span>
+            <a
+              href={`https://wa.me/?text=${encodeURIComponent(buildSavedUpdateMessage(detail.name, u))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={`Send ${detail.name} update from ${u.eventDate} via WhatsApp`}
+              className="ml-auto rounded-full border border-green-600 px-3 py-1.5 text-xs font-medium text-green-700 hover:bg-green-50 dark:border-green-500 dark:text-green-400 dark:hover:bg-green-950"
+            >
+              Send via WhatsApp
+            </a>
           </div>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <UpdateList title="Highlights" items={u.highlights} />
             <UpdateList title="Lowlights" items={u.lowlights} />
             <UpdateList title="Upcoming plans" items={u.upcomingPlans} />
           </div>
+          {u.internalValuations.length > 0 && (
+            <div className="mt-4 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+              <h3 className="mb-2 text-sm font-medium">Internal valuation assessments</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <caption className="sr-only">Internal valuation assessments linked to the update on {u.eventDate}</caption>
+                  <thead className="text-xs text-zinc-500">
+                    <tr>
+                      <th scope="col" className="px-2 py-2">Assessment date</th>
+                      <th scope="col" className="px-2 py-2">{tenantConfig.orgAbbreviation} fair market value</th>
+                      {scope === "mine" && <th scope="col" className="px-2 py-2">Your value</th>}
+                      <th scope="col" className="px-2 py-2">Implied enterprise value</th>
+                      <th scope="col" className="min-w-64 px-2 py-2">Assessment details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {u.internalValuations.map((assessment) => (
+                      <tr key={assessment.ledgerEntryId} className="border-t border-zinc-200 align-top dark:border-zinc-800">
+                        <td className="whitespace-nowrap px-2 py-2 tabular-nums">{assessment.eventDate}</td>
+                        <td className="px-2 py-2 tabular-nums">{formatCurrencyCompact(assessment.fairMarketValue)}</td>
+                        {scope === "mine" && <td className="px-2 py-2 tabular-nums">{assessment.yourValue != null ? formatCurrencyCompact(assessment.yourValue) : "—"}</td>}
+                        <td className="px-2 py-2 tabular-nums">{assessment.impliedEnterpriseValue != null ? formatCurrencyCompact(assessment.impliedEnterpriseValue) : "—"}</td>
+                        <td className="space-y-2 px-2 py-2">
+                          {assessment.rationale && <p className="whitespace-pre-wrap">{assessment.rationale}</p>}
+                          {assessment.valuationImpactSummary && <p className="whitespace-pre-wrap"><span className="font-medium">Valuation impact: </span>{assessment.valuationImpactSummary}</p>}
+                          {assessment.marketResearchGrounding && (
+                            <details>
+                              <summary className="cursor-pointer text-zinc-500">Market research</summary>
+                              <p className="mt-1 whitespace-pre-wrap">{assessment.marketResearchGrounding}</p>
+                            </details>
+                          )}
+                          {!assessment.rationale && !assessment.valuationImpactSummary && !assessment.marketResearchGrounding && "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {u.driveUrl && (
             <div className="mt-2">
               <a

@@ -36,65 +36,6 @@ function buildUpdateMessage(companyName: string, summary: CompanyUpdateSummary):
     .join("\n\n");
 }
 
-// One "Send via WhatsApp" action for a visible, committed-or-not CompanyUpdate group — persists
-// the originally-uploaded file(s) to Drive (lazily, only on this click; see
-// documents-shareCompanyUpdate.ts) and opens WhatsApp's own chat/group picker with the summary
-// and Drive link(s) pre-filled. The admin picks the recipient/group themselves. Deliberately
-// independent of commit — rendered above the review editor, so sending doesn't require (or
-// wait on) committing the records first.
-function CompanyUpdateShareButton({
-  companyId,
-  companyName,
-  record,
-  files,
-}: {
-  companyId: string;
-  companyName: string;
-  record: Record<string, unknown>;
-  files: AnalyzedFile[];
-}) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSend() {
-    setError(null);
-    setBusy(true);
-    try {
-      const { driveUrls } = await documentsShareCompanyUpdate({ companyId, files });
-      const summary = (record.summary as CompanyUpdateSummary) ?? {};
-      const message = [
-        buildUpdateMessage(companyName, summary),
-        driveUrls.length > 0 ? `Document(s):\n${driveUrls.join("\n")}` : null,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
-      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not prepare the WhatsApp share.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-1">
-      <button
-        type="button"
-        onClick={handleSend}
-        disabled={busy}
-        className="self-start rounded-full border border-green-600 px-4 py-1.5 text-sm font-medium text-green-700 disabled:opacity-50 dark:border-green-500 dark:text-green-400"
-      >
-        {busy ? "Preparing..." : "Send via WhatsApp"}
-      </button>
-      {error && (
-        <p role="alert" className="text-xs text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
 // Orchestrates the AI-2 flow: upload+analyze (DocumentDropzone) -> conversational review
 // (ask for a change -> regenerate -> check -> repeat) -> commit (LedgerRecordsEditor). Split
 // into its own client component so the page itself can stay an async server component fetching
@@ -148,7 +89,36 @@ export function AdminDocumentsFlow({
     setLastCheckErrors([]);
   }
 
-  function handleCommitted() {
+  async function handleCommitted(records: Record<string, unknown>[], shareWindow?: Window) {
+    // Use the approved records, including edits and hidden scenarios. The company may
+    // have been created by this commit, so resolve its canonical name on the server.
+    const updateCompanies = new Set(
+      records.filter((record) => record.type === "CompanyUpdate").map((record) => String(record.company))
+    );
+    const driveUrls = new Set<string>();
+    for (const companyName of updateCompanies) {
+      const saved = await documentsShareCompanyUpdate({ companyName, files: analyzedFiles });
+      for (const url of saved.driveUrls) driveUrls.add(url);
+    }
+    if (shareWindow) {
+      // Share the approved text, including edits, and only scenarios visible to this reviewer.
+      // expandForSubmit puts all visible groups before the untouched hidden groups.
+      const visibleCount = groups.filter((group) => group.visible).reduce((count, group) => count + group.scenarios.length, 0);
+      const summaries = new Map<string, string[]>();
+      for (const record of records.slice(0, visibleCount)) {
+        if (record.type !== "CompanyUpdate") continue;
+        const message = buildUpdateMessage(String(record.company), (record.summary as CompanyUpdateSummary) ?? {});
+        const scenarios = summaries.get(message) ?? [];
+        scenarios.push(SCENARIO_DISPLAY[String(record.scenario)] ?? String(record.scenario));
+        summaries.set(message, scenarios);
+      }
+      if (shareWindow.closed) throw new Error("The WhatsApp tab was closed. Retry to open it again.");
+      const message = [
+        ...Array.from(summaries, ([summary, scenarios]) => `${summary}\n\nScenarios: ${scenarios.join(", ")}`),
+        driveUrls.size > 0 ? `Document(s):\n${Array.from(driveUrls).join("\n")}` : null,
+      ].filter(Boolean).join("\n\n");
+      shareWindow.location.href = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    }
     handleDiscard();
     setCommittedNotice(true);
   }
@@ -238,7 +208,6 @@ export function AdminDocumentsFlow({
     ? visibleGroups.map((g) => proposedRecords[g.recordIndexes[0]])
     : [];
   const visibleLabels = visibleGroups.map((g) => formatScenarioLabel(g.scenarios));
-  const companyName = companies.find((c) => c.id === companyId)?.name ?? "";
 
   function expandForSubmit(editedVisibleRecords: Record<string, unknown>[]): Record<string, unknown>[] {
     if (!proposedRecords) return editedVisibleRecords;
@@ -312,26 +281,6 @@ export function AdminDocumentsFlow({
             }
             reanalyzing={regenerating}
           />
-          {companyId &&
-            visibleGroups.map((g, i) => {
-              const record = visibleRecords[i];
-              if (record.type !== "CompanyUpdate") return null;
-              return (
-                <div
-                  key={i}
-                  className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800"
-                >
-                  <p className="text-sm font-medium">Share this update ({visibleLabels[i]})</p>
-                  <CompanyUpdateShareButton
-                    companyId={companyId}
-                    companyName={companyName}
-                    record={record}
-                    files={analyzedFiles}
-                  />
-                </div>
-              );
-            })}
-
           <div className="flex flex-col gap-2 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
             <label className="flex flex-col gap-1 text-sm">
               Ask for a change (optional)
@@ -369,6 +318,7 @@ export function AdminDocumentsFlow({
             recordLabels={visibleLabels}
             expandForSubmit={expandForSubmit}
             onCommitted={handleCommitted}
+            documentActions
             onDiffResult={setLastCheckErrors}
             formattedView
             memberNames={memberNames}

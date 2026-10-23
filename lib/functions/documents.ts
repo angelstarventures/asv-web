@@ -19,8 +19,7 @@ export async function getDocumentAccessUrl(input: GetAccessUrlInput): Promise<Ge
 
 // Mirrors functions/src/functions/documents-analyze.ts exactly — same duplicated-boundary-
 // contract reasoning as the other lib/functions/*.ts wrappers. Files are sent inline for AI
-// analysis, not persisted to Drive yet (Drive upload is deferred until real OAuth is set up —
-// a bare service account has no storage quota on the personal-Gmail-owned Drive folder).
+// analysis. Company-update originals are saved to Drive after commit (or when sharing).
 
 export interface DocumentsAnalyzeFile {
   filename: string;
@@ -62,7 +61,8 @@ export interface DocumentsShareCompanyUpdateFile {
   contentBase64: string;
 }
 export interface DocumentsShareCompanyUpdateInput {
-  companyId: string;
+  companyId?: string;
+  companyName?: string;
   files: DocumentsShareCompanyUpdateFile[];
 }
 export interface DocumentsShareCompanyUpdateOutput {

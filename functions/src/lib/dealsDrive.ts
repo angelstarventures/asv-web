@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import { Readable } from "node:stream";
+import { createHash } from "node:crypto";
 import { defineSecret } from "firebase-functions/params";
 import { tenantConfig } from "./tenantConfig";
 
@@ -202,4 +203,32 @@ export async function uploadDealFile(
     throw new Error("Drive upload did not return a file id");
   }
   return { driveFileId: res.data.id, driveUrl: res.data.webViewLink ?? "" };
+}
+
+// Company-update originals can be saved by both commit and WhatsApp sharing. Reuse
+// identical files, including uploads that succeeded before a later DB/network failure.
+export async function findOrUploadCompanyUpdateFile(
+  parentFolderId: string,
+  filename: string,
+  mimeType: string,
+  content: Buffer
+): Promise<DriveUploadResult> {
+  const drive = getDealsDriveClient();
+  const checksum = createHash("md5").update(content).digest("hex");
+  const escapedName = filename.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  let pageToken: string | undefined;
+  do {
+    const res = await drive.files.list({
+      q: `'${parentFolderId}' in parents and name = '${escapedName}' and trashed = false`,
+      fields: "files(id, webViewLink, md5Checksum), nextPageToken",
+      pageSize: 100,
+      pageToken,
+    });
+    const existing = res.data.files?.find((file) => file.id && file.md5Checksum === checksum);
+    if (existing?.id) {
+      return { driveFileId: existing.id, driveUrl: existing.webViewLink ?? `https://drive.google.com/file/d/${existing.id}/view` };
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return uploadDealFile(parentFolderId, filename, mimeType, content);
 }

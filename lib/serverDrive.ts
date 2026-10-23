@@ -23,10 +23,44 @@ export async function streamDriveFile(fileId: string): Promise<{
 }> {
   const drive = getDriveClient();
   const meta = await drive.files.get({ fileId, fields: "name,mimeType" });
+  // Native Google documents have no downloadable media body; export them for in-app viewing.
+  if (["application/vnd.google-apps.document", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.presentation", "application/vnd.google-apps.drawing"].includes(meta.data.mimeType ?? "")) {
+    const res = await drive.files.export({ fileId, mimeType: "application/pdf" }, { responseType: "stream" });
+    return { stream: res.data as unknown as Readable, mimeType: "application/pdf", name: `${meta.data.name ?? fileId}.pdf` };
+  }
   const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
   return {
     stream: res.data as unknown as Readable,
     mimeType: meta.data.mimeType ?? "application/octet-stream",
     name: meta.data.name ?? fileId,
   };
+}
+
+export interface DriveFolderFile {
+  id: string;
+  name: string;
+}
+
+export async function listDriveFolderFiles(folderId: string): Promise<DriveFolderFile[]> {
+  const drive = getDriveClient();
+  const files: DriveFolderFile[] = [];
+  let pageToken: string | undefined;
+  // IDs come from the stored ledger record, not a caller-supplied Drive folder.
+  const escapedId = folderId.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  do {
+    const res = await drive.files.list({
+      q: `'${escapedId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder' and mimeType != 'application/vnd.google-apps.shortcut'`,
+      fields: "files(id,name),nextPageToken",
+      orderBy: "name_natural",
+      pageSize: 100,
+      pageToken,
+      supportsAllDrives: true,
+      includeItemsFromAllDrives: true,
+    });
+    for (const file of res.data.files ?? []) {
+      if (file.id) files.push({ id: file.id, name: file.name ?? "Untitled document" });
+    }
+    pageToken = res.data.nextPageToken ?? undefined;
+  } while (pageToken);
+  return files;
 }

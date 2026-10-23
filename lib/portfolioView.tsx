@@ -11,6 +11,7 @@ import {
   listNonParticipatingRoundDetailsForScenario,
   listPricedRoundDetailsForScenario,
   listSafeRoundDetailsForScenario,
+  listValuationAssessmentDetailsForScenario,
 } from "@/lib/dataconnect/client";
 import {
   CompanyHealth,
@@ -212,6 +213,17 @@ export interface CompanyDetailRound {
   driveFolderId: string | null;        // Drive folder ID for this round's documents
 }
 
+export interface CompanyDetailValuation {
+  ledgerEntryId: string;
+  eventDate: string;
+  fairMarketValue: number;
+  yourValue?: number;
+  impliedEnterpriseValue: number | null;
+  rationale: string | null;
+  marketResearchGrounding: string | null;
+  valuationImpactSummary: string | null;
+}
+
 export interface CompanyDetailUpdate {
   id: string;
   eventDate: string;
@@ -222,6 +234,7 @@ export interface CompanyDetailUpdate {
   upcomingPlans: string[];
   driveFileId: string | null;          // Drive file ID for this update's document
   driveUrl: string | null;             // Drive web link to the update document
+  internalValuations: CompanyDetailValuation[];
 }
 
 export interface CompanyDetail {
@@ -265,6 +278,8 @@ export async function getCompanyDetail(
     { allocations },
     memberAllocations,
     { companyUpdateDetails },
+    { valuationAssessmentDetails },
+    memberValuations,
   ] = await Promise.all([
     getCompanyById({ id: companyKey }),
     scope === "mine" && authUid ? loadMinePortfolioData(authUid, scenario) : loadAsvPortfolioData(scenario),
@@ -275,6 +290,8 @@ export async function getCompanyDetail(
     listAllocationsForScenario({ scenario }),
     scope === "mine" && authUid ? listMemberAllocations(authUid, { scenario }) : Promise.resolve(null),
     listCompanyUpdatesForScenario({ scenario }),
+    listValuationAssessmentDetailsForScenario({ scenario }),
+    scope === "mine" && authUid ? listMemberValuations(authUid, { scenario }) : Promise.resolve(null),
   ]);
 
   if (!company) return null;
@@ -338,6 +355,32 @@ export async function getCompanyDetail(
     })
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
+  const valuationByEntry = new Map(valuationAssessmentDetails.map((detail) => [detail.ledgerEntry.id, detail]));
+  const yourValueByEntry = new Map(memberValuations?.memberValuations.map((valuation) => [valuation.ledgerEntry.id, valuation.value]) ?? []);
+  const valuationsByUpdateDate = new Map<string, CompanyDetailValuation[]>();
+  for (const entry of ledgerEntries) {
+    if (entry.company.id !== companyKey || entry.type !== LedgerEntryType.INTERNAL_VALUATION_ASSESSMENT) continue;
+    const assessment = valuationByEntry.get(entry.id);
+    if (!assessment) continue;
+    // The schema has no direct update-to-assessment foreign key. Its driving-event
+    // date links the assessment to the update, within this company and scenario.
+    const linked = valuationsByUpdateDate.get(assessment.drivingEventDate) ?? [];
+    linked.push({
+      ledgerEntryId: entry.id,
+      eventDate: entry.eventDate,
+      fairMarketValue: assessment.asvTotalFairMarketValue,
+      yourValue: yourValueByEntry.get(entry.id),
+      impliedEnterpriseValue: assessment.impliedEnterpriseValue ?? null,
+      rationale: assessment.assessmentRationale ?? null,
+      marketResearchGrounding: assessment.viewpointMarketResearchGrounding ?? null,
+      valuationImpactSummary: assessment.viewpointValuationImpactSummary ?? null,
+    });
+    valuationsByUpdateDate.set(assessment.drivingEventDate, linked);
+  }
+  for (const linked of valuationsByUpdateDate.values()) {
+    linked.sort((a, b) => b.eventDate.localeCompare(a.eventDate) || a.ledgerEntryId.localeCompare(b.ledgerEntryId));
+  }
+
   const updates: CompanyDetailUpdate[] = companyUpdateDetails
     .filter((u) => u.ledgerEntry.company.id === companyKey)
     .map((u) => ({
@@ -350,6 +393,7 @@ export async function getCompanyDetail(
       upcomingPlans: u.upcomingPlans,
       driveFileId: u.driveFileId ?? null,
       driveUrl: u.driveUrl ?? null,
+      internalValuations: valuationsByUpdateDate.get(u.ledgerEntry.eventDate) ?? [],
     }))
     .sort((a, b) => (a.eventDate < b.eventDate ? 1 : -1));
 
