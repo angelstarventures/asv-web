@@ -11,11 +11,14 @@ export interface AnalyzedFile {
   mimeType: string;
   contentBase64: string;
 }
+export type StartupDocumentMode = "investment" | "updates";
 
 export function DocumentDropzone({
   companies,
   onAnalyzed,
+  mode,
 }: {
+  mode: StartupDocumentMode;
   companies: { id: string; name: string; tradeName?: string | null }[];
   onAnalyzed: (
     proposedRecords: Record<string, unknown>[],
@@ -27,7 +30,7 @@ export function DocumentDropzone({
     newCompanyName: string | null
   ) => void;
 }) {
-  const [isNewCompany, setIsNewCompany] = useState(false);
+  const isNewCompany = mode === "investment";
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -128,15 +131,6 @@ export function DocumentDropzone({
           <span className="animate-pulse">{status}</span>
         </p>
       )}
-
-      <label className="flex items-center gap-2 text-sm">
-        <input
-          type="checkbox"
-          checked={isNewCompany}
-          onChange={(e) => setIsNewCompany(e.target.checked)}
-        />
-        This is a new company ASV hasn&apos;t invested in before
-      </label>
 
       {isNewCompany ? (
         <label className="flex flex-col gap-1 text-sm">

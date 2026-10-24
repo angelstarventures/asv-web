@@ -1,5 +1,7 @@
 "use client";
 
+import { RealEstateShowcase } from "@/components/RealEstateShowcase";
+import type { ListPublicRealEstateInvestmentsData } from "@/lib/dataconnect/generated";
 import { useState } from "react";
 import type { ListCompaniesData, ListMemberProfilesData } from "@/lib/dataconnect/generated";
 import { LandingHeader } from "@/components/LandingHeader";
@@ -7,7 +9,7 @@ import { MemberProfileGrid } from "@/components/MemberProfileGrid";
 import { CompanyLogoGrid } from "@/components/CompanyLogoGrid";
 import { WelcomeSection } from "@/components/WelcomeSection";
 
-type Tab = "welcome" | "profiles" | "companies";
+type Tab = "welcome" | "profiles" | "companies" | "realestate";
 
 // Header bar mirrors AppHeader's layout (logo + tabs on the left, primary action on the
 // right) so the signed-out and signed-in shells feel like the same app.
@@ -15,10 +17,12 @@ export function LandingTabs({
   members,
   companies,
   featuredCompanyIds,
+  realEstate,
 }: {
   members: ListMemberProfilesData["members"];
   companies: ListCompaniesData["companies"];
   featuredCompanyIds: string[];
+  realEstate: ListPublicRealEstateInvestmentsData["realEstateInvestments"];
 }) {
   const [tab, setTab] = useState<Tab>("welcome");
 
@@ -29,6 +33,8 @@ export function LandingTabs({
       <div className="flex flex-1 justify-center px-6 py-12">
         <div className="w-full max-w-5xl">
           {tab === "welcome" && <WelcomeSection companies={companies} featuredCompanyIds={featuredCompanyIds} />}
+
+          {tab === "realestate" && <RealEstateShowcase investments={realEstate} />}
 
           {tab === "profiles" && <MemberProfileGrid members={members} />}
 

@@ -150,6 +150,7 @@ enum DealDocumentType {
 # --- Feature flags & company membership ---
 
 enum OrganizationFeatureKey {
+  REAL_ESTATE
   DEALS
   AI_DEAL_MATCHING
   AI_CHAT
@@ -162,6 +163,8 @@ enum OrganizationFeatureKey {
 }
 
 enum MemberOrganizationFeatureKey {
+  REAL_ESTATE_VIEW
+  REAL_ESTATE_MANAGEMENT
   DEALS_SCREENING
   DEAL_VIEW
   COMPANY_MANAGEMENT
@@ -711,4 +714,236 @@ type DealPublicReview @table {
   reviewerContact: String!
   comment: String!
   createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Parallel property ledger: startup scenarios and ownership rules do not apply here.
+enum RealEstateKind {
+  UNDER_CONSTRUCTION
+  RENTAL
+}
+
+enum RealEstateStatus {
+  ACTIVE
+  COMPLETED
+  RENTED_INTERIM
+  SOLD
+  WRITTEN_OFF
+  ARCHIVED
+}
+
+enum RealEstateOccupancy {
+  RENTED
+  PARTIALLY_RENTED
+  VACANT
+  NOT_APPLICABLE
+}
+
+enum RealEstateLedgerEntryType {
+  MEMBER_CONTRIBUTION
+  DEVELOPER_PAYMENT
+  ACQUISITION_COST
+  CAPITAL_IMPROVEMENT
+  FEE_OR_CHARGE
+  VALUATION_MARK
+  SHARE_TRANSFER
+  SALE
+  DISTRIBUTION
+  CARRY
+  FX_ADJUSTMENT
+  RENTAL_PERIOD
+  RENTAL_EXPENSE
+  DEPRECIATION
+  ESCROW_HOLD
+  ESCROW_RELEASE
+  STATUS_UPDATE
+}
+
+# Property data stays separate from the startup scenario ledger.
+type RealEstateInvestment @table {
+  id: UUID! @default(expr: "uuidV4()")
+  name: String! @unique
+  kind: RealEstateKind!
+  status: RealEstateStatus! @default(value: ACTIVE)
+  currency: String! @default(value: "USD")
+  defaultFxRateToUsd: Float! @default(value: 1.0)
+  carryPercent: Float! @default(value: 5)
+  firstInvestmentDate: Date
+  estimatedCompletionDate: Date
+  actualCompletionDate: Date
+  saleDate: Date
+  totalPropertyCost: Float
+  salePrice: Float
+  scheduleDocUrl: String
+  transactionSheetUrl: String
+  transactionSheetId: String
+  driveFolderId: String
+  driveFolderUrl: String
+  sheetConfig: String
+  developerName: String
+  projectName: String
+  locationLabel: String
+  unitIdentifier: String
+  publicBlurb: String
+  brochureDriveFileId: String
+  brochureDriveUrl: String
+  showPublicly: Boolean! @default(value: false)
+  createdBy: Member!
+createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Versioned ownership preserves historical attribution.
+type RealEstateMemberShare @table {
+  id: UUID! @default(expr: "uuidV4()")
+  investment: RealEstateInvestment!
+  member: Member! @index # Same Member.id as startup Allocation; no separate property investor registry.
+  shareUnits: Float!
+  committedAmount: Float
+  effectiveFrom: Date!
+  supersededBy: RealEstateMemberShare
+  sourceLedgerEntry: RealEstateLedgerEntry
+  createdBy: Member!
+createdAt: Timestamp! @default(expr: "request.time")
+}
+
+# Property data stays separate from the startup scenario ledger.
+type RealEstatePaymentSchedule @table {
+  id: UUID! @default(expr: "uuidV4()")
+  investment: RealEstateInvestment!
+  installmentCode: String
+  milestoneLabel: String
+  eventDate: Date
+  dueDate: Date
+  percent: Float
+  amountDue: Float!
+  vat: Float! @default(value: 0)
+  total: Float!
+  sortOrder: Int!
+}
+
+# Property data stays separate from the startup scenario ledger.
+type RealEstateLedgerEntry @table @index(fields: ["investmentId", "eventDate"], order: [ASC, DESC]) {
+  id: UUID! @default(expr: "uuidV4()")
+  investment: RealEstateInvestment!
+  type: RealEstateLedgerEntryType! @index
+  eventDate: Date!
+  amountUsd: Float!
+  amountNative: Float
+  fxRateToUsd: Float
+  currency: String!
+  member: Member
+  counterparty: String
+  installmentCode: String
+  description: String
+  fundedOutsideHub: Boolean! @default(value: false)
+  # Explicit sign supports refunds without inventing a new ledger type.
+  cashDirection: Int! @default(value: 0)
+  sourceSheetRowKey: String @index
+  sourceSheetRowNumber: Int
+  sourceSheetRowHash: String @index
+  reversesEntry: RealEstateLedgerEntry
+  createdBy: Member!
+createdAt: Timestamp! @default(expr: "request.time")
+  needsReview: Boolean! @default(value: false)
+}
+
+# Property data stays separate from the startup scenario ledger.
+type RealEstateSaleDetail @table {
+  id: UUID! @default(expr: "uuidV4()")
+  ledgerEntry: RealEstateLedgerEntry! @unique
+  grossSalePrice: Float!
+  sellingCosts: Float!
+  netProceeds: Float!
+  costBasis: Float!
+  accumulatedDepreciation: Float!
+  carryAmount: Float!
+  docUrl: String
+}
+
+# Versioned ownership preserves historical attribution.
+type RealEstateShareTransferDetail @table {
+  id: UUID! @default(expr: "uuidV4()")
+  ledgerEntry: RealEstateLedgerEntry! @unique
+  fromMember: Member!
+  toMember: Member!
+  shareUnits: Float!
+  pricePerShareUnit: Float!
+  sellerCostBasis: Float!
+  carryAmount: Float!
+}
+
+# Rental fields are defined now to avoid a breaking phase-two migration.
+type RealEstateRentalPeriodDetail @table {
+  id: UUID! @default(expr: "uuidV4()")
+  ledgerEntry: RealEstateLedgerEntry! @unique
+  periodStart: Date!
+  periodEnd: Date!
+  occupancy: RealEstateOccupancy!
+  grossRent: Float
+  stateSubsidyRent: Float
+  managerFixedFee: Float
+  managerBonusFee: Float
+  propertyTax: Float
+  maintenance: Float
+  escrowHeld: Float
+  qualitativeUpdate: String
+  reportDocUrl: String
+}
+
+# Member cash attribution is independent of the property obligation.
+type RealEstateAllocation @table {
+  id: UUID! @default(expr: "uuidV4()")
+  ledgerEntry: RealEstateLedgerEntry!
+  member: Member! @index
+  amountUsd: Float!
+  amountNative: Float
+  cashDirection: Int! @default(value: 0)
+}
+
+# Rental fields are defined now to avoid a breaking phase-two migration.
+type RealEstateRentalTerms @table {
+  id: UUID! @default(expr: "uuidV4()")
+  investment: RealEstateInvestment! @unique
+  projectedMonthlyIncome: Float
+  managerMonthlyFee: Float
+  managerBonusPercent: Float
+  projectedMonthlyPropertyTax: Float
+  projectedMonthlyMaintenance: Float
+  escrowPercent: Float
+  rentalCarryPercent: Float
+  capitalGainsCarryPercent: Float
+  depreciationAnnualPercent: Float
+  depreciableBasis: Float
+  depreciationStartDate: Date
+  distributionCadence: String @default(value: "QUARTERLY")
+  propertyManagerName: String
+  agreementDocUrl: String
+}
+
+# Separate committed and deployed capital; sentinel keys represent portfolio rows.
+type RealEstateRollupCache @table(key: ["investmentKey"]) {
+  investmentKey: String!
+  investment: RealEstateInvestment
+  kind: RealEstateKind!
+  capitalCommittedUsd: Float!
+  capitalDeployedUsd: Float!
+  realizedProfitUsd: Float!
+  cumulativeNetCashFlowUsd: Float!
+  currentValueUsd: Float!
+  roi: Float
+  irr: Float
+  computedAt: Timestamp! @default(expr: "request.time")
+}
+
+# Property data stays separate from the startup scenario ledger.
+type RealEstateSheetSyncRun @table {
+  id: UUID! @default(expr: "uuidV4()")
+  investment: RealEstateInvestment!
+  runBy: Member!
+  runAt: Timestamp! @default(expr: "request.time")
+  sheetRevisionId: String
+  rowsScanned: Int!
+  rowsImported: Int!
+  rowsUnchanged: Int!
+  rowsCorrected: Int!
+  warnings: String
 }

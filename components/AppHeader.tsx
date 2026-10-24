@@ -9,11 +9,13 @@ import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
 import { FeedbackButton } from "@/components/FeedbackButton";
 import { tenantConfig } from "@/lib/config/tenant";
 import { getMyOrganizationMembership } from "@/lib/functions/organizationMembers";
-import { getOrganizationFeatures } from "@/lib/functions/organizationFeatures";
+import { auth } from "@/lib/firebase/client";
+import { getOrganizationFeatures, getMemberOrganizationFeatures } from "@/lib/functions/organizationFeatures";
 
 // Tabs gated by org feature flags. A tab whose feature key is absent from this map or
 // set to true is shown; one explicitly set to false is hidden. Same pattern as AdminSubNav.
 const HEADER_FEATURE_GATED_TABS: Record<string, string[]> = {
+  "/member/real-estate": ["REAL_ESTATE"],
   "/member/deals": ["DEALS"],
 };
 
@@ -28,6 +30,7 @@ function isHeaderTabVisible(href: string, enabledFeatures: Record<string, boolea
 // every panel that used to be on /member/reports moved there (lib/portfolioView.tsx).
 const MEMBER_TABS = [
   { href: "/member/dashboard", label: "Portfolio" },
+  { href: "/member/real-estate", label: "Real Estate" },
   { href: "/member/deals", label: "Deals" },
   { href: "/member/documents", label: "Documents" },
   { href: "/member/settings", label: "Settings" },
@@ -54,7 +57,7 @@ export function AppHeader({
 
   // If the layout didn't pass enabledFeatures, compute them client-side.
   useEffect(() => {
-    if (enabledFeatures) { setResolvedFeatures(enabledFeatures); return; }
+    if (enabledFeatures) return;
     (async () => {
       try {
         const membership = await getMyOrganizationMembership();
@@ -63,12 +66,17 @@ export function AppHeader({
         const { features } = await getOrganizationFeatures(orgId);
         const result: Record<string, boolean> = {};
         for (const f of features) result[f.featureKey] = f.enabled;
+        const memberId=(await auth.currentUser?.getIdTokenResult())?.claims.memberId;
+        if(typeof memberId==='string') {
+          const memberFeatures = await getMemberOrganizationFeatures({memberId,organizationId:orgId});
+          if(memberFeatures.features.some(f=>f.featureKey==='REAL_ESTATE_VIEW'&&!f.enabled)) result.REAL_ESTATE=false;
+        }
         setResolvedFeatures(result);
       } catch { /* show all tabs as safe fallback */ }
     })();
   }, [enabledFeatures]);
 
-  const visibleMemberTabs = MEMBER_TABS.filter((tab) => isHeaderTabVisible(tab.href, resolvedFeatures));
+  const visibleMemberTabs = MEMBER_TABS.filter((tab) => isHeaderTabVisible(tab.href, enabledFeatures ?? resolvedFeatures));
   const baseTabs = isDeveloper
     ? [...visibleMemberTabs, { href: "/developer", label: "Developer View" }]
     : visibleMemberTabs;
@@ -80,9 +88,9 @@ export function AppHeader({
   };
 
   return (
-    <header className="relative flex items-center justify-between border-b border-zinc-200 px-4 py-4 sm:px-8 sm:py-6">
-      <div className="flex items-center gap-4 sm:gap-8">
-        <span className="flex items-center gap-2 rounded-md">
+    <header className="relative grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b border-zinc-200 px-4 py-4 sm:px-8 sm:py-6">
+      <div className="contents">
+        <span className="flex w-fit shrink-0 items-center gap-2 rounded-md">
           <Image
             src={tenantConfig.logoPath}
             alt={tenantConfig.logoAlt}
@@ -95,7 +103,7 @@ export function AppHeader({
             BETA
           </span>
         </span>
-        <nav className="hidden gap-1 rounded-full border border-zinc-200 bg-card p-1.5 md:flex">
+        <nav className="order-last col-span-2 hidden w-fit max-w-full flex-wrap gap-1 rounded-2xl border border-zinc-200 bg-card p-1.5 md:flex">
           {tabs.map((tab) => {
             const active = isTabActive(tab.href);
             return (
@@ -115,8 +123,8 @@ export function AppHeader({
           })}
         </nav>
       </div>
-      <div className="flex items-center gap-3 sm:gap-4">
-        <FeedbackButton displayName={displayName} />
+      <div className="flex shrink-0 items-center gap-3 sm:gap-4">
+        <div className="hidden sm:block"><FeedbackButton displayName={displayName} /></div>
         {photoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- a member-uploaded data: URL, not an optimizable remote image
           <img src={photoUrl} alt={displayName ?? ""} className="h-10 w-10 rounded-full border border-zinc-200 object-cover sm:h-12 sm:w-12" />
@@ -131,6 +139,7 @@ export function AppHeader({
           <LogoutButton />
         </div>
         <HeaderMobileMenu>
+          <div className="pb-2 sm:hidden" onClick={event => event.stopPropagation()}><FeedbackButton displayName={displayName} /></div>
           {tabs.map((tab) => {
             const active = isTabActive(tab.href);
             return (

@@ -481,3 +481,43 @@ export async function listDealFundingRoundsByDeal(
   );
   return res.data;
 }
+
+// Real-estate operations; never accept a member id for self-scoped reads.
+import type { ListRealEstateInvestmentsData, GetRealEstateInvestmentByIdData, ListRealEstatePaymentScheduleData, ListRealEstateLedgerEntriesData, ListRealEstateSharesData, ListRealEstateRollupsData, ListPublicRealEstateInvestmentsData, ListMyRealEstateSharesData, ListMyRealEstateLedgerEntriesData, ListMyRealEstateAllocationsData, ListMyRealEstatePositionsData } from "@/lib/dataconnect/generated";
+export async function listRealEstateInvestments(): Promise<ListRealEstateInvestmentsData> {
+  return (await dc().executeQuery<ListRealEstateInvestmentsData>("ListRealEstateInvestments")).data;
+}
+export async function getRealEstateInvestmentById(vars: { id: string }): Promise<GetRealEstateInvestmentByIdData> {
+  return (await dc().executeQuery<GetRealEstateInvestmentByIdData, {id: string}>("GetRealEstateInvestmentById", vars)).data;
+}
+export async function listRealEstatePaymentSchedule(vars: { investmentId: string }): Promise<ListRealEstatePaymentScheduleData> {
+  return (await dc().executeQuery<ListRealEstatePaymentScheduleData, {investmentId: string}>("ListRealEstatePaymentSchedule", vars)).data;
+}
+export async function listRealEstateLedgerEntries(vars: { investmentId: string }): Promise<ListRealEstateLedgerEntriesData> {
+  return (await dc().executeQuery<ListRealEstateLedgerEntriesData, {investmentId: string}>("ListRealEstateLedgerEntries", vars)).data;
+}
+export async function listRealEstateShares(vars: { investmentId: string }): Promise<ListRealEstateSharesData> {
+  return (await dc().executeQuery<ListRealEstateSharesData, {investmentId: string}>("ListRealEstateShares", vars)).data;
+}
+export async function listRealEstateRollups(): Promise<ListRealEstateRollupsData> {
+  return (await dc().executeQuery<ListRealEstateRollupsData>("ListRealEstateRollups")).data;
+}
+export async function listPublicRealEstateInvestments(): Promise<ListPublicRealEstateInvestmentsData> {
+  return (await dc().executeQuery<ListPublicRealEstateInvestmentsData>("ListPublicRealEstateInvestments")).data;
+}
+export async function listMyRealEstateShares(authUid: string): Promise<ListMyRealEstateSharesData> {
+  return (await dc().executeQuery<ListMyRealEstateSharesData, undefined>("ListMyRealEstateShares", undefined, impersonate(authUid))).data;
+}
+export async function listMyRealEstateLedgerEntries(authUid: string): Promise<ListMyRealEstateLedgerEntriesData> {
+  return (await dc().executeQuery<ListMyRealEstateLedgerEntriesData, undefined>("ListMyRealEstateLedgerEntries", undefined, impersonate(authUid))).data;
+}
+export async function listMyRealEstateAllocations(authUid: string): Promise<ListMyRealEstateAllocationsData> {
+  return (await dc().executeQuery<ListMyRealEstateAllocationsData, undefined>("ListMyRealEstateAllocations", undefined, impersonate(authUid))).data;
+}
+export async function listMyRealEstatePositions(authUid: string): Promise<ListMyRealEstatePositionsData> {
+  return (await dc().executeQuery<ListMyRealEstatePositionsData, undefined>("ListMyRealEstatePositions", undefined, impersonate(authUid))).data;
+}
+
+export async function listMyRealEstateTransfers(authUid: string) {
+  return (await dc().executeQuery<import("@/lib/dataconnect/generated").ListMyRealEstateTransfersData, undefined>("ListMyRealEstateTransfers", undefined, impersonate(authUid))).data;
+}

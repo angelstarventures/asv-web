@@ -51,6 +51,18 @@ This README will guide you through the process of using the generated JavaScript
   - [*ListDealPublicReviewsByDeal*](#listdealpublicreviewsbydeal)
   - [*ListDealFundingRoundsByDeal*](#listdealfundingroundsbydeal)
   - [*GetOrganizationMembership*](#getorganizationmembership)
+  - [*ListRealEstateInvestments*](#listrealestateinvestments)
+  - [*GetRealEstateInvestmentById*](#getrealestateinvestmentbyid)
+  - [*ListRealEstatePaymentSchedule*](#listrealestatepaymentschedule)
+  - [*ListRealEstateLedgerEntries*](#listrealestateledgerentries)
+  - [*ListRealEstateShares*](#listrealestateshares)
+  - [*ListRealEstateRollups*](#listrealestaterollups)
+  - [*ListPublicRealEstateInvestments*](#listpublicrealestateinvestments)
+  - [*ListMyRealEstateShares*](#listmyrealestateshares)
+  - [*ListMyRealEstateLedgerEntries*](#listmyrealestateledgerentries)
+  - [*ListMyRealEstateAllocations*](#listmyrealestateallocations)
+  - [*ListMyRealEstatePositions*](#listmyrealestatepositions)
+  - [*ListMyRealEstateTransfers*](#listmyrealestatetransfers)
 - [**Mutations**](#mutations)
   - [*InsertCompany*](#insertcompany)
 
@@ -4896,6 +4908,1382 @@ console.log(data.organizationMembers);
 executeQuery(ref).then((response) => {
   const data = response.data;
   console.log(data.organizationMembers);
+});
+```
+
+## ListRealEstateInvestments
+You can execute the `ListRealEstateInvestments` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listRealEstateInvestments(options?: ExecuteQueryOptions): QueryPromise<ListRealEstateInvestmentsData, undefined>;
+
+interface ListRealEstateInvestmentsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListRealEstateInvestmentsData, undefined>;
+}
+export const listRealEstateInvestmentsRef: ListRealEstateInvestmentsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listRealEstateInvestments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateInvestmentsData, undefined>;
+
+interface ListRealEstateInvestmentsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListRealEstateInvestmentsData, undefined>;
+}
+export const listRealEstateInvestmentsRef: ListRealEstateInvestmentsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listRealEstateInvestmentsRef:
+```typescript
+const name = listRealEstateInvestmentsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListRealEstateInvestments` query has no variables.
+### Return Type
+Recall that executing the `ListRealEstateInvestments` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListRealEstateInvestmentsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListRealEstateInvestmentsData {
+  realEstateInvestments: ({
+    id: UUIDString;
+    name: string;
+    kind: RealEstateKind;
+    status: RealEstateStatus;
+    currency: string;
+    defaultFxRateToUsd: number;
+    carryPercent: number;
+    firstInvestmentDate?: DateString | null;
+    estimatedCompletionDate?: DateString | null;
+    actualCompletionDate?: DateString | null;
+    saleDate?: DateString | null;
+    totalPropertyCost?: number | null;
+    salePrice?: number | null;
+    scheduleDocUrl?: string | null;
+    transactionSheetUrl?: string | null;
+    driveFolderUrl?: string | null;
+    transactionSheetId?: string | null;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+    showPublicly: boolean;
+  } & RealEstateInvestment_Key)[];
+}
+```
+### Using `ListRealEstateInvestments`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateInvestments } from '@asv/dataconnect-generated';
+
+
+// Call the `listRealEstateInvestments()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listRealEstateInvestments();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listRealEstateInvestments(dataConnect);
+
+console.log(data.realEstateInvestments);
+
+// Or, you can use the `Promise` API.
+listRealEstateInvestments().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestments);
+});
+```
+
+### Using `ListRealEstateInvestments`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateInvestmentsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listRealEstateInvestmentsRef()` function to get a reference to the query.
+const ref = listRealEstateInvestmentsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listRealEstateInvestmentsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateInvestments);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestments);
+});
+```
+
+## GetRealEstateInvestmentById
+You can execute the `GetRealEstateInvestmentById` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+getRealEstateInvestmentById(vars: GetRealEstateInvestmentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+
+interface GetRealEstateInvestmentByIdRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetRealEstateInvestmentByIdVariables): QueryRef<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+}
+export const getRealEstateInvestmentByIdRef: GetRealEstateInvestmentByIdRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+getRealEstateInvestmentById(dc: DataConnect, vars: GetRealEstateInvestmentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+
+interface GetRealEstateInvestmentByIdRef {
+  ...
+  (dc: DataConnect, vars: GetRealEstateInvestmentByIdVariables): QueryRef<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+}
+export const getRealEstateInvestmentByIdRef: GetRealEstateInvestmentByIdRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the getRealEstateInvestmentByIdRef:
+```typescript
+const name = getRealEstateInvestmentByIdRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `GetRealEstateInvestmentById` query requires an argument of type `GetRealEstateInvestmentByIdVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface GetRealEstateInvestmentByIdVariables {
+  id: UUIDString;
+}
+```
+### Return Type
+Recall that executing the `GetRealEstateInvestmentById` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `GetRealEstateInvestmentByIdData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface GetRealEstateInvestmentByIdData {
+  realEstateInvestment?: {
+    id: UUIDString;
+    name: string;
+    kind: RealEstateKind;
+    status: RealEstateStatus;
+    currency: string;
+    defaultFxRateToUsd: number;
+    carryPercent: number;
+    firstInvestmentDate?: DateString | null;
+    estimatedCompletionDate?: DateString | null;
+    actualCompletionDate?: DateString | null;
+    saleDate?: DateString | null;
+    totalPropertyCost?: number | null;
+    salePrice?: number | null;
+    scheduleDocUrl?: string | null;
+    transactionSheetUrl?: string | null;
+    driveFolderUrl?: string | null;
+    transactionSheetId?: string | null;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+    showPublicly: boolean;
+  } & RealEstateInvestment_Key;
+}
+```
+### Using `GetRealEstateInvestmentById`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, getRealEstateInvestmentById, GetRealEstateInvestmentByIdVariables } from '@asv/dataconnect-generated';
+
+// The `GetRealEstateInvestmentById` query requires an argument of type `GetRealEstateInvestmentByIdVariables`:
+const getRealEstateInvestmentByIdVars: GetRealEstateInvestmentByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getRealEstateInvestmentById()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await getRealEstateInvestmentById(getRealEstateInvestmentByIdVars);
+// Variables can be defined inline as well.
+const { data } = await getRealEstateInvestmentById({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await getRealEstateInvestmentById(dataConnect, getRealEstateInvestmentByIdVars);
+
+console.log(data.realEstateInvestment);
+
+// Or, you can use the `Promise` API.
+getRealEstateInvestmentById(getRealEstateInvestmentByIdVars).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestment);
+});
+```
+
+### Using `GetRealEstateInvestmentById`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, getRealEstateInvestmentByIdRef, GetRealEstateInvestmentByIdVariables } from '@asv/dataconnect-generated';
+
+// The `GetRealEstateInvestmentById` query requires an argument of type `GetRealEstateInvestmentByIdVariables`:
+const getRealEstateInvestmentByIdVars: GetRealEstateInvestmentByIdVariables = {
+  id: ..., 
+};
+
+// Call the `getRealEstateInvestmentByIdRef()` function to get a reference to the query.
+const ref = getRealEstateInvestmentByIdRef(getRealEstateInvestmentByIdVars);
+// Variables can be defined inline as well.
+const ref = getRealEstateInvestmentByIdRef({ id: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = getRealEstateInvestmentByIdRef(dataConnect, getRealEstateInvestmentByIdVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateInvestment);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestment);
+});
+```
+
+## ListRealEstatePaymentSchedule
+You can execute the `ListRealEstatePaymentSchedule` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listRealEstatePaymentSchedule(vars: ListRealEstatePaymentScheduleVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+
+interface ListRealEstatePaymentScheduleRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstatePaymentScheduleVariables): QueryRef<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+}
+export const listRealEstatePaymentScheduleRef: ListRealEstatePaymentScheduleRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listRealEstatePaymentSchedule(dc: DataConnect, vars: ListRealEstatePaymentScheduleVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+
+interface ListRealEstatePaymentScheduleRef {
+  ...
+  (dc: DataConnect, vars: ListRealEstatePaymentScheduleVariables): QueryRef<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+}
+export const listRealEstatePaymentScheduleRef: ListRealEstatePaymentScheduleRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listRealEstatePaymentScheduleRef:
+```typescript
+const name = listRealEstatePaymentScheduleRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListRealEstatePaymentSchedule` query requires an argument of type `ListRealEstatePaymentScheduleVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListRealEstatePaymentScheduleVariables {
+  investmentId: UUIDString;
+}
+```
+### Return Type
+Recall that executing the `ListRealEstatePaymentSchedule` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListRealEstatePaymentScheduleData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListRealEstatePaymentScheduleData {
+  realEstatePaymentSchedules: ({
+    id: UUIDString;
+    installmentCode?: string | null;
+    milestoneLabel?: string | null;
+    eventDate?: DateString | null;
+    dueDate?: DateString | null;
+    percent?: number | null;
+    amountDue: number;
+    vat: number;
+    total: number;
+    sortOrder: number;
+  } & RealEstatePaymentSchedule_Key)[];
+}
+```
+### Using `ListRealEstatePaymentSchedule`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listRealEstatePaymentSchedule, ListRealEstatePaymentScheduleVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstatePaymentSchedule` query requires an argument of type `ListRealEstatePaymentScheduleVariables`:
+const listRealEstatePaymentScheduleVars: ListRealEstatePaymentScheduleVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstatePaymentSchedule()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listRealEstatePaymentSchedule(listRealEstatePaymentScheduleVars);
+// Variables can be defined inline as well.
+const { data } = await listRealEstatePaymentSchedule({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listRealEstatePaymentSchedule(dataConnect, listRealEstatePaymentScheduleVars);
+
+console.log(data.realEstatePaymentSchedules);
+
+// Or, you can use the `Promise` API.
+listRealEstatePaymentSchedule(listRealEstatePaymentScheduleVars).then((response) => {
+  const data = response.data;
+  console.log(data.realEstatePaymentSchedules);
+});
+```
+
+### Using `ListRealEstatePaymentSchedule`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listRealEstatePaymentScheduleRef, ListRealEstatePaymentScheduleVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstatePaymentSchedule` query requires an argument of type `ListRealEstatePaymentScheduleVariables`:
+const listRealEstatePaymentScheduleVars: ListRealEstatePaymentScheduleVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstatePaymentScheduleRef()` function to get a reference to the query.
+const ref = listRealEstatePaymentScheduleRef(listRealEstatePaymentScheduleVars);
+// Variables can be defined inline as well.
+const ref = listRealEstatePaymentScheduleRef({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listRealEstatePaymentScheduleRef(dataConnect, listRealEstatePaymentScheduleVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstatePaymentSchedules);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstatePaymentSchedules);
+});
+```
+
+## ListRealEstateLedgerEntries
+You can execute the `ListRealEstateLedgerEntries` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listRealEstateLedgerEntries(vars: ListRealEstateLedgerEntriesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+
+interface ListRealEstateLedgerEntriesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstateLedgerEntriesVariables): QueryRef<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+}
+export const listRealEstateLedgerEntriesRef: ListRealEstateLedgerEntriesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listRealEstateLedgerEntries(dc: DataConnect, vars: ListRealEstateLedgerEntriesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+
+interface ListRealEstateLedgerEntriesRef {
+  ...
+  (dc: DataConnect, vars: ListRealEstateLedgerEntriesVariables): QueryRef<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+}
+export const listRealEstateLedgerEntriesRef: ListRealEstateLedgerEntriesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listRealEstateLedgerEntriesRef:
+```typescript
+const name = listRealEstateLedgerEntriesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListRealEstateLedgerEntries` query requires an argument of type `ListRealEstateLedgerEntriesVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListRealEstateLedgerEntriesVariables {
+  investmentId: UUIDString;
+}
+```
+### Return Type
+Recall that executing the `ListRealEstateLedgerEntries` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListRealEstateLedgerEntriesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListRealEstateLedgerEntriesData {
+  realEstateLedgerEntries: ({
+    id: UUIDString;
+    type: RealEstateLedgerEntryType;
+    eventDate: DateString;
+    amountUsd: number;
+    amountNative?: number | null;
+    fxRateToUsd?: number | null;
+    currency: string;
+    counterparty?: string | null;
+    description?: string | null;
+    fundedOutsideHub: boolean;
+    cashDirection: number;
+    needsReview: boolean;
+    sourceSheetRowKey?: string | null;
+    sourceSheetRowHash?: string | null;
+    reversesEntry?: {
+      id: UUIDString;
+    } & RealEstateLedgerEntry_Key;
+  } & RealEstateLedgerEntry_Key)[];
+}
+```
+### Using `ListRealEstateLedgerEntries`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateLedgerEntries, ListRealEstateLedgerEntriesVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstateLedgerEntries` query requires an argument of type `ListRealEstateLedgerEntriesVariables`:
+const listRealEstateLedgerEntriesVars: ListRealEstateLedgerEntriesVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstateLedgerEntries()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listRealEstateLedgerEntries(listRealEstateLedgerEntriesVars);
+// Variables can be defined inline as well.
+const { data } = await listRealEstateLedgerEntries({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listRealEstateLedgerEntries(dataConnect, listRealEstateLedgerEntriesVars);
+
+console.log(data.realEstateLedgerEntries);
+
+// Or, you can use the `Promise` API.
+listRealEstateLedgerEntries(listRealEstateLedgerEntriesVars).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateLedgerEntries);
+});
+```
+
+### Using `ListRealEstateLedgerEntries`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateLedgerEntriesRef, ListRealEstateLedgerEntriesVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstateLedgerEntries` query requires an argument of type `ListRealEstateLedgerEntriesVariables`:
+const listRealEstateLedgerEntriesVars: ListRealEstateLedgerEntriesVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstateLedgerEntriesRef()` function to get a reference to the query.
+const ref = listRealEstateLedgerEntriesRef(listRealEstateLedgerEntriesVars);
+// Variables can be defined inline as well.
+const ref = listRealEstateLedgerEntriesRef({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listRealEstateLedgerEntriesRef(dataConnect, listRealEstateLedgerEntriesVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateLedgerEntries);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateLedgerEntries);
+});
+```
+
+## ListRealEstateShares
+You can execute the `ListRealEstateShares` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listRealEstateShares(vars: ListRealEstateSharesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+
+interface ListRealEstateSharesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstateSharesVariables): QueryRef<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+}
+export const listRealEstateSharesRef: ListRealEstateSharesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listRealEstateShares(dc: DataConnect, vars: ListRealEstateSharesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+
+interface ListRealEstateSharesRef {
+  ...
+  (dc: DataConnect, vars: ListRealEstateSharesVariables): QueryRef<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+}
+export const listRealEstateSharesRef: ListRealEstateSharesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listRealEstateSharesRef:
+```typescript
+const name = listRealEstateSharesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListRealEstateShares` query requires an argument of type `ListRealEstateSharesVariables`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+
+```typescript
+export interface ListRealEstateSharesVariables {
+  investmentId: UUIDString;
+}
+```
+### Return Type
+Recall that executing the `ListRealEstateShares` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListRealEstateSharesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListRealEstateSharesData {
+  realEstateMemberShares: ({
+    id: UUIDString;
+    member: {
+      id: string;
+      displayName: string;
+    } & Member_Key;
+    shareUnits: number;
+    committedAmount?: number | null;
+    effectiveFrom: DateString;
+    supersededBy?: {
+      id: UUIDString;
+    } & RealEstateMemberShare_Key;
+  } & RealEstateMemberShare_Key)[];
+}
+```
+### Using `ListRealEstateShares`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateShares, ListRealEstateSharesVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstateShares` query requires an argument of type `ListRealEstateSharesVariables`:
+const listRealEstateSharesVars: ListRealEstateSharesVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstateShares()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listRealEstateShares(listRealEstateSharesVars);
+// Variables can be defined inline as well.
+const { data } = await listRealEstateShares({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listRealEstateShares(dataConnect, listRealEstateSharesVars);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+listRealEstateShares(listRealEstateSharesVars).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+### Using `ListRealEstateShares`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateSharesRef, ListRealEstateSharesVariables } from '@asv/dataconnect-generated';
+
+// The `ListRealEstateShares` query requires an argument of type `ListRealEstateSharesVariables`:
+const listRealEstateSharesVars: ListRealEstateSharesVariables = {
+  investmentId: ..., 
+};
+
+// Call the `listRealEstateSharesRef()` function to get a reference to the query.
+const ref = listRealEstateSharesRef(listRealEstateSharesVars);
+// Variables can be defined inline as well.
+const ref = listRealEstateSharesRef({ investmentId: ..., });
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listRealEstateSharesRef(dataConnect, listRealEstateSharesVars);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+## ListRealEstateRollups
+You can execute the `ListRealEstateRollups` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listRealEstateRollups(options?: ExecuteQueryOptions): QueryPromise<ListRealEstateRollupsData, undefined>;
+
+interface ListRealEstateRollupsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListRealEstateRollupsData, undefined>;
+}
+export const listRealEstateRollupsRef: ListRealEstateRollupsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listRealEstateRollups(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateRollupsData, undefined>;
+
+interface ListRealEstateRollupsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListRealEstateRollupsData, undefined>;
+}
+export const listRealEstateRollupsRef: ListRealEstateRollupsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listRealEstateRollupsRef:
+```typescript
+const name = listRealEstateRollupsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListRealEstateRollups` query has no variables.
+### Return Type
+Recall that executing the `ListRealEstateRollups` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListRealEstateRollupsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListRealEstateRollupsData {
+  realEstateRollupCaches: ({
+    investmentKey: string;
+    kind: RealEstateKind;
+    capitalCommittedUsd: number;
+    capitalDeployedUsd: number;
+    realizedProfitUsd: number;
+    cumulativeNetCashFlowUsd: number;
+    currentValueUsd: number;
+    roi?: number | null;
+    irr?: number | null;
+  } & RealEstateRollupCache_Key)[];
+}
+```
+### Using `ListRealEstateRollups`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateRollups } from '@asv/dataconnect-generated';
+
+
+// Call the `listRealEstateRollups()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listRealEstateRollups();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listRealEstateRollups(dataConnect);
+
+console.log(data.realEstateRollupCaches);
+
+// Or, you can use the `Promise` API.
+listRealEstateRollups().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateRollupCaches);
+});
+```
+
+### Using `ListRealEstateRollups`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listRealEstateRollupsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listRealEstateRollupsRef()` function to get a reference to the query.
+const ref = listRealEstateRollupsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listRealEstateRollupsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateRollupCaches);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateRollupCaches);
+});
+```
+
+## ListPublicRealEstateInvestments
+You can execute the `ListPublicRealEstateInvestments` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listPublicRealEstateInvestments(options?: ExecuteQueryOptions): QueryPromise<ListPublicRealEstateInvestmentsData, undefined>;
+
+interface ListPublicRealEstateInvestmentsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListPublicRealEstateInvestmentsData, undefined>;
+}
+export const listPublicRealEstateInvestmentsRef: ListPublicRealEstateInvestmentsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listPublicRealEstateInvestments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListPublicRealEstateInvestmentsData, undefined>;
+
+interface ListPublicRealEstateInvestmentsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListPublicRealEstateInvestmentsData, undefined>;
+}
+export const listPublicRealEstateInvestmentsRef: ListPublicRealEstateInvestmentsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listPublicRealEstateInvestmentsRef:
+```typescript
+const name = listPublicRealEstateInvestmentsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListPublicRealEstateInvestments` query has no variables.
+### Return Type
+Recall that executing the `ListPublicRealEstateInvestments` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListPublicRealEstateInvestmentsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListPublicRealEstateInvestmentsData {
+  realEstateInvestments: ({
+    id: UUIDString;
+    name: string;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+  } & RealEstateInvestment_Key)[];
+}
+```
+### Using `ListPublicRealEstateInvestments`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listPublicRealEstateInvestments } from '@asv/dataconnect-generated';
+
+
+// Call the `listPublicRealEstateInvestments()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listPublicRealEstateInvestments();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listPublicRealEstateInvestments(dataConnect);
+
+console.log(data.realEstateInvestments);
+
+// Or, you can use the `Promise` API.
+listPublicRealEstateInvestments().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestments);
+});
+```
+
+### Using `ListPublicRealEstateInvestments`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listPublicRealEstateInvestmentsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listPublicRealEstateInvestmentsRef()` function to get a reference to the query.
+const ref = listPublicRealEstateInvestmentsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listPublicRealEstateInvestmentsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateInvestments);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateInvestments);
+});
+```
+
+## ListMyRealEstateShares
+You can execute the `ListMyRealEstateShares` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listMyRealEstateShares(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateSharesData, undefined>;
+
+interface ListMyRealEstateSharesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateSharesData, undefined>;
+}
+export const listMyRealEstateSharesRef: ListMyRealEstateSharesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listMyRealEstateShares(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateSharesData, undefined>;
+
+interface ListMyRealEstateSharesRef {
+  ...
+  (dc: DataConnect): QueryRef<ListMyRealEstateSharesData, undefined>;
+}
+export const listMyRealEstateSharesRef: ListMyRealEstateSharesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listMyRealEstateSharesRef:
+```typescript
+const name = listMyRealEstateSharesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListMyRealEstateShares` query has no variables.
+### Return Type
+Recall that executing the `ListMyRealEstateShares` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListMyRealEstateSharesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListMyRealEstateSharesData {
+  realEstateMemberShares: ({
+    id: UUIDString;
+    shareUnits: number;
+    committedAmount?: number | null;
+    effectiveFrom: DateString;
+    supersededBy?: {
+      id: UUIDString;
+    } & RealEstateMemberShare_Key;
+    investment: {
+      id: UUIDString;
+      name: string;
+      kind: RealEstateKind;
+      status: RealEstateStatus;
+      currency: string;
+      defaultFxRateToUsd: number;
+      carryPercent: number;
+      firstInvestmentDate?: DateString | null;
+      estimatedCompletionDate?: DateString | null;
+      actualCompletionDate?: DateString | null;
+      saleDate?: DateString | null;
+      totalPropertyCost?: number | null;
+      salePrice?: number | null;
+      scheduleDocUrl?: string | null;
+      transactionSheetUrl?: string | null;
+      driveFolderUrl?: string | null;
+    } & RealEstateInvestment_Key;
+  } & RealEstateMemberShare_Key)[];
+}
+```
+### Using `ListMyRealEstateShares`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateShares } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateShares()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listMyRealEstateShares();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listMyRealEstateShares(dataConnect);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+listMyRealEstateShares().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+### Using `ListMyRealEstateShares`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateSharesRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateSharesRef()` function to get a reference to the query.
+const ref = listMyRealEstateSharesRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listMyRealEstateSharesRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+## ListMyRealEstateLedgerEntries
+You can execute the `ListMyRealEstateLedgerEntries` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listMyRealEstateLedgerEntries(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateLedgerEntriesData, undefined>;
+
+interface ListMyRealEstateLedgerEntriesRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateLedgerEntriesData, undefined>;
+}
+export const listMyRealEstateLedgerEntriesRef: ListMyRealEstateLedgerEntriesRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listMyRealEstateLedgerEntries(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateLedgerEntriesData, undefined>;
+
+interface ListMyRealEstateLedgerEntriesRef {
+  ...
+  (dc: DataConnect): QueryRef<ListMyRealEstateLedgerEntriesData, undefined>;
+}
+export const listMyRealEstateLedgerEntriesRef: ListMyRealEstateLedgerEntriesRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listMyRealEstateLedgerEntriesRef:
+```typescript
+const name = listMyRealEstateLedgerEntriesRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListMyRealEstateLedgerEntries` query has no variables.
+### Return Type
+Recall that executing the `ListMyRealEstateLedgerEntries` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListMyRealEstateLedgerEntriesData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListMyRealEstateLedgerEntriesData {
+  realEstateLedgerEntries: ({
+    id: UUIDString;
+    type: RealEstateLedgerEntryType;
+    eventDate: DateString;
+    amountUsd: number;
+    amountNative?: number | null;
+    fxRateToUsd?: number | null;
+    currency: string;
+    counterparty?: string | null;
+    description?: string | null;
+    fundedOutsideHub: boolean;
+    cashDirection: number;
+    needsReview: boolean;
+    sourceSheetRowKey?: string | null;
+    sourceSheetRowHash?: string | null;
+    reversesEntry?: {
+      id: UUIDString;
+    } & RealEstateLedgerEntry_Key;
+    investment: {
+      id: UUIDString;
+    } & RealEstateInvestment_Key;
+  } & RealEstateLedgerEntry_Key)[];
+}
+```
+### Using `ListMyRealEstateLedgerEntries`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateLedgerEntries } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateLedgerEntries()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listMyRealEstateLedgerEntries();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listMyRealEstateLedgerEntries(dataConnect);
+
+console.log(data.realEstateLedgerEntries);
+
+// Or, you can use the `Promise` API.
+listMyRealEstateLedgerEntries().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateLedgerEntries);
+});
+```
+
+### Using `ListMyRealEstateLedgerEntries`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateLedgerEntriesRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateLedgerEntriesRef()` function to get a reference to the query.
+const ref = listMyRealEstateLedgerEntriesRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listMyRealEstateLedgerEntriesRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateLedgerEntries);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateLedgerEntries);
+});
+```
+
+## ListMyRealEstateAllocations
+You can execute the `ListMyRealEstateAllocations` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listMyRealEstateAllocations(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateAllocationsData, undefined>;
+
+interface ListMyRealEstateAllocationsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateAllocationsData, undefined>;
+}
+export const listMyRealEstateAllocationsRef: ListMyRealEstateAllocationsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listMyRealEstateAllocations(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateAllocationsData, undefined>;
+
+interface ListMyRealEstateAllocationsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListMyRealEstateAllocationsData, undefined>;
+}
+export const listMyRealEstateAllocationsRef: ListMyRealEstateAllocationsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listMyRealEstateAllocationsRef:
+```typescript
+const name = listMyRealEstateAllocationsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListMyRealEstateAllocations` query has no variables.
+### Return Type
+Recall that executing the `ListMyRealEstateAllocations` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListMyRealEstateAllocationsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListMyRealEstateAllocationsData {
+  realEstateAllocations: ({
+    id: UUIDString;
+    amountUsd: number;
+    amountNative?: number | null;
+    cashDirection: number;
+    ledgerEntry: {
+      id: UUIDString;
+      type: RealEstateLedgerEntryType;
+      eventDate: DateString;
+      amountUsd: number;
+      amountNative?: number | null;
+      fxRateToUsd?: number | null;
+      currency: string;
+      counterparty?: string | null;
+      description?: string | null;
+      fundedOutsideHub: boolean;
+      cashDirection: number;
+      needsReview: boolean;
+      sourceSheetRowKey?: string | null;
+      sourceSheetRowHash?: string | null;
+      reversesEntry?: {
+        id: UUIDString;
+      } & RealEstateLedgerEntry_Key;
+      investment: {
+        id: UUIDString;
+      } & RealEstateInvestment_Key;
+    } & RealEstateLedgerEntry_Key;
+  } & RealEstateAllocation_Key)[];
+}
+```
+### Using `ListMyRealEstateAllocations`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateAllocations } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateAllocations()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listMyRealEstateAllocations();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listMyRealEstateAllocations(dataConnect);
+
+console.log(data.realEstateAllocations);
+
+// Or, you can use the `Promise` API.
+listMyRealEstateAllocations().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateAllocations);
+});
+```
+
+### Using `ListMyRealEstateAllocations`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateAllocationsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateAllocationsRef()` function to get a reference to the query.
+const ref = listMyRealEstateAllocationsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listMyRealEstateAllocationsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateAllocations);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateAllocations);
+});
+```
+
+## ListMyRealEstatePositions
+You can execute the `ListMyRealEstatePositions` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listMyRealEstatePositions(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstatePositionsData, undefined>;
+
+interface ListMyRealEstatePositionsRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstatePositionsData, undefined>;
+}
+export const listMyRealEstatePositionsRef: ListMyRealEstatePositionsRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listMyRealEstatePositions(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstatePositionsData, undefined>;
+
+interface ListMyRealEstatePositionsRef {
+  ...
+  (dc: DataConnect): QueryRef<ListMyRealEstatePositionsData, undefined>;
+}
+export const listMyRealEstatePositionsRef: ListMyRealEstatePositionsRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listMyRealEstatePositionsRef:
+```typescript
+const name = listMyRealEstatePositionsRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListMyRealEstatePositions` query has no variables.
+### Return Type
+Recall that executing the `ListMyRealEstatePositions` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListMyRealEstatePositionsData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListMyRealEstatePositionsData {
+  realEstateMemberShares: ({
+    investment: {
+      id: UUIDString;
+      realEstateRollupCaches_on_investment: ({
+        capitalDeployedUsd: number;
+      })[];
+      realEstateMemberShares_on_investment: ({
+        shareUnits: number;
+      })[];
+      realEstateLedgerEntries_on_investment: ({
+        id: UUIDString;
+        type: RealEstateLedgerEntryType;
+        eventDate: DateString;
+        amountUsd: number;
+        reversesEntry?: {
+          id: UUIDString;
+        } & RealEstateLedgerEntry_Key;
+      } & RealEstateLedgerEntry_Key)[];
+    } & RealEstateInvestment_Key;
+  })[];
+}
+```
+### Using `ListMyRealEstatePositions`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstatePositions } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstatePositions()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listMyRealEstatePositions();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listMyRealEstatePositions(dataConnect);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+listMyRealEstatePositions().then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+### Using `ListMyRealEstatePositions`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstatePositionsRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstatePositionsRef()` function to get a reference to the query.
+const ref = listMyRealEstatePositionsRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listMyRealEstatePositionsRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.realEstateMemberShares);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.realEstateMemberShares);
+});
+```
+
+## ListMyRealEstateTransfers
+You can execute the `ListMyRealEstateTransfers` query using the following action shortcut function, or by calling `executeQuery()` after calling the following `QueryRef` function, both of which are defined in [generated/index.d.ts](./index.d.ts):
+```typescript
+listMyRealEstateTransfers(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
+
+interface ListMyRealEstateTransfersRef {
+  ...
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateTransfersData, undefined>;
+}
+export const listMyRealEstateTransfersRef: ListMyRealEstateTransfersRef;
+```
+You can also pass in a `DataConnect` instance to the action shortcut function or `QueryRef` function.
+```typescript
+listMyRealEstateTransfers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
+
+interface ListMyRealEstateTransfersRef {
+  ...
+  (dc: DataConnect): QueryRef<ListMyRealEstateTransfersData, undefined>;
+}
+export const listMyRealEstateTransfersRef: ListMyRealEstateTransfersRef;
+```
+
+If you need the name of the operation without creating a ref, you can retrieve the operation name by calling the `operationName` property on the listMyRealEstateTransfersRef:
+```typescript
+const name = listMyRealEstateTransfersRef.operationName;
+console.log(name);
+```
+
+### Variables
+The `ListMyRealEstateTransfers` query has no variables.
+### Return Type
+Recall that executing the `ListMyRealEstateTransfers` query returns a `QueryPromise` that resolves to an object with a `data` property.
+
+The `data` property is an object of type `ListMyRealEstateTransfersData`, which is defined in [generated/index.d.ts](./index.d.ts). It has the following fields:
+```typescript
+export interface ListMyRealEstateTransfersData {
+  sales: ({
+    sellerCostBasis: number;
+    carryAmount: number;
+    ledgerEntry: {
+      amountUsd: number;
+      investment: {
+        id: UUIDString;
+      } & RealEstateInvestment_Key;
+    };
+  })[];
+}
+```
+### Using `ListMyRealEstateTransfers`'s action shortcut function
+
+```typescript
+import { getDataConnect } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateTransfers } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateTransfers()` function to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await listMyRealEstateTransfers();
+
+// You can also pass in a `DataConnect` instance to the action shortcut function.
+const dataConnect = getDataConnect(connectorConfig);
+const { data } = await listMyRealEstateTransfers(dataConnect);
+
+console.log(data.sales);
+
+// Or, you can use the `Promise` API.
+listMyRealEstateTransfers().then((response) => {
+  const data = response.data;
+  console.log(data.sales);
+});
+```
+
+### Using `ListMyRealEstateTransfers`'s `QueryRef` function
+
+```typescript
+import { getDataConnect, executeQuery } from 'firebase/data-connect';
+import { connectorConfig, listMyRealEstateTransfersRef } from '@asv/dataconnect-generated';
+
+
+// Call the `listMyRealEstateTransfersRef()` function to get a reference to the query.
+const ref = listMyRealEstateTransfersRef();
+
+// You can also pass in a `DataConnect` instance to the `QueryRef` function.
+const dataConnect = getDataConnect(connectorConfig);
+const ref = listMyRealEstateTransfersRef(dataConnect);
+
+// Call `executeQuery()` on the reference to execute the query.
+// You can use the `await` keyword to wait for the promise to resolve.
+const { data } = await executeQuery(ref);
+
+console.log(data.sales);
+
+// Or, you can use the `Promise` API.
+executeQuery(ref).then((response) => {
+  const data = response.data;
+  console.log(data.sales);
 });
 ```
 

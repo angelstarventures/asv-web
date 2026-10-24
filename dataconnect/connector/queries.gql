@@ -695,3 +695,54 @@ query GetOrganizationMembership($memberId: String!) @auth(level: USER, insecureR
     }
   }
 }
+
+# Real estate: member reads bind ownership to the verified Firebase uid.
+query ListRealEstateInvestments @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstateInvestments(limit: 10000) { id name kind status currency defaultFxRateToUsd carryPercent firstInvestmentDate estimatedCompletionDate actualCompletionDate saleDate totalPropertyCost salePrice scheduleDocUrl transactionSheetUrl driveFolderUrl transactionSheetId developerName projectName locationLabel unitIdentifier publicBlurb brochureDriveFileId showPublicly }
+}
+
+query GetRealEstateInvestmentById($id: UUID!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstateInvestment(key: {id: $id}) { id name kind status currency defaultFxRateToUsd carryPercent firstInvestmentDate estimatedCompletionDate actualCompletionDate saleDate totalPropertyCost salePrice scheduleDocUrl transactionSheetUrl driveFolderUrl transactionSheetId developerName projectName locationLabel unitIdentifier publicBlurb brochureDriveFileId showPublicly }
+}
+
+query ListRealEstatePaymentSchedule($investmentId: UUID!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstatePaymentSchedules(where: {investmentId: {eq: $investmentId}}, limit: 10000, orderBy: {sortOrder: ASC}) { id installmentCode milestoneLabel eventDate dueDate percent amountDue vat total sortOrder }
+}
+
+query ListRealEstateLedgerEntries($investmentId: UUID!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstateLedgerEntries(where: {investmentId: {eq: $investmentId}}, limit: 10000, orderBy: {eventDate: ASC}) { id type eventDate amountUsd amountNative fxRateToUsd currency counterparty description fundedOutsideHub cashDirection needsReview sourceSheetRowKey sourceSheetRowHash reversesEntry { id } }
+}
+
+query ListRealEstateShares($investmentId: UUID!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstateMemberShares(where: {investmentId: {eq: $investmentId}}, limit: 10000, orderBy: {effectiveFrom: ASC}) { id member {id displayName} shareUnits committedAmount effectiveFrom supersededBy {id} }
+}
+
+query ListRealEstateRollups @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  realEstateRollupCaches(limit: 10000) { investmentKey kind capitalCommittedUsd capitalDeployedUsd realizedProfitUsd cumulativeNetCashFlowUsd currentValueUsd roi irr }
+}
+
+query ListPublicRealEstateInvestments @auth(level: PUBLIC) {
+  realEstateInvestments(where: {showPublicly: {eq: true}}, limit: 1000) { id name developerName projectName locationLabel unitIdentifier publicBlurb brochureDriveFileId }
+}
+
+query ListMyRealEstateShares @auth(level: USER) {
+  realEstateMemberShares(where: {member: {authUid: {eq_expr: "auth.uid"}}}, limit: 10000, orderBy: {effectiveFrom: ASC}) { id shareUnits committedAmount effectiveFrom supersededBy {id} investment { id name kind status currency defaultFxRateToUsd carryPercent firstInvestmentDate estimatedCompletionDate actualCompletionDate saleDate totalPropertyCost salePrice scheduleDocUrl transactionSheetUrl driveFolderUrl } }
+}
+
+query ListMyRealEstateLedgerEntries @auth(level: USER) {
+  realEstateLedgerEntries(where: {member: {authUid: {eq_expr: "auth.uid"}}}, limit: 10000) { id type eventDate amountUsd amountNative fxRateToUsd currency counterparty description fundedOutsideHub cashDirection needsReview sourceSheetRowKey sourceSheetRowHash reversesEntry { id } investment { id } }
+}
+
+query ListMyRealEstateAllocations @auth(level: USER) {
+  realEstateAllocations(where: {member: {authUid: {eq_expr: "auth.uid"}}}, limit: 10000) { id amountUsd amountNative cashDirection ledgerEntry { id type eventDate amountUsd amountNative fxRateToUsd currency counterparty description fundedOutsideHub cashDirection needsReview sourceSheetRowKey sourceSheetRowHash reversesEntry { id } investment { id } } }
+}
+
+query ListMyRealEstatePositions @auth(level: USER) {
+  realEstateMemberShares(where: {member: {authUid: {eq_expr: "auth.uid"}}, supersededById: {isNull: true}}, limit: 10000) { investment { id realEstateRollupCaches_on_investment(limit: 1) { capitalDeployedUsd } realEstateMemberShares_on_investment(where: {supersededById: {isNull: true}}, limit: 10000) { shareUnits } realEstateLedgerEntries_on_investment(where: {type: {in: [VALUATION_MARK, SALE]}}, limit: 10000, orderBy: {eventDate: ASC}) { id type eventDate amountUsd reversesEntry {id} } } }
+}
+
+query ListMyRealEstateTransfers @auth(level: USER) {
+  sales: realEstateShareTransferDetails(where: {fromMember: {authUid: {eq_expr: "auth.uid"}}}, limit: 10000) {
+    sellerCostBasis carryAmount ledgerEntry { amountUsd investment { id } }
+  }
+}

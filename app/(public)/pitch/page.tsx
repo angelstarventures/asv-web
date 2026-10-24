@@ -13,6 +13,12 @@ export default function PitchPage() {
 
       <div className="flex flex-1 justify-center px-6 py-12">
         <div className="flex w-full max-w-3xl flex-col gap-10">
+          <section aria-labelledby="pitch-beta-heading" className="space-y-3 rounded-xl border border-amber-300 bg-tile-cream p-6">
+            <span className="inline-flex rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white">BETA</span>
+            <h2 id="pitch-beta-heading" className="text-lg font-semibold">Our pitch portal is in beta</h2>
+            <p className="text-sm leading-relaxed text-zinc-700">Please submit your pitch below and also apply to {tenantConfig.orgAbbreviation} through gust.com at the same time while we test this feature.</p>
+            <a href={tenantConfig.pitchApplicationUrl} target="_blank" rel="noreferrer" className="inline-flex rounded-full bg-foreground px-4 py-2 text-sm font-medium text-background">Apply through Gust <span className="ml-2" aria-hidden="true">↗</span></a>
+          </section>
           <div>
             <h2 className="text-2xl font-semibold tracking-tight">About {tenantConfig.orgAbbreviation}</h2>
             <section className="mt-2 rounded-lg border border-zinc-200 bg-card p-6 text-sm dark:border-zinc-800">
@@ -47,7 +53,7 @@ export default function PitchPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Pitch to Us</h1>
             <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              Tell us about your company below. We review every submission.
+              Tell us about your company below. Please also submit your application through Gust while this portal is in beta.
             </p>
           </div>
 

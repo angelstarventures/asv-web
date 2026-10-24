@@ -105,6 +105,40 @@ export enum MembershipType {
   EMERITUS = "EMERITUS",
 };
 
+export enum RealEstateKind {
+  UNDER_CONSTRUCTION = "UNDER_CONSTRUCTION",
+  RENTAL = "RENTAL",
+};
+
+export enum RealEstateLedgerEntryType {
+  MEMBER_CONTRIBUTION = "MEMBER_CONTRIBUTION",
+  DEVELOPER_PAYMENT = "DEVELOPER_PAYMENT",
+  ACQUISITION_COST = "ACQUISITION_COST",
+  CAPITAL_IMPROVEMENT = "CAPITAL_IMPROVEMENT",
+  FEE_OR_CHARGE = "FEE_OR_CHARGE",
+  VALUATION_MARK = "VALUATION_MARK",
+  SHARE_TRANSFER = "SHARE_TRANSFER",
+  SALE = "SALE",
+  DISTRIBUTION = "DISTRIBUTION",
+  CARRY = "CARRY",
+  FX_ADJUSTMENT = "FX_ADJUSTMENT",
+  RENTAL_PERIOD = "RENTAL_PERIOD",
+  RENTAL_EXPENSE = "RENTAL_EXPENSE",
+  DEPRECIATION = "DEPRECIATION",
+  ESCROW_HOLD = "ESCROW_HOLD",
+  ESCROW_RELEASE = "ESCROW_RELEASE",
+  STATUS_UPDATE = "STATUS_UPDATE",
+};
+
+export enum RealEstateStatus {
+  ACTIVE = "ACTIVE",
+  COMPLETED = "COMPLETED",
+  RENTED_INTERIM = "RENTED_INTERIM",
+  SOLD = "SOLD",
+  WRITTEN_OFF = "WRITTEN_OFF",
+  ARCHIVED = "ARCHIVED",
+};
+
 export enum Role {
   DEVELOPER = "DEVELOPER",
   DEV_SITE_ADMIN = "DEV_SITE_ADMIN",
@@ -379,6 +413,39 @@ export interface GetPortfolioRollupData {
 
 export interface GetPortfolioRollupVariables {
   scenario: Scenario;
+}
+
+export interface GetRealEstateInvestmentByIdData {
+  realEstateInvestment?: {
+    id: UUIDString;
+    name: string;
+    kind: RealEstateKind;
+    status: RealEstateStatus;
+    currency: string;
+    defaultFxRateToUsd: number;
+    carryPercent: number;
+    firstInvestmentDate?: DateString | null;
+    estimatedCompletionDate?: DateString | null;
+    actualCompletionDate?: DateString | null;
+    saleDate?: DateString | null;
+    totalPropertyCost?: number | null;
+    salePrice?: number | null;
+    scheduleDocUrl?: string | null;
+    transactionSheetUrl?: string | null;
+    driveFolderUrl?: string | null;
+    transactionSheetId?: string | null;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+    showPublicly: boolean;
+  } & RealEstateInvestment_Key;
+}
+
+export interface GetRealEstateInvestmentByIdVariables {
+  id: UUIDString;
 }
 
 export interface GetTaxDocumentByIdData {
@@ -869,6 +936,128 @@ export interface ListMemberValuationsVariables {
   scenario: Scenario;
 }
 
+export interface ListMyRealEstateAllocationsData {
+  realEstateAllocations: ({
+    id: UUIDString;
+    amountUsd: number;
+    amountNative?: number | null;
+    cashDirection: number;
+    ledgerEntry: {
+      id: UUIDString;
+      type: RealEstateLedgerEntryType;
+      eventDate: DateString;
+      amountUsd: number;
+      amountNative?: number | null;
+      fxRateToUsd?: number | null;
+      currency: string;
+      counterparty?: string | null;
+      description?: string | null;
+      fundedOutsideHub: boolean;
+      cashDirection: number;
+      needsReview: boolean;
+      sourceSheetRowKey?: string | null;
+      sourceSheetRowHash?: string | null;
+      reversesEntry?: {
+        id: UUIDString;
+      } & RealEstateLedgerEntry_Key;
+      investment: {
+        id: UUIDString;
+      } & RealEstateInvestment_Key;
+    } & RealEstateLedgerEntry_Key;
+  } & RealEstateAllocation_Key)[];
+}
+
+export interface ListMyRealEstateLedgerEntriesData {
+  realEstateLedgerEntries: ({
+    id: UUIDString;
+    type: RealEstateLedgerEntryType;
+    eventDate: DateString;
+    amountUsd: number;
+    amountNative?: number | null;
+    fxRateToUsd?: number | null;
+    currency: string;
+    counterparty?: string | null;
+    description?: string | null;
+    fundedOutsideHub: boolean;
+    cashDirection: number;
+    needsReview: boolean;
+    sourceSheetRowKey?: string | null;
+    sourceSheetRowHash?: string | null;
+    reversesEntry?: {
+      id: UUIDString;
+    } & RealEstateLedgerEntry_Key;
+    investment: {
+      id: UUIDString;
+    } & RealEstateInvestment_Key;
+  } & RealEstateLedgerEntry_Key)[];
+}
+
+export interface ListMyRealEstatePositionsData {
+  realEstateMemberShares: ({
+    investment: {
+      id: UUIDString;
+      realEstateRollupCaches_on_investment: ({
+        capitalDeployedUsd: number;
+      })[];
+      realEstateMemberShares_on_investment: ({
+        shareUnits: number;
+      })[];
+      realEstateLedgerEntries_on_investment: ({
+        id: UUIDString;
+        type: RealEstateLedgerEntryType;
+        eventDate: DateString;
+        amountUsd: number;
+        reversesEntry?: {
+          id: UUIDString;
+        } & RealEstateLedgerEntry_Key;
+      } & RealEstateLedgerEntry_Key)[];
+    } & RealEstateInvestment_Key;
+  })[];
+}
+
+export interface ListMyRealEstateSharesData {
+  realEstateMemberShares: ({
+    id: UUIDString;
+    shareUnits: number;
+    committedAmount?: number | null;
+    effectiveFrom: DateString;
+    supersededBy?: {
+      id: UUIDString;
+    } & RealEstateMemberShare_Key;
+    investment: {
+      id: UUIDString;
+      name: string;
+      kind: RealEstateKind;
+      status: RealEstateStatus;
+      currency: string;
+      defaultFxRateToUsd: number;
+      carryPercent: number;
+      firstInvestmentDate?: DateString | null;
+      estimatedCompletionDate?: DateString | null;
+      actualCompletionDate?: DateString | null;
+      saleDate?: DateString | null;
+      totalPropertyCost?: number | null;
+      salePrice?: number | null;
+      scheduleDocUrl?: string | null;
+      transactionSheetUrl?: string | null;
+      driveFolderUrl?: string | null;
+    } & RealEstateInvestment_Key;
+  } & RealEstateMemberShare_Key)[];
+}
+
+export interface ListMyRealEstateTransfersData {
+  sales: ({
+    sellerCostBasis: number;
+    carryAmount: number;
+    ledgerEntry: {
+      amountUsd: number;
+      investment: {
+        id: UUIDString;
+      } & RealEstateInvestment_Key;
+    };
+  })[];
+}
+
 export interface ListNonParticipatingRoundDetailsForScenarioData {
   nonParticipatingRoundDetails: ({
     ledgerEntry: {
@@ -906,6 +1095,127 @@ export interface ListPricedRoundDetailsForScenarioData {
 
 export interface ListPricedRoundDetailsForScenarioVariables {
   scenario: Scenario;
+}
+
+export interface ListPublicRealEstateInvestmentsData {
+  realEstateInvestments: ({
+    id: UUIDString;
+    name: string;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+  } & RealEstateInvestment_Key)[];
+}
+
+export interface ListRealEstateInvestmentsData {
+  realEstateInvestments: ({
+    id: UUIDString;
+    name: string;
+    kind: RealEstateKind;
+    status: RealEstateStatus;
+    currency: string;
+    defaultFxRateToUsd: number;
+    carryPercent: number;
+    firstInvestmentDate?: DateString | null;
+    estimatedCompletionDate?: DateString | null;
+    actualCompletionDate?: DateString | null;
+    saleDate?: DateString | null;
+    totalPropertyCost?: number | null;
+    salePrice?: number | null;
+    scheduleDocUrl?: string | null;
+    transactionSheetUrl?: string | null;
+    driveFolderUrl?: string | null;
+    transactionSheetId?: string | null;
+    developerName?: string | null;
+    projectName?: string | null;
+    locationLabel?: string | null;
+    unitIdentifier?: string | null;
+    publicBlurb?: string | null;
+    brochureDriveFileId?: string | null;
+    showPublicly: boolean;
+  } & RealEstateInvestment_Key)[];
+}
+
+export interface ListRealEstateLedgerEntriesData {
+  realEstateLedgerEntries: ({
+    id: UUIDString;
+    type: RealEstateLedgerEntryType;
+    eventDate: DateString;
+    amountUsd: number;
+    amountNative?: number | null;
+    fxRateToUsd?: number | null;
+    currency: string;
+    counterparty?: string | null;
+    description?: string | null;
+    fundedOutsideHub: boolean;
+    cashDirection: number;
+    needsReview: boolean;
+    sourceSheetRowKey?: string | null;
+    sourceSheetRowHash?: string | null;
+    reversesEntry?: {
+      id: UUIDString;
+    } & RealEstateLedgerEntry_Key;
+  } & RealEstateLedgerEntry_Key)[];
+}
+
+export interface ListRealEstateLedgerEntriesVariables {
+  investmentId: UUIDString;
+}
+
+export interface ListRealEstatePaymentScheduleData {
+  realEstatePaymentSchedules: ({
+    id: UUIDString;
+    installmentCode?: string | null;
+    milestoneLabel?: string | null;
+    eventDate?: DateString | null;
+    dueDate?: DateString | null;
+    percent?: number | null;
+    amountDue: number;
+    vat: number;
+    total: number;
+    sortOrder: number;
+  } & RealEstatePaymentSchedule_Key)[];
+}
+
+export interface ListRealEstatePaymentScheduleVariables {
+  investmentId: UUIDString;
+}
+
+export interface ListRealEstateRollupsData {
+  realEstateRollupCaches: ({
+    investmentKey: string;
+    kind: RealEstateKind;
+    capitalCommittedUsd: number;
+    capitalDeployedUsd: number;
+    realizedProfitUsd: number;
+    cumulativeNetCashFlowUsd: number;
+    currentValueUsd: number;
+    roi?: number | null;
+    irr?: number | null;
+  } & RealEstateRollupCache_Key)[];
+}
+
+export interface ListRealEstateSharesData {
+  realEstateMemberShares: ({
+    id: UUIDString;
+    member: {
+      id: string;
+      displayName: string;
+    } & Member_Key;
+    shareUnits: number;
+    committedAmount?: number | null;
+    effectiveFrom: DateString;
+    supersededBy?: {
+      id: UUIDString;
+    } & RealEstateMemberShare_Key;
+  } & RealEstateMemberShare_Key)[];
+}
+
+export interface ListRealEstateSharesVariables {
+  investmentId: UUIDString;
 }
 
 export interface ListSafeRoundDetailsForScenarioData {
@@ -1004,6 +1314,61 @@ export interface Organization_Key {
 export interface PricedRoundDetail_Key {
   id: UUIDString;
   __typename?: 'PricedRoundDetail_Key';
+}
+
+export interface RealEstateAllocation_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateAllocation_Key';
+}
+
+export interface RealEstateInvestment_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateInvestment_Key';
+}
+
+export interface RealEstateLedgerEntry_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateLedgerEntry_Key';
+}
+
+export interface RealEstateMemberShare_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateMemberShare_Key';
+}
+
+export interface RealEstatePaymentSchedule_Key {
+  id: UUIDString;
+  __typename?: 'RealEstatePaymentSchedule_Key';
+}
+
+export interface RealEstateRentalPeriodDetail_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateRentalPeriodDetail_Key';
+}
+
+export interface RealEstateRentalTerms_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateRentalTerms_Key';
+}
+
+export interface RealEstateRollupCache_Key {
+  investmentKey: string;
+  __typename?: 'RealEstateRollupCache_Key';
+}
+
+export interface RealEstateSaleDetail_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateSaleDetail_Key';
+}
+
+export interface RealEstateShareTransferDetail_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateShareTransferDetail_Key';
+}
+
+export interface RealEstateSheetSyncRun_Key {
+  id: UUIDString;
+  __typename?: 'RealEstateSheetSyncRun_Key';
 }
 
 export interface RollupCache_Key {
@@ -1559,4 +1924,148 @@ export const getOrganizationMembershipRef: GetOrganizationMembershipRef;
 
 export function getOrganizationMembership(vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
 export function getOrganizationMembership(dc: DataConnect, vars: GetOrganizationMembershipVariables, options?: ExecuteQueryOptions): QueryPromise<GetOrganizationMembershipData, GetOrganizationMembershipVariables>;
+
+interface ListRealEstateInvestmentsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListRealEstateInvestmentsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListRealEstateInvestmentsData, undefined>;
+  operationName: string;
+}
+export const listRealEstateInvestmentsRef: ListRealEstateInvestmentsRef;
+
+export function listRealEstateInvestments(options?: ExecuteQueryOptions): QueryPromise<ListRealEstateInvestmentsData, undefined>;
+export function listRealEstateInvestments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateInvestmentsData, undefined>;
+
+interface GetRealEstateInvestmentByIdRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: GetRealEstateInvestmentByIdVariables): QueryRef<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: GetRealEstateInvestmentByIdVariables): QueryRef<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+  operationName: string;
+}
+export const getRealEstateInvestmentByIdRef: GetRealEstateInvestmentByIdRef;
+
+export function getRealEstateInvestmentById(vars: GetRealEstateInvestmentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+export function getRealEstateInvestmentById(dc: DataConnect, vars: GetRealEstateInvestmentByIdVariables, options?: ExecuteQueryOptions): QueryPromise<GetRealEstateInvestmentByIdData, GetRealEstateInvestmentByIdVariables>;
+
+interface ListRealEstatePaymentScheduleRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstatePaymentScheduleVariables): QueryRef<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListRealEstatePaymentScheduleVariables): QueryRef<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+  operationName: string;
+}
+export const listRealEstatePaymentScheduleRef: ListRealEstatePaymentScheduleRef;
+
+export function listRealEstatePaymentSchedule(vars: ListRealEstatePaymentScheduleVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+export function listRealEstatePaymentSchedule(dc: DataConnect, vars: ListRealEstatePaymentScheduleVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstatePaymentScheduleData, ListRealEstatePaymentScheduleVariables>;
+
+interface ListRealEstateLedgerEntriesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstateLedgerEntriesVariables): QueryRef<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListRealEstateLedgerEntriesVariables): QueryRef<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+  operationName: string;
+}
+export const listRealEstateLedgerEntriesRef: ListRealEstateLedgerEntriesRef;
+
+export function listRealEstateLedgerEntries(vars: ListRealEstateLedgerEntriesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+export function listRealEstateLedgerEntries(dc: DataConnect, vars: ListRealEstateLedgerEntriesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateLedgerEntriesData, ListRealEstateLedgerEntriesVariables>;
+
+interface ListRealEstateSharesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListRealEstateSharesVariables): QueryRef<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListRealEstateSharesVariables): QueryRef<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+  operationName: string;
+}
+export const listRealEstateSharesRef: ListRealEstateSharesRef;
+
+export function listRealEstateShares(vars: ListRealEstateSharesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+export function listRealEstateShares(dc: DataConnect, vars: ListRealEstateSharesVariables, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateSharesData, ListRealEstateSharesVariables>;
+
+interface ListRealEstateRollupsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListRealEstateRollupsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListRealEstateRollupsData, undefined>;
+  operationName: string;
+}
+export const listRealEstateRollupsRef: ListRealEstateRollupsRef;
+
+export function listRealEstateRollups(options?: ExecuteQueryOptions): QueryPromise<ListRealEstateRollupsData, undefined>;
+export function listRealEstateRollups(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListRealEstateRollupsData, undefined>;
+
+interface ListPublicRealEstateInvestmentsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListPublicRealEstateInvestmentsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListPublicRealEstateInvestmentsData, undefined>;
+  operationName: string;
+}
+export const listPublicRealEstateInvestmentsRef: ListPublicRealEstateInvestmentsRef;
+
+export function listPublicRealEstateInvestments(options?: ExecuteQueryOptions): QueryPromise<ListPublicRealEstateInvestmentsData, undefined>;
+export function listPublicRealEstateInvestments(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListPublicRealEstateInvestmentsData, undefined>;
+
+interface ListMyRealEstateSharesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateSharesData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListMyRealEstateSharesData, undefined>;
+  operationName: string;
+}
+export const listMyRealEstateSharesRef: ListMyRealEstateSharesRef;
+
+export function listMyRealEstateShares(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateSharesData, undefined>;
+export function listMyRealEstateShares(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateSharesData, undefined>;
+
+interface ListMyRealEstateLedgerEntriesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateLedgerEntriesData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListMyRealEstateLedgerEntriesData, undefined>;
+  operationName: string;
+}
+export const listMyRealEstateLedgerEntriesRef: ListMyRealEstateLedgerEntriesRef;
+
+export function listMyRealEstateLedgerEntries(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateLedgerEntriesData, undefined>;
+export function listMyRealEstateLedgerEntries(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateLedgerEntriesData, undefined>;
+
+interface ListMyRealEstateAllocationsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateAllocationsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListMyRealEstateAllocationsData, undefined>;
+  operationName: string;
+}
+export const listMyRealEstateAllocationsRef: ListMyRealEstateAllocationsRef;
+
+export function listMyRealEstateAllocations(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateAllocationsData, undefined>;
+export function listMyRealEstateAllocations(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateAllocationsData, undefined>;
+
+interface ListMyRealEstatePositionsRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstatePositionsData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListMyRealEstatePositionsData, undefined>;
+  operationName: string;
+}
+export const listMyRealEstatePositionsRef: ListMyRealEstatePositionsRef;
+
+export function listMyRealEstatePositions(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstatePositionsData, undefined>;
+export function listMyRealEstatePositions(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstatePositionsData, undefined>;
+
+interface ListMyRealEstateTransfersRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (): QueryRef<ListMyRealEstateTransfersData, undefined>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect): QueryRef<ListMyRealEstateTransfersData, undefined>;
+  operationName: string;
+}
+export const listMyRealEstateTransfersRef: ListMyRealEstateTransfersRef;
+
+export function listMyRealEstateTransfers(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
+export function listMyRealEstateTransfers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
 

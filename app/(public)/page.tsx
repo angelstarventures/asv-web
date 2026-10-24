@@ -1,4 +1,4 @@
-import { listCompanies, listCompanyRollups, listMemberProfiles } from "@/lib/dataconnect/client";
+import { listPublicRealEstateInvestments, listCompanies, listCompanyRollups, listMemberProfiles } from "@/lib/dataconnect/client";
 import { Scenario } from "@/lib/dataconnect/generated";
 import { LandingTabs } from "@/components/LandingTabs";
 
@@ -37,12 +37,13 @@ function pickFeaturedCompanyIds(rollups: { moic: number; company?: { id: string;
 // fields), so nothing sensitive reaches this unauthenticated bundle (plan §4). Pitch link is
 // omitted entirely for V1, not just greyed out.
 export default async function LandingPage() {
-  const [{ members }, { companies }, { rollupCaches }] = await Promise.all([
+  const [{realEstateInvestments}, { members }, { companies }, { rollupCaches }] = await Promise.all([
+    listPublicRealEstateInvestments(),
     listMemberProfiles(),
     listCompanies(),
     listCompanyRollups({ scenario: Scenario.BALANCED }),
   ]);
   const featuredCompanyIds = pickFeaturedCompanyIds(rollupCaches);
 
-  return <LandingTabs members={members} companies={companies} featuredCompanyIds={featuredCompanyIds} />;
+  return <LandingTabs realEstate={realEstateInvestments} members={members} companies={companies} featuredCompanyIds={featuredCompanyIds} />;
 }

@@ -103,7 +103,7 @@ export const updateMemberOrganizationFeature = onCall<
   }
 
   if (enabled) {
-    const orgEnabled = await getOrganizationFeature(organizationId, featureKey as OrganizationFeatureKey);
+    const orgEnabled = await getOrganizationFeature(organizationId, featureKey.startsWith("REAL_ESTATE_") ? "REAL_ESTATE" : featureKey as OrganizationFeatureKey);
     if (!orgEnabled) {
       throw new HttpsError(
         "failed-precondition",

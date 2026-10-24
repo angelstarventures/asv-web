@@ -4,6 +4,7 @@ import { functions } from "@/lib/firebase/client";
 // ── Organization-level features ─────────────────────────────────────────────
 
 export type OrganizationFeatureKey =
+  | "REAL_ESTATE"
   | "DEALS"
   | "AI_DEAL_MATCHING"
   | "AI_CHAT"
@@ -40,6 +41,8 @@ export async function getOrganizationFeatures(organizationId: string): Promise<G
 // ── Per-member-within-organization features ─────────────────────────────────
 
 export type MemberOrganizationFeatureKey =
+  | "REAL_ESTATE_VIEW"
+  | "REAL_ESTATE_MANAGEMENT"
   | "DEALS_SCREENING"
   | "DEAL_VIEW"
   | "COMPANY_MANAGEMENT"

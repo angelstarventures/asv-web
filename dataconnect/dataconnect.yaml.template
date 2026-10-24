@@ -5,6 +5,8 @@ schema:
   source: "schema"
   datasource:
     postgresql:
+      # Preserve extra application columns; use the preserving deploy script for SQL objects.
+      schemaValidation: COMPATIBLE
       database: "{{DATABASE}}"
       cloudSql:
         instanceId: "{{INSTANCE_ID}}"

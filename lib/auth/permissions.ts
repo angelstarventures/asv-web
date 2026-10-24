@@ -57,6 +57,7 @@ export function hasGlobalPermission(role: Role, permission: GlobalPermission): b
 // comment) — NOT a portfolio company.
 
 export type OrganizationFeatureKey =
+  | "REAL_ESTATE"
   | "DEALS"
   | "AI_DEAL_MATCHING"
   | "AI_CHAT"
@@ -68,7 +69,7 @@ export type OrganizationFeatureKey =
   | "COSTS";
 
 // Ordered list of all organization feature keys for rendering toggles.
-export const organizationFeatureKeys: readonly OrganizationFeatureKey[] = [
+export const organizationFeatureKeys: readonly OrganizationFeatureKey[] = ["REAL_ESTATE",
   "DEALS", "AI_DEAL_MATCHING", "AI_CHAT", "AI_DOCUMENT_ANALYSIS",
   "MULTIPLE_LEDGERS", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
   "MEMBERSHIP_DUES", "COSTS",
@@ -87,6 +88,8 @@ export function canToggleOrganizationFeature(role: Role): boolean {
 // ── Per-member-within-organization feature keys ──────────────────────────────
 
 export type MemberOrganizationFeatureKey =
+  | "REAL_ESTATE_VIEW"
+  | "REAL_ESTATE_MANAGEMENT"
   | "DEALS_SCREENING"
   | "DEAL_VIEW"
   | "COMPANY_MANAGEMENT"
@@ -102,7 +105,7 @@ export type MemberOrganizationFeatureKey =
   | "COSTS";
 
 // Ordered list of all per-member feature keys for rendering toggles.
-export const memberOrganizationFeatureKeys: readonly MemberOrganizationFeatureKey[] = [
+export const memberOrganizationFeatureKeys: readonly MemberOrganizationFeatureKey[] = ["REAL_ESTATE_VIEW", "REAL_ESTATE_MANAGEMENT",
   "DEALS_SCREENING", "DEAL_VIEW", "COMPANY_MANAGEMENT", "AI_DEAL_MATCHING",
   "AI_CHAT", "AI_DOCUMENT_ANALYSIS", "MULTIPLE_LEDGERS", "MEMBER_MANAGEMENT",
   "MEMBER_PORTFOLIO_VIEW", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",

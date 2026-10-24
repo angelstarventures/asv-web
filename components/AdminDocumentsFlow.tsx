@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DocumentDropzone, type AnalyzedFile } from "@/components/DocumentDropzone";
+import { DocumentDropzone, type AnalyzedFile, type StartupDocumentMode } from "@/components/DocumentDropzone";
 import { LedgerRecordsEditor } from "@/components/LedgerRecordsEditor";
 import { UnknownMemberReferences } from "@/components/UnknownMemberReferences";
 import { documentsAnalyze, documentsShareCompanyUpdate, type RecordGroup } from "@/lib/functions/documents";
@@ -50,7 +50,9 @@ function buildUpdateMessage(companyName: string, summary: CompanyUpdateSummary):
 export function AdminDocumentsFlow({
   companies,
   members,
+  mode,
 }: {
+  mode: StartupDocumentMode;
   companies: { id: string; name: string; tradeName?: string | null }[];
   members: { id: string; displayName: string; investingEntityName?: string | null }[];
 }) {
@@ -237,7 +239,7 @@ export function AdminDocumentsFlow({
           Committed. Ready for another document.
         </p>
       )}
-      <DocumentDropzone companies={companies} onAnalyzed={handleAnalyzed} />
+      <DocumentDropzone companies={companies} onAnalyzed={handleAnalyzed} mode={mode} />
 
       {proposedRecords && (
         <div className="flex flex-col gap-3">

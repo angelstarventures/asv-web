@@ -1,3 +1,4 @@
+import { recomputeRealEstateRollups } from "../lib/realEstateRollups";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { logger } from "firebase-functions/v2";
 import { recomputeAllRollupsAndCheckInvariants } from "../lib/rollups";
@@ -7,6 +8,7 @@ import { recomputeAllRollupsAndCheckInvariants } from "../lib/rollups";
 // investment-round entry must be identical" invariant, logging a warning on divergence
 // rather than enforcing it as a DB trigger (plan §2/§3).
 export const rollupsRecompute = onSchedule("every 15 minutes", async () => {
+  await recomputeRealEstateRollups();
   const { warnings } = await recomputeAllRollupsAndCheckInvariants();
   for (const warning of warnings) {
     logger.warn(warning);

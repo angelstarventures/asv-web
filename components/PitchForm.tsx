@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { readFileAsBase64 } from "@/lib/files";
+import { tenantConfig } from "@/lib/config/tenant";
 import { submitPitch, type FundingRound, type SecurityType } from "@/lib/functions/deals";
 import {
   ROUND_OPTIONS,
@@ -231,6 +232,7 @@ export function PitchForm() {
           We&apos;ve received {submittedCompanyName}&apos;s pitch. Our team will review it and
           reach out if it&apos;s a fit.
         </p>
+        <p className="mt-4 text-sm text-zinc-600">This portal is in beta. If you haven&apos;t already, please also <a href={tenantConfig.pitchApplicationUrl} target="_blank" rel="noreferrer" className="font-medium underline underline-offset-2">apply through Gust</a> at the same time.</p>
       </div>
     );
   }

@@ -5,6 +5,7 @@ import { WelcomeBanner } from "@/components/WelcomeBanner";
 import { MemberPortfolioPicker } from "@/components/MemberPortfolioPicker";
 import { PortfolioView } from "@/lib/portfolioView";
 import { parsePortfolioTab } from "@/lib/portfolioTab";
+import { RealEstateView } from "@/lib/realEstateView";
 
 export const dynamic = "force-dynamic";
 
@@ -59,16 +60,30 @@ export default async function AdminPortfoliosPage({
       {selectedMember && (
         <>
           <WelcomeBanner subtitle={`Viewing as ${selectedMember.displayName}`} />
-          <PortfolioView
-            authUid={selectedMember.authUid ?? ""}
-            scope={scope}
-            scenario={scenario}
-            lockedScenario={lockedScenario}
-            aiChatEnabled={selectedMember.aiChatEnabled}
-            tab={tab}
-            detailHrefBase="/admin/portfolios/companies"
-            detailExtraQuery={`&memberId=${selectedMember.id}`}
-          />
+          <section aria-labelledby="startup-portfolio-heading" className="space-y-6">
+            <h2 id="startup-portfolio-heading" className="text-lg font-semibold tracking-tight">Startup investments</h2>
+            <PortfolioView
+              authUid={selectedMember.authUid ?? ""}
+              scope={scope}
+              scenario={scenario}
+              lockedScenario={lockedScenario}
+              aiChatEnabled={selectedMember.aiChatEnabled}
+              tab={tab}
+              detailHrefBase="/admin/portfolios/companies"
+              detailExtraQuery={`&memberId=${selectedMember.id}`}
+            />
+          </section>
+          <section aria-labelledby="real-estate-portfolio-heading" className="space-y-6">
+            <div className="space-y-1">
+              <h2 id="real-estate-portfolio-heading" className="text-lg font-semibold tracking-tight">Real estate investments</h2>
+              <p className="text-sm text-zinc-500">Holdings and cash balances for {selectedMember.displayName}. All amounts are in USD.</p>
+            </div>
+            {selectedMember.authUid ? (
+              <RealEstateView authUid={selectedMember.authUid} />
+            ) : (
+              <p className="text-sm text-zinc-500">Link this member&apos;s account to review their real estate portfolio.</p>
+            )}
+          </section>
         </>
       )}
     </div>

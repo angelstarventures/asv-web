@@ -12,6 +12,7 @@ export interface TenantConfig {
   backgroundColor: string;
   pwaDescription: string;
   supportEmail: string;
+  pitchApplicationUrl: string;
   billingConsoleProjectId: string;
   duesReminderTemplateDefault: string;
   complianceScreening: {
@@ -32,6 +33,7 @@ export const tenantConfig: TenantConfig = {
     process.env.NEXT_PUBLIC_TENANT_PWA_DESCRIPTION ??
     "AngelStar Ventures member portal: portfolio, ledger, and deal flow.",
   supportEmail: process.env.NEXT_PUBLIC_TENANT_SUPPORT_EMAIL ?? "angelstarinvestments@gmail.com",
+  pitchApplicationUrl: process.env.NEXT_PUBLIC_TENANT_PITCH_APPLICATION_URL ?? "https://gust.com/organizations/angel-star-ventures",
   billingConsoleProjectId: process.env.NEXT_PUBLIC_TENANT_BILLING_PROJECT_ID ?? "angelstar-investments",
   duesReminderTemplateDefault:
     process.env.NEXT_PUBLIC_TENANT_DUES_REMINDER_TEMPLATE ??

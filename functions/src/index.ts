@@ -50,3 +50,12 @@ export { dealsFindReviewers } from "./functions/deals-findReviewers";
 export { ledgerRebalanceMemberValuations } from "./functions/ledger-rebalanceMemberValuations";
 export { updateOrganizationFeature, getOrganizationFeatures, updateMemberOrganizationFeature, getMemberOrganizationFeatures } from "./functions/organizationFeatures";
 export { listOrganizations, assignOrganizationMember, removeOrganizationMember, listOrganizationMembers, getMyOrganizationMembership, getOrganizationMemberIds, getOrganizationMemberships } from "./functions/organizationMembers";
+
+export { realEstateCreateInvestment } from "./functions/realEstate-createInvestment";
+export { realEstateUpdateInvestment } from "./functions/realEstate-updateInvestment";
+export { realEstateSetShares } from "./functions/realEstate-setShares";
+export { realEstateImportSchedule } from "./functions/realEstate-importSchedule";
+export { realEstateSheetPreview } from "./functions/realEstate-sheetPreview";
+export { realEstateSheetSync } from "./functions/realEstate-sheetSync";
+export { realEstateRecordEntry } from "./functions/realEstate-recordEntry";
+export { realEstateRecomputeRollups } from "./functions/realEstate-recomputeRollups";

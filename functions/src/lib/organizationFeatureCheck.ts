@@ -1,10 +1,11 @@
-import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
+import { HttpsError } from "firebase-functions/v2/https";
 import { query } from "./dataconnect-admin";
-import { requireCaller, type CallerContext } from "./auth";
+import { type CallerContext } from "./auth";
 
 // ── Types mirroring the Data Connect enums ──────────────────────────────────
 
 export type OrganizationFeatureKey =
+  | "REAL_ESTATE"
   | "DEALS"
   | "AI_DEAL_MATCHING"
   | "AI_CHAT"
@@ -16,6 +17,8 @@ export type OrganizationFeatureKey =
   | "COSTS";
 
 export type MemberOrganizationFeatureKey =
+  | "REAL_ESTATE_VIEW"
+  | "REAL_ESTATE_MANAGEMENT"
   | "DEALS_SCREENING"
   | "DEAL_VIEW"
   | "COMPANY_MANAGEMENT"
@@ -30,13 +33,13 @@ export type MemberOrganizationFeatureKey =
   | "MEMBERSHIP_DUES"
   | "COSTS";
 
-export const ORGANIZATION_FEATURE_KEYS: readonly OrganizationFeatureKey[] = [
+export const ORGANIZATION_FEATURE_KEYS: readonly OrganizationFeatureKey[] = ["REAL_ESTATE",
   "DEALS", "AI_DEAL_MATCHING", "AI_CHAT", "AI_DOCUMENT_ANALYSIS",
   "MULTIPLE_LEDGERS", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
   "MEMBERSHIP_DUES", "COSTS",
 ];
 
-export const MEMBER_ORGANIZATION_FEATURE_KEYS: readonly MemberOrganizationFeatureKey[] = [
+export const MEMBER_ORGANIZATION_FEATURE_KEYS: readonly MemberOrganizationFeatureKey[] = ["REAL_ESTATE_VIEW", "REAL_ESTATE_MANAGEMENT",
   "DEALS_SCREENING", "DEAL_VIEW", "COMPANY_MANAGEMENT", "AI_DEAL_MATCHING",
   "AI_CHAT", "AI_DOCUMENT_ANALYSIS", "MULTIPLE_LEDGERS", "MEMBER_MANAGEMENT",
   "MEMBER_PORTFOLIO_VIEW", "AI_MODEL_PROMPT_CONFIG", "AI_MODEL_SELECTION",
@@ -85,7 +88,7 @@ export async function getMemberOrganizationFeature(
   organizationId: string,
   featureKey: MemberOrganizationFeatureKey
 ): Promise<boolean> {
-  const orgEnabled = await getOrganizationFeature(organizationId, featureKey as OrganizationFeatureKey);
+  const orgEnabled = await getOrganizationFeature(organizationId, featureKey.startsWith("REAL_ESTATE_") ? "REAL_ESTATE" : featureKey as OrganizationFeatureKey);
   if (!orgEnabled) return false;
 
   const rows = await query<{ enabled: boolean }>(
@@ -117,7 +120,7 @@ export async function getAllMemberOrganizationFeatures(
   );
   const result: MemberOrganizationFeatureState[] = [];
   for (const key of MEMBER_ORGANIZATION_FEATURE_KEYS) {
-    const orgEnabled = orgEnabledByKey.get(key) ?? false;
+    const orgEnabled = orgEnabledByKey.get(key.startsWith("REAL_ESTATE_") ? "REAL_ESTATE" : key) ?? false;
     if (!orgEnabled) {
       // Hard gate — disabled at the org level, no per-member row can override it.
       result.push({ featureKey: key, enabled: false });

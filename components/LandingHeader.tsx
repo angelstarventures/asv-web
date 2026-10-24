@@ -6,16 +6,17 @@ import { LoginModal } from "@/components/LoginModal";
 import { HeaderMobileMenu } from "@/components/HeaderMobileMenu";
 import { tenantConfig } from "@/lib/config/tenant";
 
-export type LandingTab = "welcome" | "profiles" | "companies" | "pitch";
+export type LandingTab = "welcome" | "profiles" | "companies" | "realestate" | "pitch";
 
 const TAB_LABELS: Record<LandingTab, string> = {
+  realestate: "Real Estate",
   welcome: "Welcome",
   profiles: "Our Team",
   companies: "Portfolio",
   pitch: "Pitch to Us",
 };
 
-const HOME_TABS: ("welcome" | "profiles" | "companies")[] = ["welcome", "profiles", "companies"];
+const HOME_TABS: ("welcome" | "profiles" | "companies" | "realestate")[] = ["welcome", "profiles", "companies", "realestate"];
 
 function pillClass(active: boolean): string {
   return active
@@ -39,7 +40,7 @@ export function LandingHeader({
   onSelectHomeTab,
 }: {
   active: LandingTab;
-  onSelectHomeTab?: (tab: "welcome" | "profiles" | "companies") => void;
+  onSelectHomeTab?: (tab: "welcome" | "profiles" | "companies" | "realestate") => void;
 }) {
   return (
     <header className="relative flex items-center justify-between border-b border-zinc-200 px-4 py-4 sm:px-8 sm:py-6">
