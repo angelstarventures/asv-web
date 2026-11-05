@@ -5,6 +5,7 @@ import { query, withTransaction } from "../lib/dataconnect-admin";
 import { sendEmail } from "../lib/gmail";
 import { driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 import { tenantConfig } from "../lib/tenantConfig";
+import { PASSWORD_RESET_TTL_MS, inspectPasswordReset, completePasswordResetWithToken, requestMemberPasswordReset } from "../lib/passwordReset";
 
 // The ONLY path that ever sets role/status custom claims (plan §3/§4). Backs the admin
 // "add member" flow at app/admin/members/page.tsx.
@@ -15,32 +16,35 @@ const APP_DOMAIN = tenantConfig.appDomain;
 const ORG_NAME = tenantConfig.orgDisplayName;
 
 // Generates a random token and stores it with a 48-hour expiry on the member row.
-// Returns the custom link the user will receive via email.
-async function storePasswordResetToken(memberId: string): Promise<string> {
+// A failed delivery must leave any previously emailed link intact.
+async function storePasswordResetToken(memberId: string, deliver: (link: string) => Promise<void>): Promise<void> {
   const token = crypto.randomUUID().replace(/-/g, "");
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 hours
-
   await withTransaction(async (client) => {
+    // Wait for any concurrent reset to finish before starting the new link's lifetime.
+    const existing = await client.query(`SELECT id FROM member WHERE id = $1 FOR UPDATE`, [memberId]);
+    if (!existing.rows.length) throw new HttpsError("not-found", "This member no longer exists.");
+    const expiresAt = new Date(Date.now() + PASSWORD_RESET_TTL_MS);
     await client.query(
       `UPDATE "member" SET "password_reset_token" = $1, "password_reset_expires_at" = $2 WHERE id = $3`,
       [token, expiresAt.toISOString(), memberId]
     );
+    await deliver(`${APP_DOMAIN}/set-password?token=${token}`);
   });
+}
 
-  return `${APP_DOMAIN}/set-password?token=${token}`;
+async function deliverPasswordEmail(message: Parameters<typeof sendEmail>[0]): Promise<void> {
+  try { await sendEmail(message); }
+  catch { throw new HttpsError("unavailable", "Could not send the password email. Please try again."); }
 }
 
 // Sends a password-set/reset email via Gmail. The link goes through our app's
-// /set-password page which validates the 48-hour token, then redirects to a
-// fresh Firebase password reset link.
+// /set-password page which keeps the 48-hour token until a password is submitted.
 async function sendPasswordSetEmail(
   email: string,
   displayName: string,
   memberId: string
 ): Promise<void> {
-  const customLink = await storePasswordResetToken(memberId);
-
-  await sendEmail({
+  await storePasswordResetToken(memberId, customLink => deliverPasswordEmail({
     to: email,
     subject: `Set your ${ORG_NAME} account password`,
     body: [
@@ -55,7 +59,7 @@ async function sendPasswordSetEmail(
       "",
       `— ${ORG_NAME}`,
     ].join("\n"),
-  });
+  }));
 }
 
 // Sends a password-reset email via Gmail — distinct from the provisioning email above.
@@ -63,26 +67,29 @@ async function sendPasswordSetEmail(
 async function sendPasswordResetEmail(
   email: string,
   displayName: string,
-  memberId: string
+  memberId: string,
+  suppliedLink?: string,
+  requestedByAdmin = true,
 ): Promise<void> {
-  const customLink = await storePasswordResetToken(memberId);
-
-  await sendEmail({
+  const deliver = (customLink: string) => deliverPasswordEmail({
     to: email,
     subject: `Password reset request for ${ORG_NAME}`,
     body: [
       `Hi ${displayName},`,
       "",
-      `An admin has requested that you reset your ${ORG_NAME} member portal password.`,
+      requestedByAdmin ? `An admin has requested that you reset your ${ORG_NAME} member portal password.` : `We received a request to reset your ${ORG_NAME} member portal password.`,
       "Click the link below to choose a new password and sign in:",
       "",
       customLink,
       "",
       "This link expires in 48 hours. If you didn't request this, you can safely ignore this email.",
+      "Use the latest reset email; requesting a new link replaces earlier links.",
       "",
       `— ${ORG_NAME}`,
     ].join("\n"),
   });
+  if (suppliedLink) await deliver(suppliedLink);
+  else await storePasswordResetToken(memberId, deliver);
 }
 
 export interface ProvisionMemberInput {
@@ -870,108 +877,32 @@ export interface ValidatePasswordResetTokenInput {
 
 export interface ValidatePasswordResetTokenOutput {
   resetLink: string;
+  email: string;
+  expiresAt: string;
 }
 
-// Validates a password-reset token (checks expiry, clears it), generates a fresh
-// Firebase password reset link, and returns it. The caller's browser redirects to it.
+// Validating an emailed link is read-only. Only submitting a new password consumes it.
 export const validatePasswordResetToken = onCall<
-  ValidatePasswordResetTokenInput,
-  Promise<ValidatePasswordResetTokenOutput>
->(async (request) => {
-  const { token } = request.data;
-  if (!token) {
-    throw new HttpsError("invalid-argument", "Token is required.");
-  }
+  ValidatePasswordResetTokenInput, Promise<ValidatePasswordResetTokenOutput>
+>(async request => inspectPasswordReset(request.data?.token));
 
-  const rows = await query<{
-    id: string;
-    email: string;
-    passwordResetToken: string | null;
-    passwordResetExpiresAt: string | null;
-  }>(
-    `SELECT id, email, "password_reset_token" AS "passwordResetToken",
-            "password_reset_expires_at" AS "passwordResetExpiresAt"
-     FROM "member" WHERE "password_reset_token" = $1`,
-    [token]
-  );
+export const completePasswordReset = onCall<
+  { token: string; password: string }, Promise<{ ok: true }>
+>(async request => completePasswordResetWithToken(request.data?.token, request.data?.password));
 
-  if (rows.length === 0) {
-    throw new HttpsError("invalid-argument", "Invalid or expired token.");
-  }
+export const requestPasswordReset = onCall<{ email: string }, Promise<{ ok: true }>>(
+  { enforceAppCheck: true, secrets: [driveOAuthClientSecret, driveOAuthRefreshToken], timeoutSeconds: 60 },
+  async request => {
+    try {
+      return await requestMemberPasswordReset(request.data?.email, async (member, link) => {
+        await sendPasswordResetEmail(member.email, member.displayName, member.id, link, false);
+      });
+    } catch {
+      throw new HttpsError("unavailable", "Could not request a reset email. Please try again.");
+    }
+  },
+);
 
-  const member = rows[0];
-
-  // Log the stored expiry for debugging
-  console.log(`validatePasswordResetToken: member=${member.id} expiresAt=${member.passwordResetExpiresAt} now=${new Date().toISOString()}`);
-
-  if (!member.passwordResetExpiresAt) {
-    console.error(`validatePasswordResetToken: token ${token} has no expiry for member ${member.id}`);
-    throw new HttpsError("invalid-argument", "This link was not stored correctly. Ask an admin to send a new one.");
-  }
-
-  const expiresAt = new Date(member.passwordResetExpiresAt).getTime();
-  const now = Date.now();
-
-  if (Number.isNaN(expiresAt) || expiresAt < now) {
-    // Token expired — still clear it so it can't be reused
-    await withTransaction(async (client) => {
-      await client.query(
-        `UPDATE "member" SET "password_reset_token" = NULL, "password_reset_expires_at" = NULL WHERE id = $1`,
-        [member.id]
-      );
-    });
-    throw new HttpsError("invalid-argument", "This link has expired. Ask an admin to send a new one.");
-  }
-
-  if (!member.email) {
-    throw new HttpsError("failed-precondition", "No email on file for this member.");
-  }
-
-  // Clear the token (single-use)
-  await withTransaction(async (client) => {
-    await client.query(
-      `UPDATE "member" SET "password_reset_token" = NULL, "password_reset_expires_at" = NULL WHERE id = $1`,
-      [member.id]
-    );
-  });
-
-  // Clear the mustChangePassword flag so the user isn't redirected to the
-  // change-password page after resetting via the Firebase link.
-  let user;
-  try {
-    user = await getAuth().getUserByEmail(member.email);
-  } catch (err) {
-    console.error(`validatePasswordResetToken: Firebase Auth user not found for ${member.email}:`, err);
-    throw new HttpsError(
-      "failed-precondition",
-      "This member does not have a login account yet. Ask an admin to send a new invitation from the member detail page."
-    );
-  }
-  const existingClaims = (user.customClaims ?? {}) as Record<string, unknown>;
-  try {
-    await getAuth().setCustomUserClaims(user.uid, { ...existingClaims, mustChangePassword: false });
-  } catch (err) {
-    console.error(`validatePasswordResetToken: failed to update claims for ${user.uid}:`, err);
-  }
-
-  // Generate a fresh Firebase password reset link (1-hour expiry from now, which is
-  // fine — the user is clicking at this moment)
-  let resetLink: string;
-  try {
-    resetLink = await getAuth().generatePasswordResetLink(member.email, {
-      url: `${APP_DOMAIN}/login`,
-      handleCodeInApp: false,
-    });
-  } catch (err) {
-    console.error(`validatePasswordResetToken: failed to generate reset link for ${member.email}:`, err);
-    throw new HttpsError(
-      "internal",
-      "Could not generate a password reset link. The member may not have a Firebase Auth account."
-    );
-  }
-
-  return { resetLink };
-});
 
 export interface SetMemberRoleInput {
   memberId: string;

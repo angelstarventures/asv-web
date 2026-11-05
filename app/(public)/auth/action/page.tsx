@@ -5,10 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
 import Link from "next/link";
 import { auth } from "@/lib/firebase/client";
+import { PasswordResetForm } from "@/components/PasswordResetForm";
 
 // Custom handler for Firebase Auth action links (password reset only, for V1) — the plan
 // explicitly calls for custom login/reset/change forms over Firebase's own hosted pages.
-function AuthActionForm() {
+function FirebaseAuthActionForm() {
   const params = useSearchParams();
   const mode = params.get("mode");
   const oobCode = params.get("oobCode");
@@ -146,4 +147,10 @@ export default function AuthActionPage() {
       </Suspense>
     </div>
   );
+}
+
+function AuthActionForm() {
+  const params = useSearchParams();
+  const token = params.get("resetToken");
+  return token ? <PasswordResetForm key={token} token={token} /> : <FirebaseAuthActionForm />;
 }

@@ -170,6 +170,9 @@ export interface ValidatePasswordResetTokenInput {
 }
 export interface ValidatePasswordResetTokenOutput {
   resetLink: string;
+  // Optional during rollout: the previous validator returned only a Firebase redirect.
+  email?: string;
+  expiresAt?: string;
 }
 export async function validatePasswordResetToken(
   input: ValidatePasswordResetTokenInput
@@ -180,6 +183,16 @@ export async function validatePasswordResetToken(
   );
   const res = await call(input);
   return res.data;
+}
+
+export async function completePasswordReset(input: { token: string; password: string }): Promise<{ ok: true }> {
+  const call = httpsCallable<typeof input, { ok: true }>(functions, "completePasswordReset");
+  return (await call(input)).data;
+}
+
+export async function requestPasswordReset(input: { email: string }): Promise<{ ok: true }> {
+  const call = httpsCallable<typeof input, { ok: true }>(functions, "requestPasswordReset");
+  return (await call(input)).data;
 }
 
 export interface DeleteMemberInput {

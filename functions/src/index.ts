@@ -8,6 +8,8 @@ initializeApp();
 // us-east1 (ASV's region); a new tenant overrides via TENANT_FUNCTIONS_REGION env var.
 setGlobalOptions({ region: process.env.TENANT_FUNCTIONS_REGION ?? "us-east1" });
 
+export { requestPasswordReset, completePasswordReset } from "./functions/users-onCreateProvision";
+
 export { createMember, updateMember, updateMemberAiSettings, updateOwnProfile, updateOwnPhoto, updatePhotoForMember, provisionMember, deleteMember, adminSendPasswordReset, adminSetTemporaryPassword, memberCompletePasswordChange, setMemberStatus, setMemberRole, setSiteAdminMode, setDevSiteAdminMode, validatePasswordResetToken } from "./functions/users-onCreateProvision";
 export { updateAiPromptSetting } from "./functions/ai-updatePromptSetting";
 export { updateAiProviderSetting } from "./functions/ai-updateProviderSetting";

@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { sendPasswordResetEmail } from "firebase/auth";
 import Link from "next/link";
-import { auth } from "@/lib/firebase/client";
+import { requestPasswordReset } from "@/lib/functions/adminMembers";
 
 export default function ResetPasswordPage() {
   const [email, setEmail] = useState("");
@@ -16,16 +15,11 @@ export default function ResetPasswordPage() {
     setError(null);
     setLoading(true);
     try {
-      // url points back at our own /auth/action page (custom forms, not Firebase's hosted
-      // reset page) — plan §4's "custom login/reset/change forms" requirement.
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/auth/action`,
-        handleCodeInApp: true,
-      });
+      await requestPasswordReset({ email });
       setSent(true);
     } catch {
-      // Deliberately generic: don't reveal whether an email is registered.
-      setSent(true);
+      // Unknown addresses receive the same successful response from the server.
+      setError("We couldn't request a reset link right now. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -39,6 +33,7 @@ export default function ResetPasswordPage() {
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
             If an account exists for {email}, a password reset link is on its way.
           </p>
+          <p className="mt-3 text-sm text-zinc-500">Use the latest reset email. The link is valid for 48 hours, until your password is changed or a new link is requested.</p>
           <Link href="/login" className="mt-6 inline-block text-sm underline underline-offset-2">
             Back to sign in
           </Link>
