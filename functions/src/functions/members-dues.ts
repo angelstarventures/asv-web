@@ -4,6 +4,7 @@ import { requireFeatureEnabled } from "../lib/organizationFeatureCheck";
 import { query, withTransaction } from "../lib/dataconnect-admin";
 import { getAppSetting } from "../lib/appSettings";
 import { sendEmail } from "../lib/gmail";
+import { tenantConfig } from "../lib/tenantConfig";
 import { driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 interface MemberDuesRow {
@@ -59,7 +60,7 @@ export const membersSendDuesReminder = onCall<MembersSendDuesReminderInput, Prom
 
     if (channel === "email") {
       try {
-        await sendEmail({ to: member.email, subject: "ASV Membership Dues Reminder", body: message });
+        await sendEmail({ to: member.email, subject: `${tenantConfig.orgAbbreviation} Membership Dues Reminder`, body: message });
       } catch (err) {
         console.error("membersSendDuesReminder: email send failed", err);
         throw new HttpsError(

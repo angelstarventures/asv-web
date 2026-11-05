@@ -1,4 +1,5 @@
 import { query } from "./dataconnect-admin";
+import { tenantConfig } from "./tenantConfig";
 
 // Fund-wide settings (admin-settable), backing /admin/settings. Same key/value flat-table
 // shape and fallback pattern as aiPrompts.ts's getPromptSetting — a feature works from first
@@ -20,7 +21,7 @@ const DEFAULTS: Record<AppSettingKey, string> = {
   member_annual_dues_amount: "",
   associate_annual_dues_amount: "",
   dues_reminder_template:
-    "Hi {name}, this is a reminder that your ${amount} annual ASV membership dues for {year} are due. Thank you!",
+    "Hi {name}, this is a reminder that your ${amount} annual " + tenantConfig.orgAbbreviation + " membership dues for {year} are due. Thank you!",
 };
 
 export async function getAppSetting(key: AppSettingKey): Promise<string> {

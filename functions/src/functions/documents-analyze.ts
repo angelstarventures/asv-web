@@ -13,6 +13,7 @@ import { fetchLedgerRecordsForCompany } from "../lib/legacyRecordShape";
 import { checkValuationGuardrails } from "../lib/valuationGuardrails";
 import { fetchAllMemberIds, findUnknownMemberReferences } from "../lib/memberIds";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // Phase 2 AI: admin uploads one or more documents straight from the browser (no Drive
 // persistence yet — that's deferred until real OAuth is set up for the personal-Gmail-owned
@@ -382,7 +383,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     `Member list (id, name, investing entity) — resolve any investor named in the document to the matching id:\n${JSON.stringify(members)}`,
     companyId
       ? `This company's complete existing ledger history, full detail (round pricing, post-money valuations, every member's allocation/valuation dollars) — use this to ground any new price-per-share or valuation figure you draft, and to self-check your draft before responding:\n${JSON.stringify(existingLedger)}`
-      : "This is a brand-new company ASV has no prior ledger history with — draft its first investment round record(s) from the document.",
+      : `This is a brand-new company ${tenantConfig.orgAbbreviation} has no prior ledger history with — draft its first investment round record(s) from the document.`,
     companyId
       ? `Each member's cumulative cash allocation into this company to date (memberId -> total dollars invested, balanced scenario, which equals every scenario since investment-round records never diverge by scenario). Use this to compute member_valuations proportionally whenever you draft a Transaction_ValuationChange or Internal_ValuationAssessment record for this company: member_valuations[memberId] = (that member's total here / sum of all totals here) * asv_total_fair_market_value:\n${JSON.stringify(memberAllocationTotals)}`
       : null,

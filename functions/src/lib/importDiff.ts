@@ -4,6 +4,7 @@ import { query } from "./dataconnect-admin";
 import { LEDGER_TYPE_TO_ENUM, legacyTypeToEnum, type LegacyLedgerType } from "./enumMap";
 import { checkValuationGuardrails } from "./valuationGuardrails";
 import { fetchAllMemberIds, findUnknownMemberReferences } from "./memberIds";
+import { tenantConfig } from "./tenantConfig";
 
 // Tolerant of both shapes `record.type` can carry: the legacy JSON string
 // ("Participating_PricedRound", from the original schema) or the DB enum form directly
@@ -158,7 +159,7 @@ export async function checkConsistency(records: Record<string, unknown>[]): Prom
 
     if (!ROUND_TYPES.has(type) && !companiesWithRound.has(companyName)) {
       errors.push(
-        `"${companyName}" has no existing investment round on record — a ${type} entry cannot be added for a company ASV has not invested in.`
+        `"${companyName}" has no existing investment round on record — a ${type} entry cannot be added for a company ${tenantConfig.orgAbbreviation} has not invested in.`
       );
     }
 

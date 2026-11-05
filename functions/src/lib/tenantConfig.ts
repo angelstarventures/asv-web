@@ -11,6 +11,8 @@ export interface FunctionsTenantConfig {
   dealsDriveRootFolderId: string;
   companyUpdatesDriveRootFolderId: string;
   taxDocumentsDriveRootFolderId: string;
+  realEstateDriveRootFolderId: string;
+  gcpProjectId: string; // Vertex AI project (functions/src/lib/vertexAi.ts, embeddingMatch.ts)
   complianceScreening: {
     enabled: boolean;
     halalTagLabel: string;
@@ -28,6 +30,8 @@ export const tenantConfig: FunctionsTenantConfig = {
   dealsDriveRootFolderId: process.env.DEALS_DRIVE_ROOT_FOLDER_ID ?? "",
   companyUpdatesDriveRootFolderId: process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID ?? "",
   taxDocumentsDriveRootFolderId: process.env.TAX_DOCUMENTS_DRIVE_ROOT_FOLDER_ID ?? "",
+  realEstateDriveRootFolderId: process.env.REAL_ESTATE_DRIVE_ROOT_FOLDER_ID ?? "",
+  gcpProjectId: process.env.TENANT_GCP_PROJECT_ID ?? "angelstar-investments",
   complianceScreening: {
     enabled: process.env.TENANT_COMPLIANCE_SCREENING_ENABLED !== "false",
     halalTagLabel: process.env.TENANT_HALAL_TAG_LABEL ?? "Halal",

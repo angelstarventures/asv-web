@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { tenantConfig } from "./tenantConfig";
 
 // Semantic similarity via Vertex AI text embeddings — a middle ground between a full generative
 // chat completion (keywordMatch's original AI path — flexible but has JSON-formatting fragility
@@ -10,7 +11,7 @@ import { GoogleGenAI } from "@google/genai";
 //
 // Same Vertex project/location as vertexAi.ts (no new secret, no new config) — gemini-embedding-001
 // is the current general-purpose Vertex text embedding model, GA as of 2026.
-const PROJECT_ID = "angelstar-investments";
+const PROJECT_ID = tenantConfig.gcpProjectId;
 const LOCATION = "us-central1";
 const EMBEDDING_MODEL = "gemini-embedding-001";
 

@@ -3,6 +3,7 @@ import { useEffect,useState } from "react";
 import { useRouter } from "next/navigation";
 import { realEstateSheetPreview, realEstateSheetSync, realEstateUpdateInvestment, type SheetPreview, type SheetConfig } from "@/lib/functions/realEstate";
 import { formatCurrency } from "@/lib/money";
+import { tenantConfig } from "@/lib/config/tenant";
 export function RealEstateSyncPanel({ investmentId, initialConfig, members }: {
     investmentId: string;
     initialConfig?: string | null;
@@ -11,7 +12,7 @@ export function RealEstateSyncPanel({ investmentId, initialConfig, members }: {
         displayName: string;
     }[];
 }) {
-    const router = useRouter(), [config, setConfig] = useState(initialConfig || '{"hubAliases":["ASV"],"developerAliases":["DAMAC"],"investorColumnMap":{}}'), [preview, setPreview] = useState<SheetPreview | null>(null), [busy, setBusy] = useState(false), [ack, setAck] = useState(false), [message, setMessage] = useState(''), [mapping, setMapping] = useState<Record<string, string>>({});
+    const router = useRouter(), [config, setConfig] = useState(initialConfig || JSON.stringify({ hubAliases: [tenantConfig.orgAbbreviation], developerAliases: ["DAMAC"], investorColumnMap: {} })), [preview, setPreview] = useState<SheetPreview | null>(null), [busy, setBusy] = useState(false), [ack, setAck] = useState(false), [message, setMessage] = useState(''), [mapping, setMapping] = useState<Record<string, string>>({});
     const [loaded,setLoaded]=useState(!!initialConfig);
     useEffect(()=>{
         if(initialConfig)return;

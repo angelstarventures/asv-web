@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { query } from "../lib/dataconnect-admin";
+import { tenantConfig } from "../lib/tenantConfig";
 import { findFolder, findOrCreateFolder, listFilesInFolder, uploadDealFile, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 // Creates the Drive folder structure for ledger entries that don't have a
@@ -24,7 +25,7 @@ export const documentsSyncToDrive = onCall<DocumentsSyncToDriveInput, Promise<Do
     const caller = await requireAdmin(request);
     const { companyId } = request.data ?? {};
 
-    const rootFolderId = process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID;
+    const rootFolderId = tenantConfig.companyUpdatesDriveRootFolderId;
     if (!rootFolderId) {
       throw new HttpsError("failed-precondition", "COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is not configured.");
     }

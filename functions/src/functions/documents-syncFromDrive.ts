@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
+import { tenantConfig } from "../lib/tenantConfig";
 import { findFolder, listFilesInFolder, listSubFolders, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 // "Pull from what's there" — reconciles whatever's actually sitting in each company's
@@ -30,7 +31,7 @@ export const documentsSyncFromDrive = onCall<DocumentsSyncFromDriveInput, Promis
     const caller = await requireAdmin(request);
     const { companyId } = request.data ?? {};
 
-    const rootFolderId = process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID;
+    const rootFolderId = tenantConfig.companyUpdatesDriveRootFolderId;
     if (!rootFolderId) {
       throw new HttpsError("failed-precondition", "COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is not configured.");
     }

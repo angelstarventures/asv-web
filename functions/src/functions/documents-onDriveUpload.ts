@@ -3,6 +3,7 @@ import { requireAdmin } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
 import { uploadDealFile, findOrCreateFolder, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 import type { DocumentType } from "../lib/accessMatrix";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // Manual company-document upload — backs the "Company Documents/Updates" tab's upload form. Same
 // OAuth-delegated Drive client + per-company-subfolder pattern as documents-shareCompanyUpdate.ts
@@ -41,7 +42,7 @@ export const documentsOnDriveUpload = onCall<DocumentsOnDriveUploadInput, Promis
       throw new HttpsError("invalid-argument", `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit.`);
     }
 
-    const rootFolderId = process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID;
+    const rootFolderId = tenantConfig.companyUpdatesDriveRootFolderId;
     if (!rootFolderId) {
       throw new HttpsError("failed-precondition", "COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is not configured.");
     }

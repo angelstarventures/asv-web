@@ -5,6 +5,7 @@ import { requireFeatureEnabled, requireMemberFeatureEnabled } from "../lib/organ
 import { driveOAuthClientSecret, driveOAuthRefreshToken, findOrCreateFolder, uploadDealFile } from "../lib/dealsDrive";
 import { fields, image, sheetId, snake } from "../lib/realEstateInputs";
 import { withTransaction } from "../lib/dataconnect-admin";
+import { tenantConfig } from "../lib/tenantConfig";
 import { recomputeRealEstateRollups } from "../lib/realEstateRollups";
 export const realEstateCreateInvestment = onCall({ timeoutSeconds: 300, secrets: [driveOAuthClientSecret, driveOAuthRefreshToken] }, async (request) => {
     const caller = await requireAdmin(request);
@@ -18,7 +19,7 @@ export const realEstateCreateInvestment = onCall({ timeoutSeconds: 300, secrets:
         throw new HttpsError("invalid-argument", "Rental creation is available in phase 2.");
     if (values.currency === 'USD' && values.defaultFxRateToUsd !== 1)
         throw new HttpsError("invalid-argument", "USD exchange rate must be 1.");
-    const parent = process.env.REAL_ESTATE_DRIVE_ROOT_FOLDER_ID;
+    const parent = tenantConfig.realEstateDriveRootFolderId;
     if (!parent)
         throw new HttpsError("failed-precondition", "Configure REAL_ESTATE_DRIVE_ROOT_FOLDER_ID.");
     const spreadsheetId = sheetId(values.transactionSheetUrl);

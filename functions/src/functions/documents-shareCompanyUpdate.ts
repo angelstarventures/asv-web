@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
 import { findOrUploadCompanyUpdateFile, findOrCreateFolder, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // Backs saving originals after commit and the "Send via WhatsApp" button on a CompanyUpdate in the AI document-review
 // screen (AdminDocumentsFlow.tsx) — persists the file(s) that were only ever held in-memory for
@@ -50,7 +51,7 @@ export const documentsShareCompanyUpdate = onCall<
     throw new HttpsError("invalid-argument", `Files exceed the ${MAX_TOTAL_BYTES / (1024 * 1024)}MB total limit.`);
   }
 
-  const rootFolderId = process.env.COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID;
+  const rootFolderId = tenantConfig.companyUpdatesDriveRootFolderId;
   if (!rootFolderId) {
     throw new HttpsError("failed-precondition", "COMPANY_UPDATES_DRIVE_ROOT_FOLDER_ID is not configured.");
   }

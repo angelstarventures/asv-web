@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { withTransaction, query } from "../lib/dataconnect-admin";
+import { tenantConfig } from "../lib/tenantConfig";
 import { uploadDealFile, findOrCreateFolder, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 
 // Manual per-member tax-document upload (e.g. a K-1) — same OAuth-delegated Drive client + one-
@@ -44,7 +45,7 @@ export const documentsUploadTaxDocument = onCall<
     throw new HttpsError("invalid-argument", `File exceeds the ${MAX_UPLOAD_BYTES / (1024 * 1024)}MB limit.`);
   }
 
-  const rootFolderId = process.env.TAX_DOCUMENTS_DRIVE_ROOT_FOLDER_ID;
+  const rootFolderId = tenantConfig.taxDocumentsDriveRootFolderId;
   if (!rootFolderId) {
     throw new HttpsError("failed-precondition", "TAX_DOCUMENTS_DRIVE_ROOT_FOLDER_ID is not configured.");
   }

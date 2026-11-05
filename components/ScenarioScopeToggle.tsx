@@ -2,6 +2,7 @@
 
 import { useScenario } from "@/lib/scenarios";
 import { SCENARIOS, SCOPES } from "@/lib/scenarioTypes";
+import { tenantConfig } from "@/lib/config/tenant";
 
 const SCENARIO_LABELS: Record<(typeof SCENARIOS)[number], string> = {
   optimistic: "Optimistic",
@@ -11,7 +12,7 @@ const SCENARIO_LABELS: Record<(typeof SCENARIOS)[number], string> = {
 
 const SCOPE_LABELS: Record<(typeof SCOPES)[number], string> = {
   mine: "My holdings",
-  asv: "All of ASV",
+  asv: `All of ${tenantConfig.orgAbbreviation}`,
 };
 
 function ToggleGroup<T extends string>({

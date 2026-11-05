@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { tenantConfig } from "./tenantConfig";
 
 // Vertex AI, not the Gemini Developer API's free tier — Cloud Functions' own service account
 // authenticates via ADC automatically (no new secret to manage), and Vertex AI's enterprise
@@ -11,7 +12,7 @@ import { GoogleGenAI } from "@google/genai";
 // regardless of which region the Cloud Functions themselves run in (us-east1, per
 // functions/src/index.ts's setGlobalOptions). That's a normal cross-region API call, not a
 // config error.
-const PROJECT_ID = "angelstar-investments";
+const PROJECT_ID = tenantConfig.gcpProjectId;
 const LOCATION = "us-central1";
 const MODEL = "gemini-2.5-flash";
 

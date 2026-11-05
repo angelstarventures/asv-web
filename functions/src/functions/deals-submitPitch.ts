@@ -2,6 +2,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { withTransaction } from "../lib/dataconnect-admin";
 import { createDealFolder, uploadDealFile, driveOAuthClientSecret, driveOAuthRefreshToken } from "../lib/dealsDrive";
 import { syncAutoTagsForDeal } from "../lib/dealAutoTags";
+import { tenantConfig } from "../lib/tenantConfig";
 import {
   assertValidDealCoreFields,
   assertValidFundingHistory,
@@ -70,7 +71,7 @@ export const dealsSubmitPitch = onCall<DealsSubmitPitchInput, Promise<DealsSubmi
     assertValid(input);
     const fundingHistory = assertValidFundingHistory(input.fundingHistory);
 
-    const rootFolderId = process.env.DEALS_DRIVE_ROOT_FOLDER_ID;
+    const rootFolderId = tenantConfig.dealsDriveRootFolderId;
     if (!rootFolderId) {
       throw new HttpsError("failed-precondition", "Pitch intake is not configured yet.");
     }

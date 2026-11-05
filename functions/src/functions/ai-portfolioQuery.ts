@@ -12,6 +12,7 @@ import { getPromptSetting } from "../lib/aiPrompts";
 import { fetchAllLedgerRecords, fetchOwnLedgerRecords } from "../lib/legacyRecordShape";
 import { fetchAggregateRollups } from "../lib/portfolioAggregates";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
+import { tenantConfig } from "../lib/tenantConfig";
 
 // Phase 2 AI: the member-facing portfolio chat, in both scopes ("my holdings" and "all of
 // ASV"). The schema + ledger data + (for admins) member list are seeded once per chat session
@@ -95,7 +96,7 @@ async function buildContext(scope: "mine" | "asv", memberId: string, isAdmin: bo
       `Pre-computed portfolio-wide totals, one row per scenario:\n${JSON.stringify(aggregate.portfolio)}\n\nPre-computed per-company totals, one row per (company, scenario):\n${JSON.stringify(aggregate.companies)}`
     );
     parts.push(
-      `The complete ASV ledger, across all 3 scenarios, every member's individual data included (asv_ledger_optimistic.json + asv_ledger_balanced.json + asv_ledger_conservative.json, combined) — use this for anything the pre-computed totals above don't cover, such as individual member amounts, round terms, or company update narratives:\n${JSON.stringify(records)}`
+      `The complete ${tenantConfig.orgAbbreviation} ledger, across all 3 scenarios, every member's individual data included (asv_ledger_optimistic.json + asv_ledger_balanced.json + asv_ledger_conservative.json, combined) — use this for anything the pre-computed totals above don't cover, such as individual member amounts, round terms, or company update narratives:\n${JSON.stringify(records)}`
     );
   } else {
     const aggregate = await fetchAggregateRollups();
