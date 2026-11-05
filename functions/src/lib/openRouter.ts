@@ -1,4 +1,5 @@
 import { HttpsError } from "firebase-functions/v2/https";
+import { setTimeout as delay } from "node:timers/promises";
 
 // The OpenRouter alternative to vertexAi.ts's plain generateContent/generateChatReply — used
 // only when a feature's AiProviderSetting.provider is "openrouter" (functions/src/lib/
@@ -48,12 +49,71 @@ function toOpenAiParts(parts: ContentPart[]): OpenAiContentPart[] {
 // applies if a call site doesn't specify one.
 const DEFAULT_OPENROUTER_TIMEOUT_MS = 60_000;
 
+interface OpenRouterError {
+  code?: number | string;
+  metadata?: { error_type?: string };
+}
+
+interface OpenRouterResponse {
+  id?: string;
+  model?: string;
+  provider?: string;
+  error?: OpenRouterError;
+  choices?: {
+    message?: { content?: string | { type: string; text?: string }[] | null; refusal?: string | null };
+    finish_reason?: string;
+    error?: OpenRouterError;
+  }[];
+}
+
+class OpenRouterFailure extends HttpsError {
+  constructor(message: string, readonly retryable: boolean, code: ConstructorParameters<typeof HttpsError>[0] = "unavailable") {
+    super(code, message);
+  }
+}
+
+function providerFailure(error: OpenRouterError, httpStatus?: number): OpenRouterFailure {
+  const status = Number(error.code) || httpStatus;
+  const type = error.metadata?.error_type;
+  if (status === 402 || type === "payment_required") {
+    return new OpenRouterFailure("The OpenRouter account for this feature has insufficient credits. Add credits at openrouter.ai/settings/credits, or switch this feature's provider in Settings.", false, "failed-precondition");
+  }
+  if (status === 401 || type === "authentication") {
+    return new OpenRouterFailure("The OpenRouter API key for this feature was rejected. Check the key in Secret Manager.", false, "failed-precondition");
+  }
+  if (status === 403 || type === "permission_denied" || type === "content_policy_violation") {
+    return new OpenRouterFailure("OpenRouter blocked this request. Check the model's access, account limits and content policy in OpenRouter.", false, "failed-precondition");
+  }
+  if (["context_length_exceeded", "max_tokens_exceeded", "token_limit_exceeded", "string_too_long"].includes(type ?? "")) {
+    return new OpenRouterFailure("The selected AI model reached its input or output limit. Try fewer documents or choose a model with larger limits in Settings.", false, "failed-precondition");
+  }
+  const retryable = ["provider_unavailable", "provider_overloaded", "server", "timeout", "rate_limit_exceeded"].includes(type ?? "")
+    || status === 408 || status === 429 || (status !== undefined && status >= 500);
+  return new OpenRouterFailure(
+    retryable
+      ? "The AI provider temporarily failed or disconnected. Please try the analysis again."
+      : "OpenRouter rejected this request. Check the selected model's document support and provider settings.",
+    retryable,
+    status === 429 ? "resource-exhausted" : retryable ? "unavailable" : "failed-precondition",
+  );
+}
+
+function retryDelay(value: string | null): number {
+  if (!value) return 750;
+  const seconds = Number(value);
+  const milliseconds = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(milliseconds) ? Math.max(750, milliseconds) : 750;
+}
+
 async function callOpenRouter(
   apiKey: string,
   body: Record<string, unknown>,
   timeoutMs: number = DEFAULT_OPENROUTER_TIMEOUT_MS
 ): Promise<string> {
   const controller = new AbortController();
+  // One deadline covers both attempts, their backoff and body reads. Never restart the
+  // caller's budget on a retry: document analysis must stay below its function timeout.
+  const deadline = Date.now() + timeoutMs;
   // Covers the WHOLE call, not just fetch() resolving — fetch() resolves as soon as response
   // headers arrive, before the body is read. A model that streams its response slowly gets
   // past that point quickly and then hangs on res.json() instead, which clearing the timeout
@@ -62,39 +122,46 @@ async function callOpenRouter(
   // hanging all the way to the outer Cloud Function timeout instead.
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "");
-      console.error(`callOpenRouter: request failed (${res.status})`, errText.slice(0, 1000));
-      if (res.status === 402) {
-        throw new HttpsError(
-          "failed-precondition",
-          "The OpenRouter account for this feature has insufficient credits for this request (file inputs need at least $0.50). Add credits at openrouter.ai/settings/credits, or switch this feature's provider in Settings."
-        );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let waitMs = 750;
+      try {
+        const res = await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body), signal: controller.signal,
+        });
+        waitMs = retryDelay(res.headers.get("Retry-After"));
+        const json = await res.json().catch(() => {
+          throw res.ok
+            ? new OpenRouterFailure("The AI provider returned an unreadable response. Please try again.", true)
+            : providerFailure({}, res.status);
+        }) as OpenRouterResponse;
+        // Providers can fail after sending HTTP 200, including after partial text.
+        // Record only routing/error metadata; documents and model reasoning stay private.
+        if (!res.ok || json.error || json.choices?.[0]?.error || json.choices?.[0]?.finish_reason === "error") {
+          const error = json.error ?? json.choices?.[0]?.error ?? {};
+          console.warn("callOpenRouter: provider failure", {
+            id: json.id, model: json.model, provider: json.provider,
+            status: res.status, code: error.code, errorType: error.metadata?.error_type, attempt: attempt + 1,
+          });
+          throw providerFailure(error, res.ok ? 502 : res.status);
+        }
+        return extractText(json);
+      } catch (err) {
+        if (controller.signal.aborted) throw err;
+        const failure = err instanceof OpenRouterFailure ? err
+          : err instanceof TypeError ? new OpenRouterFailure("The connection to the AI provider failed. Please try again.", true)
+          : undefined;
+        if (!failure) throw err;
+        if (!failure.retryable || attempt === 1 || Date.now() + waitMs + 1000 >= deadline) throw failure;
+        console.warn("callOpenRouter: retrying temporary failure", { attempt: attempt + 1, waitMs });
+        await delay(waitMs, undefined, { signal: controller.signal });
       }
-      if (res.status === 401 || res.status === 403) {
-        throw new HttpsError(
-          "failed-precondition",
-          "The OpenRouter API key for this feature was rejected (invalid, revoked, or restricted). Check the key in Secret Manager."
-        );
-      }
-      throw new HttpsError("internal", `OpenRouter request failed (${res.status}): ${errText.slice(0, 300)}`);
     }
-    const json = (await res.json()) as {
-      choices?: { message?: { content?: string; reasoning?: string }; finish_reason?: string }[];
-    };
-    return extractText(json);
+    throw new OpenRouterFailure("The AI provider is unavailable. Please try again.", true);
   } catch (err) {
     if (controller.signal.aborted) {
-      throw new HttpsError("internal", `OpenRouter request timed out after ${timeoutMs / 1000}s.`);
+      throw new HttpsError("deadline-exceeded", `OpenRouter request timed out after ${timeoutMs / 1000}s. Please try again.`);
     }
     throw err;
   } finally {
@@ -102,16 +169,18 @@ async function callOpenRouter(
   }
 }
 
-function extractText(json: { choices?: { message?: { content?: string; reasoning?: string }; finish_reason?: string }[] }): string {
-  const text = json.choices?.[0]?.message?.content;
-  if (!text) {
-    // Seen in practice on small/weak free models under strict JSON mode (response_format:
-    // json_object) — the model produces nothing usable in `content` at all (sometimes dumping
-    // everything into `reasoning` instead, sometimes just stopping early). Logged in full so a
-    // future failure on a specific model is diagnosable without guessing.
-    console.error("callOpenRouter: no content in response", JSON.stringify(json).slice(0, 2000));
-    throw new HttpsError("internal", "OpenRouter returned no text content.");
+function extractText(json: OpenRouterResponse): string {
+  const choice = json.choices?.[0];
+  if (choice?.finish_reason === "length") {
+    throw new OpenRouterFailure("The selected AI model reached its output limit before finishing. Try fewer documents or choose a model with a larger output limit in Settings.", false, "failed-precondition");
   }
+  if (choice?.finish_reason === "content_filter" || choice?.message?.refusal) {
+    throw new OpenRouterFailure("The selected AI model declined to process this request. Try a different model in Settings.", false, "failed-precondition");
+  }
+  const content = choice?.message?.content;
+  const text = typeof content === "string" ? content
+    : Array.isArray(content) ? content.filter(part => part.type === "text").map(part => part.text ?? "").join("") : "";
+  if (!text.trim()) throw new OpenRouterFailure("The AI provider returned an empty response. Please try again or choose a different model in Settings.", true);
   return text;
 }
 
