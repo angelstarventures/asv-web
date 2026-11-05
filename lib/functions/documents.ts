@@ -74,10 +74,32 @@ export async function documentsShareCompanyUpdate(
   const call = httpsCallable<DocumentsShareCompanyUpdateInput, DocumentsShareCompanyUpdateOutput>(
     functions,
     "documentsShareCompanyUpdate",
-    { timeout: 120000 }
+    { timeout: 300000 }
   );
   const res = await call(input);
   return res.data;
+}
+
+// Sends one file per call so a single large or slow file can't fail the whole batch, and the
+// error names the file that failed. Safe to retry: the function reuses identical files already
+// in Drive (md5 match) and ignores duplicate document rows.
+export async function documentsShareCompanyUpdateEach(
+  input: DocumentsShareCompanyUpdateInput
+): Promise<DocumentsShareCompanyUpdateOutput> {
+  const driveUrls: string[] = [];
+  const failures: string[] = [];
+  for (const file of input.files) {
+    try {
+      const out = await documentsShareCompanyUpdate({ ...input, files: [file] });
+      driveUrls.push(...out.driveUrls);
+    } catch (err) {
+      failures.push(`${file.filename}: ${err instanceof Error ? err.message : "upload failed"}`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`Could not save to Drive — ${failures.join("; ")}`);
+  }
+  return { driveUrls };
 }
 
 // Manual "Company Documents/Updates" upload — mirrors functions/src/functions/

@@ -33,7 +33,7 @@ const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 export const documentsShareCompanyUpdate = onCall<
   DocumentsShareCompanyUpdateInput,
   Promise<DocumentsShareCompanyUpdateOutput>
->({ secrets: [driveOAuthClientSecret, driveOAuthRefreshToken], timeoutSeconds: 120 }, async (request) => {
+>({ secrets: [driveOAuthClientSecret, driveOAuthRefreshToken], timeoutSeconds: 300, memory: "1GiB" }, async (request) => {
   const caller = await requireAdmin(request);
   const { companyId, companyName, files } = request.data;
   if ((!companyId && !companyName) || !Array.isArray(files) || files.length === 0) {

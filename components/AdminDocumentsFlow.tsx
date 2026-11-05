@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { DocumentDropzone, type AnalyzedFile, type StartupDocumentMode } from "@/components/DocumentDropzone";
 import { LedgerRecordsEditor } from "@/components/LedgerRecordsEditor";
 import { UnknownMemberReferences } from "@/components/UnknownMemberReferences";
-import { documentsAnalyze, documentsShareCompanyUpdate, type RecordGroup } from "@/lib/functions/documents";
+import { documentsAnalyze, documentsShareCompanyUpdateEach, type RecordGroup } from "@/lib/functions/documents";
 
 const SCENARIO_DISPLAY: Record<string, string> = {
   optimistic: "Optimistic",
@@ -99,7 +99,7 @@ export function AdminDocumentsFlow({
     );
     const driveUrls = new Set<string>();
     for (const companyName of updateCompanies) {
-      const saved = await documentsShareCompanyUpdate({ companyName, files: analyzedFiles });
+      const saved = await documentsShareCompanyUpdateEach({ companyName, files: analyzedFiles });
       for (const url of saved.driveUrls) driveUrls.add(url);
     }
     if (shareWindow) {
