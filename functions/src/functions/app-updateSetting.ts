@@ -9,10 +9,15 @@ import { APP_SETTING_KEYS, type AppSettingKey } from "../lib/appSettings";
 // hold. Per-key value validation happens here rather than trusting the client to send something
 // sane, same posture as updateAiPromptSetting.
 const NUMERIC_DUES_AMOUNT = { test: (v: string) => v === "" || (!Number.isNaN(Number(v)) && Number(v) >= 0) };
+const PERCENT = { test: (v: string) => v.trim() !== "" && !Number.isNaN(Number(v)) && Number(v) >= 0 && Number(v) <= 100 };
 const VALID_VALUES: Record<AppSettingKey, { test: (v: string) => boolean }> = {
   member_annual_dues_amount: NUMERIC_DUES_AMOUNT,
   associate_annual_dues_amount: NUMERIC_DUES_AMOUNT,
   dues_reminder_template: { test: (v: string) => v.trim().length > 0 },
+  transfer_dd_lead_carry_percent: PERCENT,
+  transfer_management_carry_percent: PERCENT,
+  // Existence in the member table is checked separately below; format here only.
+  transfer_management_carry_member_id: { test: (v: string) => /^\d{5}$/.test(v) },
 };
 
 export interface UpdateAppSettingInput {
@@ -32,6 +37,10 @@ export const updateAppSetting = onCall<UpdateAppSettingInput, Promise<{ ok: true
   }
 
   await withTransaction(async (client) => {
+    if (key === "transfer_management_carry_member_id") {
+      const member = await client.query(`SELECT 1 FROM "member" WHERE id = $1`, [value]);
+      if (member.rowCount === 0) throw new HttpsError("invalid-argument", `No member with ID ${value}.`);
+    }
     await client.query(
       `INSERT INTO "app_setting" (key, value, "updated_by_id", "updated_at")
        VALUES ($1, $2, $3, now())

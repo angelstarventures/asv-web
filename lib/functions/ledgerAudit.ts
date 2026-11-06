@@ -4,7 +4,7 @@ import { functions } from "@/lib/firebase/client";
 // Mirrors functions/src/functions/ledger-audit.ts's output shape exactly.
 
 export interface AuditFinding {
-  category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility";
+  category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility" | "transfer";
   severity: "error" | "warning";
   message: string;
   ledgerEntryId?: string;

@@ -14,12 +14,20 @@ export const APP_SETTING_KEYS = [
   "member_annual_dues_amount",
   "associate_annual_dues_amount",
   "dues_reminder_template",
+  // Internal-transfer carry (see transferCalc.ts): fixed fund-wide rates and the one member who
+  // receives management carry. Empty recipient = transfers cannot be recorded yet.
+  "transfer_dd_lead_carry_percent",
+  "transfer_management_carry_percent",
+  "transfer_management_carry_member_id",
 ] as const;
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number];
 
 const DEFAULTS: Record<AppSettingKey, string> = {
   member_annual_dues_amount: "",
   associate_annual_dues_amount: "",
+  transfer_dd_lead_carry_percent: "3",
+  transfer_management_carry_percent: "5",
+  transfer_management_carry_member_id: "",
   dues_reminder_template:
     "Hi {name}, this is a reminder that your ${amount} annual " + tenantConfig.orgAbbreviation + " membership dues for {year} are due. Thank you!",
 };

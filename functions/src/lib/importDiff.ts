@@ -5,6 +5,9 @@ import { LEDGER_TYPE_TO_ENUM, legacyTypeToEnum, type LegacyLedgerType } from "./
 import { checkValuationGuardrails } from "./valuationGuardrails";
 import { fetchAllMemberIds, findUnknownMemberReferences } from "./memberIds";
 import { tenantConfig } from "./tenantConfig";
+import { previewInternalTransfer, type Run } from "./transferWrites";
+
+const dbRun: Run = (text, params) => query(text, params);
 
 // Tolerant of both shapes `record.type` can carry: the legacy JSON string
 // ("Participating_PricedRound", from the original schema) or the DB enum form directly
@@ -152,8 +155,27 @@ export async function checkConsistency(records: Record<string, unknown>[]): Prom
       );
   }
 
+  // Dry-run each internal transfer through the same calculator the commit uses, so overselling,
+  // a missing DD lead/management recipient, unbalanced shares etc. surface here with a message
+  // instead of as a failed commit. Holdings are read from the DB, so two transfers touching the
+  // same seller in one batch aren't checked against each other.
+  const transferErrorsByIndex = new Map<number, string[]>();
+  for (let i = 0; i < records.length; i++) {
+    if (normalizeTypeToEnum(String(records[i].type)) !== "INTERNAL_TRANSFER") continue;
+    try {
+      const preview = await previewInternalTransfer(dbRun, records[i]);
+      if (preview.errors.length > 0) transferErrorsByIndex.set(i, preview.errors);
+    } catch (err) {
+      transferErrorsByIndex.set(i, [err instanceof Error ? err.message : String(err)]);
+    }
+  }
+
   return records.map((record, index) => {
-    const errors: string[] = [...(guardrailErrorsByIndex.get(index) ?? []), ...(unknownMemberErrorsByIndex.get(index) ?? [])];
+    const errors: string[] = [
+      ...(guardrailErrorsByIndex.get(index) ?? []),
+      ...(unknownMemberErrorsByIndex.get(index) ?? []),
+      ...(transferErrorsByIndex.get(index) ?? []),
+    ];
     const type = normalizeTypeToEnum(String(record.type));
     const companyName = String(record.company ?? "");
 

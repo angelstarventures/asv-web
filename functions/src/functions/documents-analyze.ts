@@ -141,6 +141,7 @@ const CANONICAL_RECORD_TYPES = [
   "Internal_ValuationAssessment",
   "Compliance_FlagChange",
   "CompanyUpdate",
+  "Internal_Transfer",
 ] as const;
 
 function typeKey(value: string): string {

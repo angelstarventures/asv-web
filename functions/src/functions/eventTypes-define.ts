@@ -34,6 +34,7 @@ const RESERVED_KEYS = new Set([
   "INTERNAL_VALUATION_ASSESSMENT",
   "COMPLIANCE_FLAG_CHANGE",
   "COMPANY_UPDATE",
+  "INTERNAL_TRANSFER",
 ]);
 
 function validateFieldDefs(fields: EventTypeFieldDef[]): string[] {

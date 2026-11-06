@@ -168,6 +168,35 @@ export async function fetchDetailForEntry(
         member_valuations: memberValuations,
       };
     }
+    case "INTERNAL_TRANSFER": {
+      const rows = await query<Record<string, unknown>>(
+        `SELECT "reference_round_name", "round_price_per_share", "transfer_price_per_share", notes
+         FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`,
+        [ledgerEntryId]
+      );
+      // Member-scoped reads (AI chat "mine" scope) see only the member's own leg — never the
+      // counterparties, their amounts, or fees charged to anyone else.
+      const parties = await query<{ memberId: string; side: string; shares: number; amount: number }>(
+        memberScopeId
+          ? `SELECT "member_id" AS "memberId", side::text AS side, shares, amount FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2`
+          : `SELECT "member_id" AS "memberId", side::text AS side, shares, amount FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
+        memberScopeId ? [ledgerEntryId, memberScopeId] : [ledgerEntryId]
+      );
+      const legal = await query<{ total: number }>(
+        memberScopeId
+          ? `SELECT COALESCE(SUM(amount), 0) AS total FROM "fee_line" WHERE "ledger_entry_id" = $1 AND kind = 'LEGAL_COSTS' AND "charged_to_member_id" = $2`
+          : `SELECT COALESCE(SUM(amount), 0) AS total FROM "fee_line" WHERE "ledger_entry_id" = $1 AND kind = 'LEGAL_COSTS'`,
+        memberScopeId ? [ledgerEntryId, memberScopeId] : [ledgerEntryId]
+      );
+      // The record stores inputs only (sellers' shares, buyers' dollars); cost basis, gains and
+      // fee lines are re-derived on write. legal_costs is kept because it is a manual input.
+      return {
+        ...omitNullish(rows[0] ?? {}),
+        sellers: Object.fromEntries(parties.filter((p) => p.side === "SELLER").map((p) => [p.memberId, p.shares])),
+        buyers: Object.fromEntries(parties.filter((p) => p.side === "BUYER").map((p) => [p.memberId, p.amount])),
+        legal_costs: Number(legal[0]?.total ?? 0),
+      };
+    }
     case "COMPLIANCE_FLAG_CHANGE": {
       // audit_type and compliance_officer_notes are TOP-LEVEL fields per the schema —
       // compliance_status only wraps {status, flagged_date, reason}. Nesting all four under

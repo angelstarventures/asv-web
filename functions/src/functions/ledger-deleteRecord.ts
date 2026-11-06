@@ -19,7 +19,13 @@ export const ledgerDeleteRecord = onCall<LedgerDeleteRecordInput, Promise<{ ok: 
     throw new HttpsError("invalid-argument", "ledgerEntryId is required.");
   }
 
-  const companyId = await withTransaction((client) => deleteLedgerEntry(client, ledgerEntryId));
+  const companyId = await withTransaction((client) => deleteLedgerEntry(client, ledgerEntryId)).catch((err) => {
+    // Raised when removing a round/transfer would leave a member with negative share holdings.
+    if (err instanceof Error && err.message.includes("negative share holdings")) {
+      throw new HttpsError("failed-precondition", err.message);
+    }
+    throw err;
+  });
   await recomputeRollups(companyId);
 
   return { ok: true };

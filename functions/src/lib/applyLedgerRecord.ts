@@ -15,6 +15,7 @@ import {
   updateCompanyStatusForExit,
 } from "./ledgerWriteBuilders";
 import { contentHashOf } from "./importDiff";
+import { applyInternalTransfer, writeRoundLots } from "./transferWrites";
 
 // The one place a legacy-shaped record (asv_master_portfolio_schema.json shape) becomes DB
 // rows. Shared by ledger-massImportCommit AND functions/scripts/migrate-legacy-data.ts, so
@@ -84,6 +85,14 @@ async function insertDetailForType(
         postMoneyValuation: Number(record.post_money_valuation),
       });
       await insertAllocations(client, ledgerEntryId, (record.allocations as Record<string, number>) ?? {});
+      await writeRoundLots(client, {
+        ledgerEntryId,
+        companyId,
+        scenario,
+        eventDate: String(record.date),
+        pricePerShare: Number(record.price_per_share),
+        allocations: (record.allocations as Record<string, number>) ?? {},
+      });
       break;
     case "PARTICIPATING_SAFE_ROUND": {
       const warrants = (record.warrants as Record<string, unknown>) ?? {};
@@ -102,8 +111,18 @@ async function insertDetailForType(
         notes: record.notes as string | undefined,
       });
       await insertAllocations(client, ledgerEntryId, (record.allocations as Record<string, number>) ?? {});
+      await writeRoundLots(client, {
+        ledgerEntryId,
+        companyId,
+        scenario,
+        eventDate: String(record.date),
+        allocations: (record.allocations as Record<string, number>) ?? {},
+      });
       break;
     }
+    case "INTERNAL_TRANSFER":
+      await applyInternalTransfer(client, { ledgerEntryId, companyId, scenario, record });
+      break;
     case "NON_PARTICIPATING_ROUND":
       await insertNonParticipatingRoundDetail(client, ledgerEntryId, {
         roundName: String(record.round_name),

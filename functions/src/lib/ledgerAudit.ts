@@ -9,7 +9,7 @@ import { fetchPriceHistory, deriveOwnership, hasSafeRoundHistory, EXTREME_RATIO,
 // ledgerUpdateRecord by hand, same as the Prosperous Brands correction.
 
 export interface AuditFinding {
-  category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility";
+  category: "rollup" | "cross_scenario" | "member_valuation_sum" | "price_continuity" | "fmv_plausibility" | "transfer";
   severity: "error" | "warning";
   message: string;
   // Present when the finding traces to one specific ledger entry — lets the UI either offer a
@@ -206,14 +206,90 @@ async function auditCompanyPriceContinuityAndFmv(companyName: string): Promise<A
   return findings;
 }
 
+interface TransferAuditRow {
+  ledgerEntryId: string;
+  companyName: string;
+  eventDate: string;
+  scenario: string;
+  sold: number;
+  bought: number;
+  roundPrice: number;
+  transferPrice: number;
+  fees: number;
+}
+
+// Internal transfers: sellers' shares must equal buyers' shares, the fee lines must roughly equal
+// the spread that funds them, and no member may hold negative shares in any company. Skipped
+// (empty) if the transfer tables don't exist yet, so a functions deploy that lands before
+// migration 009 doesn't break the rest of the audit.
+async function auditInternalTransfers(): Promise<AuditFinding[]> {
+  const findings: AuditFinding[] = [];
+  let rows: TransferAuditRow[];
+  let negative: { companyName: string; memberId: string; shares: number }[];
+  try {
+    rows = await query<TransferAuditRow>(
+      `SELECT le.id AS "ledgerEntryId", c.name AS "companyName", le."event_date"::text AS "eventDate", le.scenario::text AS scenario,
+              COALESCE(SUM(tp.shares) FILTER (WHERE tp.side = 'SELLER'), 0) AS sold,
+              COALESCE(SUM(tp.shares) FILTER (WHERE tp.side = 'BUYER'), 0) AS bought,
+              itd."round_price_per_share" AS "roundPrice", itd."transfer_price_per_share" AS "transferPrice",
+              (SELECT COALESCE(SUM(f.amount), 0) FROM "fee_line" f WHERE f."ledger_entry_id" = le.id) AS fees
+       FROM "ledger_entry" le
+       JOIN "company" c ON c.id = le."company_id"
+       JOIN "internal_transfer_detail" itd ON itd."ledger_entry_id" = le.id
+       LEFT JOIN "transfer_party" tp ON tp."ledger_entry_id" = le.id
+       WHERE le.type = 'INTERNAL_TRANSFER'
+       GROUP BY le.id, c.name, itd."round_price_per_share", itd."transfer_price_per_share"`
+    );
+    negative = await query(
+      `SELECT c.name AS "companyName", sl."member_id" AS "memberId", SUM(sl.shares) AS shares
+       FROM "share_lot" sl JOIN "company" c ON c.id = sl."company_id"
+       WHERE NOT sl."pending_conversion"
+       GROUP BY c.name, sl."member_id" HAVING SUM(sl.shares) < -0.000001`
+    );
+  } catch (err) {
+    if ((err as { code?: string }).code === "42P01") return [];
+    throw err;
+  }
+
+  for (const r of rows) {
+    const label = `"${r.companyName}" internal transfer (${r.eventDate}, ${r.scenario})`;
+    if (Math.abs(Number(r.sold) - Number(r.bought)) > 1e-4) {
+      findings.push({
+        category: "transfer",
+        severity: "error",
+        message: `${label}: sellers sold ${Number(r.sold)} shares but buyers bought ${Number(r.bought)}.`,
+        ledgerEntryId: r.ledgerEntryId,
+      });
+    }
+    const spread = (Number(r.roundPrice) - Number(r.transferPrice)) * Number(r.sold);
+    if (Math.abs(spread - Number(r.fees)) > 1) {
+      findings.push({
+        category: "transfer",
+        severity: "warning",
+        message: `${label}: fee lines total $${Number(r.fees).toLocaleString()} but the price spread funds $${spread.toLocaleString()}.`,
+        ledgerEntryId: r.ledgerEntryId,
+      });
+    }
+  }
+  for (const n of negative) {
+    findings.push({
+      category: "transfer",
+      severity: "error",
+      message: `"${n.companyName}": member ${n.memberId} has negative share holdings (${Number(n.shares)}).`,
+    });
+  }
+  return findings;
+}
+
 export async function runLedgerAudit(): Promise<AuditFinding[]> {
   const companies = await query<{ name: string }>(`SELECT name FROM "company" ORDER BY name`);
 
-  const [rollupFindings, memberValuationFindings, ...perCompanyFindings] = await Promise.all([
+  const [rollupFindings, memberValuationFindings, transferFindings, ...perCompanyFindings] = await Promise.all([
     auditRollupsAndCrossScenario(),
     auditMemberValuationSums(),
+    auditInternalTransfers(),
     ...companies.map((c) => auditCompanyPriceContinuityAndFmv(c.name)),
   ]);
 
-  return [...rollupFindings, ...memberValuationFindings, ...perCompanyFindings.flat()];
+  return [...rollupFindings, ...memberValuationFindings, ...transferFindings, ...perCompanyFindings.flat()];
 }

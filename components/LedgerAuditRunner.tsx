@@ -10,6 +10,7 @@ const CATEGORY_LABELS: Record<AuditFinding["category"], string> = {
   member_valuation_sum: "Member-valuation sums",
   price_continuity: "Price-per-share continuity",
   fmv_plausibility: "Fair-market-value plausibility",
+  transfer: "Internal transfers & share holdings",
 };
 
 function FindingActions({ finding }: { finding: AuditFinding }) {

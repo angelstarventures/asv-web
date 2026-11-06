@@ -23,7 +23,8 @@
         "Transaction_ValuationChange",
         "Internal_ValuationAssessment",
         "Compliance_FlagChange",
-        "CompanyUpdate"
+        "CompanyUpdate",
+        "Internal_Transfer"
       ],
       "description": "The precise transaction mechanism, tracking event, compliance pivot, or operational update type. Note: a Participating_PricedRound, Participating_SAFERound, or NonParticipating_Round record for a company ASV already holds a position in should be followed by a companion Transaction_ValuationChange record (same date) marking ASV's existing position to the round's new post-money valuation — this applies even when ASV did not participate in the round (NonParticipating_Round), since the round itself is the priced event that sets the new mark. Transaction_ValuationChange is for marks driven by an actual priced transaction; Internal_ValuationAssessment is reserved for a subjective mark with no external pricing event (e.g. a health/market-conditions reassessment)."
     },
@@ -109,6 +110,22 @@
           "new_post_money_valuation": { "type": "number", "minimum": 0 },
           "total_round_size": { "type": "number", "minimum": 0, "description": "The company's full raise across every investor in this round. Optional — omit if not stated in the source document." },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
+          "notes": { "type": "string" }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "type": { "const": "Internal_Transfer" } } },
+      "then": {
+        "required": ["round_price_per_share", "transfer_price_per_share", "sellers", "buyers"],
+        "properties": {
+          "reference_round_name": { "type": "string", "description": "The round whose price the carry is measured against." },
+          "round_price_per_share": { "type": "number", "exclusiveMinimum": 0, "description": "The round price buyers pay and the carry base is measured at." },
+          "transfer_price_per_share": { "type": "number", "minimum": 0, "description": "The (lower) price sellers are actually paid. The spread to the round price funds carry and legal costs." },
+          "sellers": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }, "description": "Dictionary mapping 5-digit Member IDs to the number of shares they sold. Cost basis, gains and carry are computed by the system, never supplied." },
+          "buyers": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }, "description": "Dictionary mapping 5-digit Member IDs to the dollars they paid, at the round price." },
+          "legal_costs": { "type": "number", "minimum": 0, "description": "Total legal costs of the transfer in dollars. Optional — when omitted the system derives it as the spread minus carry." },
+          "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the transfer was reported via plain text/email rather than an actual document." },
           "notes": { "type": "string" }
         }
       }

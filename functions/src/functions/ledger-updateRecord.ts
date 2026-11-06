@@ -5,6 +5,7 @@ import { validateLedgerRecord } from "../lib/schema-validate";
 import { checkConsistency } from "../lib/importDiff";
 import { applyLedgerRecord } from "../lib/applyLedgerRecord";
 import { deleteLedgerEntry } from "../lib/deleteLedgerRecord";
+import { assertNoNegativeHoldings } from "../lib/transferWrites";
 import { recomputeRollups } from "../lib/rollups";
 import type { ScenarioEnum } from "../lib/enumMap";
 
@@ -50,9 +51,25 @@ export const ledgerUpdateRecord = onCall<LedgerUpdateRecordInput, Promise<{ ok: 
   const { scenario: _drop, ...legacyRecord } = record;
   void _drop;
 
+  // A transfer's parties/fee lines/lots are derived from holdings at the time it was recorded
+  // and shared across its three scenario rows — editing one row in place would desync them.
+  if (String(record.type) === "Internal_Transfer") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Internal transfers can't be edited in place. Delete all three scenario rows and record the transfer again."
+    );
+  }
+
   const oldCompanyId = await withTransaction(async (client) => {
-    const companyId = await deleteLedgerEntry(client, ledgerEntryId);
+    const existing = await client.query<{ type: string }>(`SELECT type::text AS type FROM "ledger_entry" WHERE id = $1`, [ledgerEntryId]);
+    if (existing.rows[0]?.type === "INTERNAL_TRANSFER") {
+      throw new HttpsError("failed-precondition", "Internal transfers can't be edited in place. Delete all three scenario rows and record the transfer again.");
+    }
+    // Deferred so editing a round that later transfers already sold shares from isn't rejected
+    // at the delete step; the check runs once the corrected record is back in place.
+    const companyId = await deleteLedgerEntry(client, ledgerEntryId, { deferHoldingsCheck: true });
     await applyLedgerRecord(client, legacyRecord, { scenario, createdBy: caller.memberId });
+    await assertNoNegativeHoldings(client, companyId);
     return companyId;
   });
 

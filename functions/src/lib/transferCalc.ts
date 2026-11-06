@@ -151,6 +151,54 @@ export interface TransferResult {
   legalDerived: boolean;
 }
 
+// The legacy-schema record shape for type "Internal_Transfer" (asv_master_portfolio_schema.json).
+// Only inputs are stored on the record; cost basis, gains and fee lines are always derived.
+export interface InternalTransferRecord {
+  round_price_per_share: number;
+  transfer_price_per_share: number;
+  sellers: Record<string, number>; // memberId -> shares sold
+  buyers: Record<string, number>; // memberId -> dollars paid at the round price
+  legal_costs?: number;
+}
+
+export interface Holding {
+  shares: number; // net shares held (acquisitions minus disposals), excluding pending-conversion lots
+  costBasis: number; // net total cost basis in dollars for those shares
+}
+
+export interface TransferContext {
+  holdings: Record<string, Holding>; // by sellers' member id; missing = holds nothing
+  ddLeadMemberId: string | null;
+  managementMemberId: string | null;
+  ddLeadPercent: number;
+  managementPercent: number;
+}
+
+export function computeTransferFromRecord(rec: InternalTransferRecord, ctx: TransferContext): TransferResult {
+  return computeTransfer({
+    roundPricePerShare: rec.round_price_per_share,
+    transferPricePerShare: rec.transfer_price_per_share,
+    sellers: Object.entries(rec.sellers).map(([memberId, shares]) => {
+      const h = ctx.holdings[memberId];
+      const held = h && h.shares > 0 ? h.shares : 0;
+      return {
+        memberId,
+        shares,
+        // Average cost across the seller's remaining lots; disposals remove basis proportionally,
+        // so the average is stable across repeated partial sales.
+        costBasisPerShare: held > 0 ? h.costBasis / held : 0,
+        heldShares: held,
+      };
+    }),
+    buyers: Object.entries(rec.buyers).map(([memberId, amount]) => ({ memberId, amount })),
+    ddLeadMemberId: ctx.ddLeadMemberId,
+    managementMemberId: ctx.managementMemberId,
+    ddLeadPercent: ctx.ddLeadPercent,
+    managementPercent: ctx.managementPercent,
+    legalCosts: rec.legal_costs,
+  });
+}
+
 const SHARE_EPS = 1e-6;
 const MONEY_TOLERANCE = 1; // dollars; spread vs fee reconciliation
 

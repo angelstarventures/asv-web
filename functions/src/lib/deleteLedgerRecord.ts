@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { assertNoNegativeHoldings } from "./transferWrites";
 
 // Every per-type detail table, plus the two per-member breakdown tables and the import-hash
 // row — schema.gql declares no cascade behavior anywhere (a deliberate append-only-ledger
@@ -15,12 +16,24 @@ const DETAIL_TABLES = [
   "compliance_flag_detail",
   "company_update_detail",
   "custom_event_detail",
+  "internal_transfer_detail",
+  "transfer_party",
+  "fee_line",
 ];
 
 // Shared by ledgerDeleteRecord (delete) and ledgerUpdateRecord (delete-then-reinsert via
 // applyLedgerRecord, since the ledger is append-only and "editing" a row in place has no
 // existing precedent to build on). Returns the company id so the caller can recomputeRollups.
-export async function deleteLedgerEntry(client: PoolClient, ledgerEntryId: string): Promise<string> {
+//
+// Share lots created by this entry (round acquisitions, transfer buys/sells) are removed with
+// it. Unless `deferHoldingsCheck` is set, the delete is rejected if it would leave any member
+// with negative holdings (e.g. deleting a round whose shares a later transfer already sold); the
+// update flow sets it and runs assertNoNegativeHoldings itself after re-applying the record.
+export async function deleteLedgerEntry(
+  client: PoolClient,
+  ledgerEntryId: string,
+  opts: { deferHoldingsCheck?: boolean } = {}
+): Promise<string> {
   const { rows } = await client.query<{ company_id: string }>(
     `SELECT "company_id" FROM "ledger_entry" WHERE id = $1`,
     [ledgerEntryId]
@@ -36,7 +49,9 @@ export async function deleteLedgerEntry(client: PoolClient, ledgerEntryId: strin
   for (const table of DETAIL_TABLES) {
     await client.query(`DELETE FROM "${table}" WHERE "ledger_entry_id" = $1`, [ledgerEntryId]);
   }
+  await client.query(`DELETE FROM "share_lot" WHERE "source_entry_id" = $1`, [ledgerEntryId]);
   await client.query(`DELETE FROM "ledger_entry" WHERE id = $1`, [ledgerEntryId]);
+  if (!opts.deferHoldingsCheck) await assertNoNegativeHoldings(client, companyId);
 
   return companyId;
 }

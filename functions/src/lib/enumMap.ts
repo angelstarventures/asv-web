@@ -10,6 +10,7 @@ export const LEDGER_TYPE_TO_ENUM = {
   Internal_ValuationAssessment: "INTERNAL_VALUATION_ASSESSMENT",
   Compliance_FlagChange: "COMPLIANCE_FLAG_CHANGE",
   CompanyUpdate: "COMPANY_UPDATE",
+  Internal_Transfer: "INTERNAL_TRANSFER",
 } as const;
 
 export type LegacyLedgerType = keyof typeof LEDGER_TYPE_TO_ENUM;
