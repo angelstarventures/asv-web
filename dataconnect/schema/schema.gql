@@ -51,6 +51,19 @@ enum LedgerEntryType {
   COMPLIANCE_FLAG_CHANGE          # Compliance_FlagChange
   COMPANY_UPDATE                  # CompanyUpdate
   CUSTOM                          # any admin-defined EventTypeDefinition
+  INTERNAL_TRANSFER               # Internal_Transfer — member-to-member secondary sale; not a new round, not an exit
+}
+
+enum TransferSide {
+  SELLER
+  BUYER
+}
+
+enum FeeKind {
+  DD_LEAD_CARRY
+  MANAGEMENT_CARRY
+  LEGAL_COSTS
+  OTHER
 }
 
 enum CompanyHealth {
@@ -366,6 +379,63 @@ type ExitEventDetail @table {
   totalExitValue: Float!
   asvTotalPayout: Float!
   docLink: String
+}
+
+# --- Internal (member-to-member) transfers, carry and share lots ---
+# A secondary sale between members: ASV's own position and cash are unchanged, so these rows are
+# excluded from fund-level invested/realized/MOIC/IRR (rollups, Phase 3). Recorded identically
+# across all three scenarios, like rounds. All math is computed in functions/src/lib/transferCalc.ts.
+
+type InternalTransferDetail @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @unique
+  referenceRoundName: String            # the round whose price the carry is measured against (e.g. the 2026 non-participating round)
+  roundPricePerShare: Float!            # carry base price (the buyer-facing round price)
+  transferPricePerShare: Float!         # price sellers were actually paid
+  totalShares: Float!
+  grossGain: Float!                     # SUM of positive per-seller gains at roundPricePerShare
+  docLink: String
+  notes: String
+}
+
+# One row per seller or buyer in a transfer. Buyers' costBasisPerShare = their purchase price.
+type TransferParty @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @index
+  member: Member!           @index
+  side: TransferSide!
+  shares: Float!
+  costBasisPerShare: Float!
+  amount: Float!            # sellers: gross paid to them at transferPricePerShare; buyers: amount paid
+  gain: Float               # sellers only: carry base = max(0, shares x (roundPrice - costBasisPerShare))
+  feesCharged: Float        # sellers only: SUM of fee lines charged against this seller's gain
+  realizedGain: Float       # sellers only: amount - shares x costBasisPerShare (what the seller actually realized)
+}
+
+# Carry/legal lines for a transfer or a full exit (both are LedgerEntry rows).
+type FeeLine @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  ledgerEntry: LedgerEntry! @index
+  kind: FeeKind!
+  recipient: Member @index              # null for LEGAL_COSTS paid to third parties
+  chargedToMember: Member               # the seller whose gain this line was charged against (null if not per-seller)
+  percent: Float                        # of that seller's gain; null for flat/derived lines
+  amount: Float!
+  note: String
+}
+
+# Append-only per-member share holdings: positive rows acquire, negative rows dispose.
+# Balance = SUM(shares) per (member, company). SAFE holders have no share count until conversion.
+type ShareLot @table {
+  id: UUID!                 @default(expr: "uuidV4()")
+  member: Member!           @index
+  company: Company!         @index
+  shares: Float             # signed; null only while pendingConversion
+  costBasis: Float!         # signed total dollars (negative on disposal)
+  acquiredDate: Date!
+  sourceEntry: LedgerEntry  # the round / transfer that created this lot
+  pendingConversion: Boolean! @default(value: false)
+  createdAt: Timestamp!     @default(expr: "request.time")
 }
 
 # Shared by Transaction_ValuationChange and Internal_ValuationAssessment — identical field
