@@ -1,5 +1,6 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { updateAppSetting, type AppSettingKey } from "@/lib/functions/adminSettings";
@@ -91,7 +92,7 @@ export function TransferFeeSettingsForm({
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm"
         >
           <option value="">— not set (sales cannot be recorded) —</option>
-          {members.map((m) => (
+          {sortByName(members).map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName} ({m.id})
             </option>

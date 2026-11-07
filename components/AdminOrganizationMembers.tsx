@@ -1,5 +1,6 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -127,7 +128,7 @@ export function AdminOrganizationMembers({ members }: { members: { id: string; d
           className="rounded-md border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="">Select a member…</option>
-          {unassignedMembers.map((m) => (
+          {sortByName(unassignedMembers).map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName}
             </option>

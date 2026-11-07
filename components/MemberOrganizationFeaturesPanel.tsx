@@ -1,5 +1,6 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { memberOrganizationFeatureKeys, type MemberOrganizationFeatureKey } from "@/lib/auth/permissions";
@@ -149,7 +150,7 @@ export function MemberOrganizationFeaturesPanel({
           className="mb-3 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
         >
           <option value="">Select a member…</option>
-          {members.map((m) => (
+          {sortByName(members).map((m) => (
             <option key={m.id} value={m.id}>
               {m.displayName} ({m.id})
             </option>

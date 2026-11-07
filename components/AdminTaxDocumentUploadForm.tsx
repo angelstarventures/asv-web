@@ -1,5 +1,6 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { readFileAsBase64 } from "@/lib/files";
@@ -69,7 +70,7 @@ export function AdminTaxDocumentUploadForm({ members }: { members: { id: string;
             onChange={(e) => setMemberId(e.target.value)}
             className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
           >
-            {members.map((m) => (
+            {sortByName(members).map((m) => (
               <option key={m.id} value={m.id}>
                 {m.displayName}
               </option>
