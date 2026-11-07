@@ -40,6 +40,7 @@ const { applyLedgerRecord } = require("../lib/src/lib/applyLedgerRecord");
 const { deleteLedgerEntry } = require("../lib/src/lib/deleteLedgerRecord");
 const { previewInternalTransfer, clientRunner, findNegativeHoldings } = require("../lib/src/lib/transferWrites");
 const { TRANSFER_SETTING_KEYS } = require("../lib/src/lib/transferCalc");
+const { loadMemberPositions, memberValuesAfterTransfers } = require("../lib/src/lib/memberPositions");
 
 class Rollback extends Error {}
 const near = (a, b, eps = 0.01) => Math.abs(Number(a) - Number(b)) <= eps;
@@ -193,6 +194,25 @@ async function main() {
     assert(near(lots[buyerA].shares, 3, 1e-6) && near(lots[buyerA].basis, 6000));
     assert(near(lots[newOwner].shares, 2, 1e-6) && near(lots[newOwner].basis, 4000));
     ok("replacement: 2 of 5 shares move with proportional basis (4,000), no fee lines, same in all 3 scenarios");
+
+    // --- E2. Member positions and value moved across transfers (Phase 3) --------------------
+    const positions = Object.fromEntries((await loadMemberPositions(run, companyId)).map((p) => [p.memberId, p]));
+    assert(near(positions[sellerA].basis, 0) && positions[sellerA].shares === 0, "sold-out seller");
+    assert(near(positions[buyerA].basis, 6000) && near(positions[buyerA].shares, 3), "partial seller / buyer");
+    assert(near(positions[newOwner].basis, 4000) && near(positions[newOwner].shares, 2), "replacement buyer");
+    ok("member positions: sold-out seller 0, partial holder 3 sh / $6,000, replacement buyer 2 sh / $4,000");
+    // A valuation dated BEFORE both transfers; its values must be carried across them.
+    await applyLedgerRecord(client, {
+      ...base, type: "Transaction_ValuationChange", date: "2026-02-01", driving_event_date: "2026-02-01",
+      asv_total_fair_market_value: 16000, member_valuations: { [sellerA]: 10000, [sellerB]: 6000 },
+    }, { scenario: "BALANCED", createdBy: ddLead });
+    const moved = await memberValuesAfterTransfers(run, companyId, "BALANCED");
+    assert.equal(moved.asOfDate, "2026-02-01");
+    const v = moved.values;
+    assert(near(v[sellerA], 0) && near(v[sellerB], 0), "sellers' value moved out");
+    assert(near(v[buyerA], 6000) && near(v[buyerB], 6000) && near(v[newOwner], 4000), JSON.stringify(v));
+    assert(near(Object.values(v).reduce((n, x) => n + x, 0), 16000), "value conserved");
+    ok("recorded member value follows the shares across both transfers (16,000 conserved)");
 
     // --- F. Guards --------------------------------------------------------------------------
     await expectFailure(client, "repeating the sale (sellers now hold nothing)", /holds only/, () =>

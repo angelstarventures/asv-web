@@ -34,6 +34,7 @@ export { ledgerMassImportCommit } from "./functions/ledger-massImportCommit";
 export { ledgerDeleteRecord } from "./functions/ledger-deleteRecord";
 export { ledgerUpdateRecord } from "./functions/ledger-updateRecord";
 export { ledgerRecordInternalTransfer } from "./functions/ledger-recordInternalTransfer";
+export { ledgerTransferHoldings } from "./functions/ledger-transferHoldings";
 export { rollupsRecompute } from "./functions/rollups-recompute";
 export { dealsSubmitPitch } from "./functions/deals-submitPitch";
 export { dealsSubmitPublicReview } from "./functions/deals-submitPublicReview";
