@@ -74,7 +74,7 @@ Not yet done. In order:
    ```
 
    The first wrapper command is a dry run; it refuses any statement outside CHECK/index/default/JSONB normalization. `--force` acknowledges the breaking-change notice for the new enum values. Always generate a fresh diff, because the wrapper's default diff file is the old real-estate one. If the process is interrupted, run it again with `--restore`.
-5. `firebase deploy --only functions`, then hosting (functions before hosting).
+5. `firebase deploy --only functions`, then hosting (functions before hosting). On this Windows workstation the Firebase framework adapter can package a stale `.next` directory without rebuilding, so run `npx.cmd next build --webpack` first, require exit code 0, then `firebase deploy --only hosting`. Symptom of a stale package: new pages or cards (Record a Transfer, the Transfer carry settings card) are missing after deploy. Hard-refresh the browser too.
 6. Configure the settings above.
 
 If an admin ever saved a custom document-analysis or portfolio-chat prompt in Settings, it overrides the built-in text; re-save or clear it to pick up the transfer guidance.
