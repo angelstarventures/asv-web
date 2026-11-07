@@ -24,6 +24,7 @@ import {
 import { type Scenario as ScenarioParam, type Scope } from "@/lib/scenarioTypes";
 import { xirr, type CashFlow } from "@/lib/xirr";
 import { loadAsvReportsData, loadMineReportsData } from "@/lib/reportsData";
+import { loadMemberTransferData } from "@/lib/memberTransfers";
 import { StatTile, formatCurrencyCompact, formatMoic } from "@/components/StatTile";
 import { ScenarioScopeToggle } from "@/components/ScenarioScopeToggle";
 import { PortfolioTabs } from "@/components/PortfolioTabs";
@@ -124,6 +125,9 @@ interface PortfolioData {
   companyRows: CompanyRollupRow[];
   exitRows: ExitRow[];
   writeOffRows: WriteOffRow[];
+  // Member scope only, shown when non-zero: carry charged against this member's sales / paid to them.
+  transferCarryPaid?: number;
+  transferCarryEarned?: number;
 }
 
 // The portfolio-wide, scenario-scoped queries behind health/investment-year/exits are
@@ -418,14 +422,15 @@ export async function getCompanyDetail(
 }
 
 async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): Promise<PortfolioData> {
-  const [{ allocations }, { memberValuations }, context] = await Promise.all([
+  const [{ allocations }, { memberValuations }, context, transfers] = await Promise.all([
     listMemberAllocations(authUid, { scenario }),
     listMemberValuations(authUid, { scenario }),
     loadPortfolioEventContext(scenario),
+    loadMemberTransferData(authUid, scenario),
   ]);
   const { healthByCompany, exitEventRows } = context;
 
-  const totalAllocated = allocations.reduce((sum, a) => sum + a.amount, 0);
+  let totalAllocated = allocations.reduce((sum, a) => sum + a.amount, 0);
 
   const byCompany = new Map<
     string,
@@ -438,6 +443,8 @@ async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): P
       realizedValue: number;
       latestValuationDate?: string;
       latestValuationValue?: number;
+      // Cost basis still held after transfers; stands in for allocated when nothing is valued yet.
+      remainingBasis?: number;
     }
   >();
   // Investment year is THIS member's own earliest allocation in the company — deliberately
@@ -483,8 +490,10 @@ async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): P
     };
     if (v.ledgerEntry.type === LedgerEntryType.EXIT_EVENT) {
       entry.hasExited = true;
-      entry.realizedValue += v.value;
-      cashFlows.push({ date: new Date(v.ledgerEntry.eventDate), amount: v.value });
+      // Net of exit carry charged to this member (the recorded payout itself stays gross).
+      const netPayout = v.value - (transfers.exitCarryByEntry.get(v.ledgerEntry.id) ?? 0);
+      entry.realizedValue += netPayout;
+      cashFlows.push({ date: new Date(v.ledgerEntry.eventDate), amount: netPayout });
     } else if (!entry.latestValuationDate || v.ledgerEntry.eventDate > entry.latestValuationDate) {
       entry.latestValuationDate = v.ledgerEntry.eventDate;
       entry.latestValuationValue = v.value;
@@ -492,11 +501,37 @@ async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): P
     byCompany.set(key, entry);
   }
 
+  // Internal transfers (lib/transferAdjust.ts): buying adds to invested, selling realizes proceeds,
+  // and until the next valuation record the member's recorded value follows the shares.
+  for (const [companyId, fx] of transfers.effects) {
+    const info = transfers.companies.get(companyId);
+    const entry = byCompany.get(companyId) ?? {
+      name: info?.name ?? "Unknown company",
+      sector: info?.sector ?? null,
+      status: info?.status ?? CompanyStatus.ACTIVE,
+      allocated: 0,
+      hasExited: false,
+      realizedValue: 0,
+    };
+    entry.allocated += fx.basisIn;
+    totalAllocated += fx.basisIn;
+    entry.realizedValue += fx.proceeds;
+    entry.remainingBasis = entry.allocated - fx.basisOut;
+    if (fx.valueAfter !== null) entry.latestValuationValue = fx.valueAfter;
+    for (const cf of fx.cashFlows) cashFlows.push({ date: new Date(cf.date), amount: cf.amount });
+    if (fx.firstDate) {
+      const year = Number(fx.firstDate.slice(0, 4));
+      const existingYear = investmentYearByCompany.get(companyId);
+      if (existingYear === undefined || year < existingYear) investmentYearByCompany.set(companyId, year);
+    }
+    byCompany.set(companyId, entry);
+  }
+
   let unrealizedValue = 0;
   let realizedValue = 0;
   const sectorTotals = new Map<string, number>();
   for (const c of byCompany.values()) {
-    const companyUnrealized = c.hasExited ? 0 : (c.latestValuationValue ?? c.allocated);
+    const companyUnrealized = c.hasExited ? 0 : (c.latestValuationValue ?? c.remainingBasis ?? c.allocated);
     unrealizedValue += companyUnrealized;
     realizedValue += c.realizedValue;
 
@@ -564,7 +599,7 @@ async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): P
   // Same plain-object flattening as the asv loader — CompanyRollupTable is a Client Component
   // and can't take Map instances as props.
   const companyRows: CompanyRollupRow[] = [...byCompany.entries()].map(([companyId, c]) => {
-    const companyUnrealized = c.hasExited ? 0 : (c.latestValuationValue ?? c.allocated);
+    const companyUnrealized = c.hasExited ? 0 : (c.latestValuationValue ?? c.remainingBasis ?? c.allocated);
     const moicForCompany = c.allocated > 0 ? (companyUnrealized + c.realizedValue) / c.allocated : 0;
     return {
       companyKey: companyId,
@@ -593,6 +628,8 @@ async function loadMinePortfolioData(authUid: string, scenario: ScenarioType): P
     companyRows,
     exitRows,
     writeOffRows,
+    transferCarryPaid: transfers.carryPaid,
+    transferCarryEarned: transfers.carryEarned,
   };
 }
 
@@ -764,6 +801,17 @@ function OverviewTab({ data, scope, aiChatEnabled }: { data: PortfolioData; scop
         <StatTile label="Active companies" value={String(data.activeCount)} variant="violet" />
         <StatTile label="Exits & write-offs" value={`${data.exitedCount} exits · ${data.writtenOffCount} write-offs`} variant="cream" />
       </div>
+
+      {((data.transferCarryPaid ?? 0) > 0 || (data.transferCarryEarned ?? 0) > 0) && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+          {data.transferCarryPaid ? (
+            <StatTile label="Transfer carry paid" value={formatCurrencyCompact(data.transferCarryPaid)} variant="cream" />
+          ) : null}
+          {data.transferCarryEarned ? (
+            <StatTile label="Transfer carry earned" value={formatCurrencyCompact(data.transferCarryEarned)} variant="green" />
+          ) : null}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <section className="rounded-lg border border-zinc-200 bg-card px-5 py-4">

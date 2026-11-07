@@ -61,6 +61,7 @@ export enum DocumentType {
   COMPANY_UPDATE_DOC = "COMPANY_UPDATE_DOC",
   SPA = "SPA",
   ALLOCATION_SCHEDULE = "ALLOCATION_SCHEDULE",
+  TRANSFER_AGREEMENT = "TRANSFER_AGREEMENT",
 };
 
 export enum ExitType {
@@ -69,6 +70,13 @@ export enum ExitType {
   MERGER = "MERGER",
   SHUTDOWN = "SHUTDOWN",
   DISSOLUTION = "DISSOLUTION",
+};
+
+export enum FeeKind {
+  DD_LEAD_CARRY = "DD_LEAD_CARRY",
+  MANAGEMENT_CARRY = "MANAGEMENT_CARRY",
+  LEGAL_COSTS = "LEGAL_COSTS",
+  OTHER = "OTHER",
 };
 
 export enum FundingRound {
@@ -91,6 +99,7 @@ export enum LedgerEntryType {
   COMPLIANCE_FLAG_CHANGE = "COMPLIANCE_FLAG_CHANGE",
   COMPANY_UPDATE = "COMPANY_UPDATE",
   CUSTOM = "CUSTOM",
+  INTERNAL_TRANSFER = "INTERNAL_TRANSFER",
 };
 
 export enum MemberStatus {
@@ -158,6 +167,11 @@ export enum SecurityType {
   SAFE = "SAFE",
   CONVERTIBLE_NOTE = "CONVERTIBLE_NOTE",
   OTHER = "OTHER",
+};
+
+export enum TransferSide {
+  SELLER = "SELLER",
+  BUYER = "BUYER",
 };
 
 
@@ -270,6 +284,11 @@ export interface EventTypeDefinition_Key {
 export interface ExitEventDetail_Key {
   id: UUIDString;
   __typename?: 'ExitEventDetail_Key';
+}
+
+export interface FeeLine_Key {
+  id: UUIDString;
+  __typename?: 'FeeLine_Key';
 }
 
 export interface GetCompanyByIdData {
@@ -475,6 +494,11 @@ export interface InsertCompanyData {
 export interface InsertCompanyVariables {
   name: string;
   sector?: string | null;
+}
+
+export interface InternalTransferDetail_Key {
+  id: UUIDString;
+  __typename?: 'InternalTransferDetail_Key';
 }
 
 export interface LedgerEntry_Key {
@@ -932,6 +956,29 @@ export interface ListMemberValuationsData {
   })[];
 }
 
+export interface ListMemberValuationsForCompaniesData {
+  memberValuations: ({
+    value: number;
+    member: {
+      id: string;
+      authUid?: string | null;
+    } & Member_Key;
+    ledgerEntry: {
+      id: UUIDString;
+      eventDate: DateString;
+      type: LedgerEntryType;
+      company: {
+        id: UUIDString;
+      } & Company_Key;
+    } & LedgerEntry_Key;
+  })[];
+}
+
+export interface ListMemberValuationsForCompaniesVariables {
+  scenario: Scenario;
+  companyIds: UUIDString[];
+}
+
 export interface ListMemberValuationsVariables {
   scenario: Scenario;
 }
@@ -1257,6 +1304,76 @@ export interface ListTaxDocumentsByMemberVariables {
   memberId: string;
 }
 
+export interface ListTransferFeeLinesForScenarioData {
+  feeLines: ({
+    kind: FeeKind;
+    amount: number;
+    recipient?: {
+      id: string;
+      authUid?: string | null;
+    } & Member_Key;
+    chargedToMember?: {
+      id: string;
+      authUid?: string | null;
+    } & Member_Key;
+    ledgerEntry: {
+      id: UUIDString;
+      eventDate: DateString;
+      type: LedgerEntryType;
+      company: {
+        id: UUIDString;
+        name: string;
+        tradeName?: string | null;
+      } & Company_Key;
+    } & LedgerEntry_Key;
+  })[];
+}
+
+export interface ListTransferFeeLinesForScenarioVariables {
+  scenario: Scenario;
+}
+
+export interface ListTransferPartiesForScenarioData {
+  transferParties: ({
+    side: TransferSide;
+    shares: number;
+    costBasisPerShare: number;
+    amount: number;
+    gain?: number | null;
+    feesCharged?: number | null;
+    realizedGain?: number | null;
+    sharesHeldBefore?: number | null;
+    member: {
+      id: string;
+      authUid?: string | null;
+    } & Member_Key;
+    ledgerEntry: {
+      id: UUIDString;
+      eventDate: DateString;
+      sourceDocument?: string | null;
+      company: {
+        id: UUIDString;
+        name: string;
+        tradeName?: string | null;
+        sector?: string | null;
+        status: CompanyStatus;
+      } & Company_Key;
+      internalTransferDetail_on_ledgerEntry?: {
+        kind: TransferKind;
+        referenceRoundName?: string | null;
+        roundPricePerShare?: number | null;
+        transferPricePerShare?: number | null;
+        docLink?: string | null;
+        notes?: string | null;
+      };
+    } & LedgerEntry_Key;
+  })[];
+}
+
+export interface ListTransferPartiesForScenarioVariables {
+  scenario: Scenario;
+}
+
 export interface ListValuationAssessmentDetailsForScenarioData {
   valuationAssessmentDetails: ({
     ledgerEntry: {
@@ -1387,9 +1504,19 @@ export interface SerperUsageCounter_Key {
   __typename?: 'SerperUsageCounter_Key';
 }
 
+export interface ShareLot_Key {
+  id: UUIDString;
+  __typename?: 'ShareLot_Key';
+}
+
 export interface TaxDocument_Key {
   id: UUIDString;
   __typename?: 'TaxDocument_Key';
+}
+
+export interface TransferParty_Key {
+  id: UUIDString;
+  __typename?: 'TransferParty_Key';
 }
 
 export interface ValuationAssessmentDetail_Key {
@@ -2068,4 +2195,40 @@ export const listMyRealEstateTransfersRef: ListMyRealEstateTransfersRef;
 
 export function listMyRealEstateTransfers(options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
 export function listMyRealEstateTransfers(dc: DataConnect, options?: ExecuteQueryOptions): QueryPromise<ListMyRealEstateTransfersData, undefined>;
+
+interface ListTransferPartiesForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListTransferPartiesForScenarioVariables): QueryRef<ListTransferPartiesForScenarioData, ListTransferPartiesForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListTransferPartiesForScenarioVariables): QueryRef<ListTransferPartiesForScenarioData, ListTransferPartiesForScenarioVariables>;
+  operationName: string;
+}
+export const listTransferPartiesForScenarioRef: ListTransferPartiesForScenarioRef;
+
+export function listTransferPartiesForScenario(vars: ListTransferPartiesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListTransferPartiesForScenarioData, ListTransferPartiesForScenarioVariables>;
+export function listTransferPartiesForScenario(dc: DataConnect, vars: ListTransferPartiesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListTransferPartiesForScenarioData, ListTransferPartiesForScenarioVariables>;
+
+interface ListTransferFeeLinesForScenarioRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListTransferFeeLinesForScenarioVariables): QueryRef<ListTransferFeeLinesForScenarioData, ListTransferFeeLinesForScenarioVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListTransferFeeLinesForScenarioVariables): QueryRef<ListTransferFeeLinesForScenarioData, ListTransferFeeLinesForScenarioVariables>;
+  operationName: string;
+}
+export const listTransferFeeLinesForScenarioRef: ListTransferFeeLinesForScenarioRef;
+
+export function listTransferFeeLinesForScenario(vars: ListTransferFeeLinesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListTransferFeeLinesForScenarioData, ListTransferFeeLinesForScenarioVariables>;
+export function listTransferFeeLinesForScenario(dc: DataConnect, vars: ListTransferFeeLinesForScenarioVariables, options?: ExecuteQueryOptions): QueryPromise<ListTransferFeeLinesForScenarioData, ListTransferFeeLinesForScenarioVariables>;
+
+interface ListMemberValuationsForCompaniesRef {
+  /* Allow users to create refs without passing in DataConnect */
+  (vars: ListMemberValuationsForCompaniesVariables): QueryRef<ListMemberValuationsForCompaniesData, ListMemberValuationsForCompaniesVariables>;
+  /* Allow users to pass in custom DataConnect instances */
+  (dc: DataConnect, vars: ListMemberValuationsForCompaniesVariables): QueryRef<ListMemberValuationsForCompaniesData, ListMemberValuationsForCompaniesVariables>;
+  operationName: string;
+}
+export const listMemberValuationsForCompaniesRef: ListMemberValuationsForCompaniesRef;
+
+export function listMemberValuationsForCompanies(vars: ListMemberValuationsForCompaniesVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsForCompaniesData, ListMemberValuationsForCompaniesVariables>;
+export function listMemberValuationsForCompanies(dc: DataConnect, vars: ListMemberValuationsForCompaniesVariables, options?: ExecuteQueryOptions): QueryPromise<ListMemberValuationsForCompaniesData, ListMemberValuationsForCompaniesVariables>;
 

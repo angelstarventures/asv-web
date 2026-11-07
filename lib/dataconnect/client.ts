@@ -44,6 +44,9 @@ import {
   listDealFundingRoundsByDealRef,
   listAllTaxDocumentsRef,
   listTaxDocumentsByMemberRef,
+  listTransferPartiesForScenarioRef,
+  listTransferFeeLinesForScenarioRef,
+  listMemberValuationsForCompaniesRef,
   getTaxDocumentByIdRef,
   type ListCompaniesData,
   type GetCompanyByIdData,
@@ -108,6 +111,12 @@ import {
   type ListDealFundingRoundsByDealVariables,
   type ListAllTaxDocumentsData,
   type ListTaxDocumentsByMemberData,
+  type ListTransferPartiesForScenarioData,
+  type ListTransferPartiesForScenarioVariables,
+  type ListTransferFeeLinesForScenarioData,
+  type ListTransferFeeLinesForScenarioVariables,
+  type ListMemberValuationsForCompaniesData,
+  type ListMemberValuationsForCompaniesVariables,
   type ListTaxDocumentsByMemberVariables,
   type GetTaxDocumentByIdData,
   type GetTaxDocumentByIdVariables,
@@ -520,4 +529,36 @@ export async function listMyRealEstatePositions(authUid: string): Promise<ListMy
 
 export async function listMyRealEstateTransfers(authUid: string) {
   return (await dc().executeQuery<import("@/lib/dataconnect/generated").ListMyRealEstateTransfersData, undefined>("ListMyRealEstateTransfers", undefined, impersonate(authUid))).data;
+}
+
+// Internal-transfer reads for member views. Admin trust (no impersonation); the callers in
+// lib/memberTransfers.ts keep only the signed-in member's own legs.
+export async function listTransferPartiesForScenario(
+  vars: ListTransferPartiesForScenarioVariables
+): Promise<ListTransferPartiesForScenarioData> {
+  const res = await dc().executeQuery<ListTransferPartiesForScenarioData, ListTransferPartiesForScenarioVariables>(
+    listTransferPartiesForScenarioRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listTransferFeeLinesForScenario(
+  vars: ListTransferFeeLinesForScenarioVariables
+): Promise<ListTransferFeeLinesForScenarioData> {
+  const res = await dc().executeQuery<ListTransferFeeLinesForScenarioData, ListTransferFeeLinesForScenarioVariables>(
+    listTransferFeeLinesForScenarioRef.operationName,
+    vars
+  );
+  return res.data;
+}
+
+export async function listMemberValuationsForCompanies(
+  vars: ListMemberValuationsForCompaniesVariables
+): Promise<ListMemberValuationsForCompaniesData> {
+  const res = await dc().executeQuery<ListMemberValuationsForCompaniesData, ListMemberValuationsForCompaniesVariables>(
+    listMemberValuationsForCompaniesRef.operationName,
+    vars
+  );
+  return res.data;
 }

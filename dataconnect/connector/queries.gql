@@ -748,3 +748,49 @@ query ListMyRealEstateTransfers @auth(level: USER) {
     sellerCostBasis carryAmount ledgerEntry { amountUsd investment { id } }
   }
 }
+
+# --- Internal transfers (member views). Server-only: the web server runs these with admin trust
+# (no impersonation) and then keeps only the signed-in member's own legs. The admin-role auth
+# expression stops a signed-in member from calling them directly and reading other members' transfers.
+
+query ListTransferPartiesForScenario($scenario: Scenario!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  transferParties(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 10000, orderBy: { ledgerEntry: { eventDate: ASC } }) {
+    side
+    shares
+    costBasisPerShare
+    amount
+    gain
+    feesCharged
+    realizedGain
+    sharesHeldBefore
+    member { id authUid }
+    ledgerEntry {
+      id
+      eventDate
+      sourceDocument
+      company { id name tradeName sector status }
+      internalTransferDetail_on_ledgerEntry { kind referenceRoundName roundPricePerShare transferPricePerShare docLink notes }
+    }
+  }
+}
+
+# Fee lines exist only on transfers and on full exits (exit carry), so no type filter is needed.
+query ListTransferFeeLinesForScenario($scenario: Scenario!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  feeLines(where: { ledgerEntry: { scenario: { eq: $scenario } } }, limit: 10000) {
+    kind
+    amount
+    recipient { id authUid }
+    chargedToMember { id authUid }
+    ledgerEntry { id eventDate type company { id name tradeName } }
+  }
+}
+
+# Recorded member values for the given companies (all members), so a transfer after the latest
+# valuation can move a seller's recorded value to the buyers. Same server-only posture as above.
+query ListMemberValuationsForCompanies($scenario: Scenario!, $companyIds: [UUID!]!) @auth(expr: "auth.token.role in ['admin', 'site_admin', 'dev_site_admin']") {
+  memberValuations(where: { ledgerEntry: { scenario: { eq: $scenario }, company: { id: { in: $companyIds } } } }, limit: 10000) {
+    value
+    member { id authUid }
+    ledgerEntry { id eventDate type company { id } }
+  }
+}

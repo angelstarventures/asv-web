@@ -17,6 +17,7 @@ import { LedgerEntryType, Scenario as ScenarioEnum } from "@/lib/dataconnect/gen
 import { SCENARIOS, type Scenario } from "@/lib/scenarioTypes";
 import { ENUM_TO_LEDGER_TYPE } from "@/lib/legacyEnumMap";
 import { buildLegacyRecordFragments } from "@/lib/legacyLedgerRecords";
+import { loadMemberTransferData } from "@/lib/memberTransfers";
 
 // Full per-scenario ledger export, in the same record shape as the admin's mass export
 // (functions/src/functions/ledger-massExport.ts), but member-facing: filtered to companies
@@ -49,6 +50,7 @@ export async function GET(request: Request) {
     { exitEventDetails },
     { valuationAssessmentDetails },
     { complianceFlagDetails },
+    transfers,
   ] = await Promise.all([
     listMemberAllocations(member.authUid, { scenario: scenarioEnum }),
     listMemberValuations(member.authUid, { scenario: scenarioEnum }),
@@ -60,11 +62,16 @@ export async function GET(request: Request) {
     listExitEventDetailsForScenario({ scenario: scenarioEnum }),
     listValuationAssessmentDetailsForScenario({ scenario: scenarioEnum }),
     listComplianceFlagDetailsForScenario({ scenario: scenarioEnum }),
+    loadMemberTransferData(member.authUid, scenarioEnum),
   ]);
 
   // "Invested in" = has an allocation somewhere — never a company I've only seen a valuation
   // or update for without ever putting money in.
-  const heldCompanyIds = new Set(allocations.map((a) => a.ledgerEntry.company.id));
+  // A member who only ever bought into a company through a transfer holds it too.
+  const heldCompanyIds = new Set([
+    ...allocations.map((a) => a.ledgerEntry.company.id),
+    ...transfers.legs.map((l) => l.companyId),
+  ]);
 
   const myAllocationByEntry = new Map(allocations.map((a) => [a.ledgerEntry.id, a.amount]));
   const myValuationByEntry = new Map(memberValuations.map((v) => [v.ledgerEntry.id, v.value]));
@@ -113,6 +120,34 @@ export async function GET(request: Request) {
 
       return record;
     });
+
+  // This member's OWN legs of internal transfers, in the admin export's record shape. Counterparties,
+  // their amounts and fees charged to anyone else are never included.
+  const companyNameById = new Map(ledgerEntries.map((e) => [e.company.id, e.company.name]));
+  for (const t of transfers.legs) {
+    const replacement = t.kind === "REPLACEMENT";
+    const seller = t.side === "SELLER";
+    records.push({
+      date: t.date,
+      company: transfers.companies.get(t.companyId)?.name ?? companyNameById.get(t.companyId) ?? t.companyId,
+      scenario,
+      type: "Internal_Transfer",
+      transfer_kind: replacement ? "Replacement" : "Sale",
+      ...(t.referenceRoundName ? { reference_round_name: t.referenceRoundName } : {}),
+      ...(!replacement && t.roundPricePerShare !== null ? { round_price_per_share: t.roundPricePerShare } : {}),
+      ...(!replacement && t.transferPricePerShare !== null ? { transfer_price_per_share: t.transferPricePerShare } : {}),
+      ...(t.docLink ? { doc_link: t.docLink } : {}),
+      ...(seller
+        ? {
+            sellers: { [member.memberId]: t.shares },
+            ...(t.sharesHeldBefore !== null
+              ? { holdings_before: { [member.memberId]: { shares: t.sharesHeldBefore, cost_basis: Math.round(t.sharesHeldBefore * t.costBasisPerShare * 10000) / 10000 } } }
+              : {}),
+          }
+        : { buyers: { [member.memberId]: replacement ? t.shares : t.amount } }),
+    });
+  }
+  records.sort((a, b) => String(b.date).localeCompare(String(a.date))); // same newest-first order as the ledger query
 
   return new NextResponse(JSON.stringify({ scenario, records }, null, 2), {
     status: 200,
