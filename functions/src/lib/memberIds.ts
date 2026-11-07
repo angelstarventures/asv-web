@@ -5,7 +5,7 @@ export async function fetchAllMemberIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.id));
 }
 
-const MEMBER_DICT_FIELDS = ["allocations", "member_valuations", "member_payouts", "sellers", "buyers"] as const;
+const MEMBER_DICT_FIELDS = ["allocations", "member_valuations", "member_payouts", "sellers", "buyers", "holdings_before"] as const;
 
 export interface UnknownMemberReference {
   recordIndex: number;

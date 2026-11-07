@@ -59,6 +59,20 @@ enum TransferSide {
   BUYER
 }
 
+# SALE: priced secondary with carry/legal costs. REPLACEMENT: plain change of owner, no money.
+enum TransferKind {
+  SALE
+  REPLACEMENT
+}
+
+# Why a share lot exists. OPENING = holding declared on a transfer (holdings_before); there is no
+# round-time lot backfill, so a seller's first transfer establishes their recorded holding.
+enum LotKind {
+  OPENING
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
 enum FeeKind {
   DD_LEAD_CARRY
   MANAGEMENT_CARRY
@@ -389,9 +403,10 @@ type ExitEventDetail @table {
 type InternalTransferDetail @table {
   id: UUID!                 @default(expr: "uuidV4()")
   ledgerEntry: LedgerEntry! @unique
+  kind: TransferKind! @default(value: SALE)
   referenceRoundName: String            # the round whose price the carry is measured against (e.g. the 2026 non-participating round)
-  roundPricePerShare: Float!            # carry base price (the buyer-facing round price)
-  transferPricePerShare: Float!         # price sellers were actually paid
+  roundPricePerShare: Float             # carry base price (the buyer-facing round price); null for REPLACEMENT
+  transferPricePerShare: Float          # price sellers were actually paid; null for REPLACEMENT
   totalShares: Float!
   grossGain: Float!                     # SUM of positive per-seller gains at roundPricePerShare
   docLink: String
@@ -410,6 +425,7 @@ type TransferParty @table {
   gain: Float               # sellers only: carry base = max(0, shares x (roundPrice - costBasisPerShare))
   feesCharged: Float        # sellers only: SUM of fee lines charged against this seller's gain
   realizedGain: Float       # sellers only: amount - shares x costBasisPerShare (what the seller actually realized)
+  sharesHeldBefore: Float   # sellers only: the seller's whole holding going into this transfer (declared or from lots)
 }
 
 # Carry/legal lines for a transfer or a full exit (both are LedgerEntry rows).
@@ -424,17 +440,18 @@ type FeeLine @table {
   note: String
 }
 
-# Append-only per-member share holdings: positive rows acquire, negative rows dispose.
-# Balance = SUM(shares) per (member, company). SAFE holders have no share count until conversion.
+# Append-only per-member share holdings, written only by transfers: OPENING (a declared holding,
+# may be a signed correction), TRANSFER_IN (positive) and TRANSFER_OUT (negative).
+# Balance = SUM(shares) per (member, company); a member with no rows has no recorded holding.
 type ShareLot @table {
   id: UUID!                 @default(expr: "uuidV4()")
   member: Member!           @index
   company: Company!         @index
-  shares: Float             # signed; null only while pendingConversion
+  kind: LotKind!
+  shares: Float!            # signed
   costBasis: Float!         # signed total dollars (negative on disposal)
   acquiredDate: Date!
-  sourceEntry: LedgerEntry  # the round / transfer that created this lot
-  pendingConversion: Boolean! @default(value: false)
+  sourceEntry: LedgerEntry  # the transfer that created this lot
   createdAt: Timestamp!     @default(expr: "request.time")
 }
 

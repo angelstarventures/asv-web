@@ -25,9 +25,9 @@ const DETAIL_TABLES = [
 // applyLedgerRecord, since the ledger is append-only and "editing" a row in place has no
 // existing precedent to build on). Returns the company id so the caller can recomputeRollups.
 //
-// Share lots created by this entry (round acquisitions, transfer buys/sells) are removed with
-// it. Unless `deferHoldingsCheck` is set, the delete is rejected if it would leave any member
-// with negative holdings (e.g. deleting a round whose shares a later transfer already sold); the
+// Share lots created by this entry (a transfer's opening/in/out lots) are removed with it.
+// Unless `deferHoldingsCheck` is set, the delete is rejected if it would leave any member
+// with negative holdings (e.g. deleting a transfer whose opening lot a later transfer relied on); the
 // update flow sets it and runs assertNoNegativeHoldings itself after re-applying the record.
 export async function deleteLedgerEntry(
   client: PoolClient,

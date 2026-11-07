@@ -213,9 +213,10 @@ interface TransferAuditRow {
   scenario: string;
   sold: number;
   bought: number;
-  roundPrice: number;
-  transferPrice: number;
+  roundPrice: number | null;
+  transferPrice: number | null;
   fees: number;
+  kind: string;
 }
 
 // Internal transfers: sellers' shares must equal buyers' shares, the fee lines must roughly equal
@@ -231,19 +232,18 @@ async function auditInternalTransfers(): Promise<AuditFinding[]> {
       `SELECT le.id AS "ledgerEntryId", c.name AS "companyName", le."event_date"::text AS "eventDate", le.scenario::text AS scenario,
               COALESCE(SUM(tp.shares) FILTER (WHERE tp.side = 'SELLER'), 0) AS sold,
               COALESCE(SUM(tp.shares) FILTER (WHERE tp.side = 'BUYER'), 0) AS bought,
-              itd."round_price_per_share" AS "roundPrice", itd."transfer_price_per_share" AS "transferPrice",
+              itd."round_price_per_share" AS "roundPrice", itd."transfer_price_per_share" AS "transferPrice", itd.kind::text AS kind,
               (SELECT COALESCE(SUM(f.amount), 0) FROM "fee_line" f WHERE f."ledger_entry_id" = le.id) AS fees
        FROM "ledger_entry" le
        JOIN "company" c ON c.id = le."company_id"
        JOIN "internal_transfer_detail" itd ON itd."ledger_entry_id" = le.id
        LEFT JOIN "transfer_party" tp ON tp."ledger_entry_id" = le.id
        WHERE le.type = 'INTERNAL_TRANSFER'
-       GROUP BY le.id, c.name, itd."round_price_per_share", itd."transfer_price_per_share"`
+       GROUP BY le.id, c.name, itd."round_price_per_share", itd."transfer_price_per_share", itd.kind`
     );
     negative = await query(
       `SELECT c.name AS "companyName", sl."member_id" AS "memberId", SUM(sl.shares) AS shares
        FROM "share_lot" sl JOIN "company" c ON c.id = sl."company_id"
-       WHERE NOT sl."pending_conversion"
        GROUP BY c.name, sl."member_id" HAVING SUM(sl.shares) < -0.000001`
     );
   } catch (err) {
@@ -260,6 +260,18 @@ async function auditInternalTransfers(): Promise<AuditFinding[]> {
         message: `${label}: sellers sold ${Number(r.sold)} shares but buyers bought ${Number(r.bought)}.`,
         ledgerEntryId: r.ledgerEntryId,
       });
+    }
+    // A plain replacement has no price, so no spread and no fee lines to reconcile.
+    if (r.kind === "REPLACEMENT") {
+      if (Number(r.fees) !== 0) {
+        findings.push({
+          category: "transfer",
+          severity: "error",
+          message: `${label}: a replacement should carry no fee lines but has ${Number(r.fees).toLocaleString()}.`,
+          ledgerEntryId: r.ledgerEntryId,
+        });
+      }
+      continue;
     }
     const spread = (Number(r.roundPrice) - Number(r.transferPrice)) * Number(r.sold);
     if (Math.abs(spread - Number(r.fees)) > 1) {

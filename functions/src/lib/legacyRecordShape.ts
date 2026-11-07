@@ -170,16 +170,18 @@ export async function fetchDetailForEntry(
     }
     case "INTERNAL_TRANSFER": {
       const rows = await query<Record<string, unknown>>(
-        `SELECT "reference_round_name", "round_price_per_share", "transfer_price_per_share", notes
+        `SELECT kind::text AS kind, "reference_round_name", "round_price_per_share", "transfer_price_per_share", notes
          FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
       );
       // Member-scoped reads (AI chat "mine" scope) see only the member's own leg — never the
       // counterparties, their amounts, or fees charged to anyone else.
-      const parties = await query<{ memberId: string; side: string; shares: number; amount: number }>(
+      const parties = await query<{
+        memberId: string; side: string; shares: number; amount: number; costBasisPerShare: number; heldBefore: number | null;
+      }>(
         memberScopeId
-          ? `SELECT "member_id" AS "memberId", side::text AS side, shares, amount FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2`
-          : `SELECT "member_id" AS "memberId", side::text AS side, shares, amount FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
+          ? `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare", "shares_held_before" AS "heldBefore" FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2`
+          : `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare", "shares_held_before" AS "heldBefore" FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
         memberScopeId ? [ledgerEntryId, memberScopeId] : [ledgerEntryId]
       );
       const legal = await query<{ total: number }>(
@@ -190,11 +192,22 @@ export async function fetchDetailForEntry(
       );
       // The record stores inputs only (sellers' shares, buyers' dollars); cost basis, gains and
       // fee lines are re-derived on write. legal_costs is kept because it is a manual input.
+      const { kind, ...detail } = (rows[0] ?? {}) as Record<string, unknown>;
+      const replacement = kind === "REPLACEMENT";
+      const sellers = parties.filter((p) => p.side === "SELLER");
+      // The declared holding is exported so a re-import into an empty ledger reproduces the same lots.
+      const holdingsBefore = Object.fromEntries(
+        sellers
+          .filter((p) => p.heldBefore != null)
+          .map((p) => [p.memberId, { shares: p.heldBefore, cost_basis: Math.round(Number(p.heldBefore) * p.costBasisPerShare * 10000) / 10000 }])
+      );
       return {
-        ...omitNullish(rows[0] ?? {}),
-        sellers: Object.fromEntries(parties.filter((p) => p.side === "SELLER").map((p) => [p.memberId, p.shares])),
-        buyers: Object.fromEntries(parties.filter((p) => p.side === "BUYER").map((p) => [p.memberId, p.amount])),
-        legal_costs: Number(legal[0]?.total ?? 0),
+        ...omitNullish(detail),
+        transfer_kind: replacement ? "Replacement" : "Sale",
+        sellers: Object.fromEntries(sellers.map((p) => [p.memberId, p.shares])),
+        buyers: Object.fromEntries(parties.filter((p) => p.side === "BUYER").map((p) => [p.memberId, replacement ? p.shares : p.amount])),
+        ...(Object.keys(holdingsBefore).length ? { holdings_before: holdingsBefore } : {}),
+        ...(replacement ? {} : { legal_costs: Number(legal[0]?.total ?? 0) }),
       };
     }
     case "COMPLIANCE_FLAG_CHANGE": {

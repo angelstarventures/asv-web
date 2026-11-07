@@ -117,17 +117,21 @@
     {
       "if": { "properties": { "type": { "const": "Internal_Transfer" } } },
       "then": {
-        "required": ["round_price_per_share", "transfer_price_per_share", "sellers", "buyers"],
+        "required": ["sellers", "buyers"],
         "properties": {
+          "transfer_kind": { "type": "string", "enum": ["Sale", "Replacement"], "description": "Sale (default): buyers pay the round price, sellers receive the lower transfer price, and the spread funds carry and legal costs. Replacement: a plain change of owner for all or part of a holding with no price, carry or costs — buyers inherit the sellers' cost basis; buyers then maps member IDs to SHARES received." },
+          "holdings_before": { "type": "object", "additionalProperties": { "type": "object", "required": ["shares"], "properties": { "shares": { "type": "number", "exclusiveMinimum": 0 }, "cost_basis": { "type": "number", "minimum": 0 } } }, "description": "Optional. Each seller's WHOLE holding in the company before this transfer: shares and (optionally) total cost basis in dollars, which defaults to the member's total invested dollars in the company. Needed the first time a member appears as a seller; overrides any holding already recorded." },
           "reference_round_name": { "type": "string", "description": "The round whose price the carry is measured against." },
           "round_price_per_share": { "type": "number", "exclusiveMinimum": 0, "description": "The round price buyers pay and the carry base is measured at." },
           "transfer_price_per_share": { "type": "number", "minimum": 0, "description": "The (lower) price sellers are actually paid. The spread to the round price funds carry and legal costs." },
           "sellers": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }, "description": "Dictionary mapping 5-digit Member IDs to the number of shares they sold. Cost basis, gains and carry are computed by the system, never supplied." },
-          "buyers": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }, "description": "Dictionary mapping 5-digit Member IDs to the dollars they paid, at the round price." },
+          "buyers": { "type": "object", "minProperties": 1, "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }, "description": "Dictionary mapping 5-digit Member IDs to the dollars they paid at the round price (Sale) or the shares they received (Replacement)." },
           "legal_costs": { "type": "number", "minimum": 0, "description": "Total legal costs of the transfer in dollars. Optional — when omitted the system derives it as the spread minus carry." },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the transfer was reported via plain text/email rather than an actual document." },
           "notes": { "type": "string" }
-        }
+        },
+        "if": { "required": ["transfer_kind"], "properties": { "transfer_kind": { "const": "Replacement" } } },
+        "else": { "required": ["round_price_per_share", "transfer_price_per_share"] }
       }
     },
     {

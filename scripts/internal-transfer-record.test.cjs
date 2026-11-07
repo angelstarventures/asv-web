@@ -73,4 +73,50 @@ assert.equal(second.sellers[0].gain, round2(4.5 * (2300 - basis)));
 assert(computeTransferFromRecord(record, { ...ctx, ddLeadMemberId: null }).errors.some((e) => /no DD lead/.test(e)));
 assert(computeTransferFromRecord(record, { ...ctx, managementMemberId: null }).errors.some((e) => /management-carry/.test(e)));
 
+// --- Declared holdings (no round-time lot backfill) ---------------------------------------------
+// A first-time seller has no recorded lots: holdings_before declares the whole holding, and the
+// cost basis defaults to the member's invested dollars in the company.
+const emptyCtx = { holdings: {}, invested: { '00010': 5000, '00011': 5000 }, ddLeadMemberId: '00002', managementMemberId: '00001', ddLeadPercent: 3, managementPercent: 5 };
+const declared = { ...record, holdings_before: { '00010': { shares: 9 }, '00011': { shares: 20, cost_basis: 5000 } } };
+r = computeTransferFromRecord(declared, emptyCtx);
+assert.deepEqual(r.errors, [], r.errors.join('; '));
+assert.equal(r.openingAdjustments.length, 2);
+assert.equal(r.openingAdjustments.find((o) => o.memberId === '00010').shares, 9);
+assert.equal(r.openingAdjustments.find((o) => o.memberId === '00010').costBasis, 5000); // defaulted from invested
+assert.equal(r.sellers.find((x) => x.memberId === '00010').sharesHeldBefore, 9);
+assert.equal(r.sellers.find((x) => x.memberId === '00010').costBasisPerShare, 5000 / 9);
+// No declaration and no lots is still an oversell error; a declaration with no basis source is an error.
+assert(computeTransferFromRecord(record, emptyCtx).errors.some((e) => /holds only 0/.test(e)));
+assert(computeTransferFromRecord({ ...record, holdings_before: { '00010': { shares: 9 } } }, { ...emptyCtx, invested: {} }).errors.some((e) => /no cost basis/.test(e)));
+// A declaration that matches the recorded lots writes no adjustment; one that differs replaces them with a warning.
+const sameLots = { ...ctx, invested: {} };
+r = computeTransferFromRecord({ ...record, holdings_before: { '00010': { shares: 9, cost_basis: 9 * basis }, '00011': { shares: 20, cost_basis: 20 * basis } } }, sameLots);
+assert.equal(r.openingAdjustments.length, 0);
+r = computeTransferFromRecord({ ...record, holdings_before: { '00010': { shares: 10, cost_basis: 10 * basis } } }, sameLots);
+assert.equal(r.openingAdjustments[0].shares, 1);
+assert(r.warnings.some((w) => /replaces the 9 shares/.test(w)));
+
+// --- Replacement: plain owner change, no price/carry/costs, buyer inherits basis ---------------
+const { sellers: _s, buyers: _b, round_price_per_share: _r, transfer_price_per_share: _t, legal_costs: _lc, ...rest } = record; void [_s, _b, _r, _t, _lc];
+const repl = { ...rest, transfer_kind: 'Replacement' };
+assert(validate({ ...repl, sellers: { '00010': 4 }, buyers: { '00030': 4 } }), JSON.stringify(validate.errors)); // prices not required
+assert(!validate({ ...record, round_price_per_share: undefined })); // a sale still needs them
+const holds = { holdings: { '00010': { shares: 9, costBasis: 5000 } }, ddLeadMemberId: null, managementMemberId: null, ddLeadPercent: 3, managementPercent: 5 };
+r = computeTransferFromRecord({ ...repl, sellers: { '00010': 9 }, buyers: { '00030': 9 } }, holds); // whole position, no DD lead/mgmt needed
+assert.deepEqual(r.errors, [], r.errors.join('; '));
+assert.equal(r.kind, 'REPLACEMENT');
+assert.equal(r.feeLines.length, 0); assert.equal(r.totalFees, 0); assert.equal(r.buyers[0].amount, 0);
+assert(Math.abs(r.buyers[0].costBasisPerShare - 5000 / 9) < 1e-9);
+// Partial replacement moves proportional basis; two sellers blend into one inherited basis.
+r = computeTransferFromRecord({ ...repl, sellers: { '00010': 3 }, buyers: { '00030': 1, '00031': 2 } }, holds);
+assert.deepEqual(r.errors, []);
+assert(Math.abs(r.buyers[0].costBasisPerShare - 5000 / 9) < 1e-9 && r.buyers[0].shares === 1);
+assert(computeTransferFromRecord({ ...repl, sellers: { '00010': 3 }, buyers: { '00030': 2 } }, holds).errors.some((e) => /must equal/.test(e)));
+assert(computeTransferFromRecord({ ...repl, sellers: { '00010': 12 }, buyers: { '00030': 12 } }, holds).errors.some((e) => /holds only 9/.test(e)));
+assert(computeTransferFromRecord({ ...repl, sellers: { '00010': 3 }, buyers: { '00010': 3 } }, holds).errors.some((e) => /both buyer and seller/.test(e)));
+// A replacement can declare holdings too (first-ever transfer of a position).
+r = computeTransferFromRecord({ ...repl, sellers: { '00010': 9 }, buyers: { '00030': 9 }, holdings_before: { '00010': { shares: 9 } } }, { ...emptyCtx, ddLeadMemberId: null, managementMemberId: null });
+assert.deepEqual(r.errors, []);
+assert.equal(r.openingAdjustments[0].shares, 9);
+
 console.log('internal-transfer-record tests passed');

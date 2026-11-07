@@ -286,9 +286,10 @@ export async function insertCompanyUpdateDetail(
 }
 
 export interface InternalTransferDetailInput {
+  kind: "SALE" | "REPLACEMENT";
   referenceRoundName?: string;
-  roundPricePerShare: number;
-  transferPricePerShare: number;
+  roundPricePerShare?: number; // omitted for REPLACEMENT
+  transferPricePerShare?: number; // omitted for REPLACEMENT
   totalShares: number;
   grossGain: number;
   docLink?: string;
@@ -302,13 +303,14 @@ export async function insertInternalTransferDetail(
 ): Promise<void> {
   await client.query(
     `INSERT INTO "internal_transfer_detail"
-       ("ledger_entry_id", "reference_round_name", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+       ("ledger_entry_id", kind, "reference_round_name", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       ledgerEntryId,
+      d.kind,
       d.referenceRoundName ?? null,
-      d.roundPricePerShare,
-      d.transferPricePerShare,
+      d.roundPricePerShare ?? null,
+      d.transferPricePerShare ?? null,
       d.totalShares,
       d.grossGain,
       d.docLink ?? null,
@@ -326,14 +328,15 @@ export interface TransferPartyInput {
   gain?: number;
   feesCharged?: number;
   realizedGain?: number;
+  sharesHeldBefore?: number;
 }
 
 export async function insertTransferParty(client: PoolClient, ledgerEntryId: string, p: TransferPartyInput): Promise<void> {
   await client.query(
     `INSERT INTO "transfer_party"
-       ("ledger_entry_id", "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain")
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [ledgerEntryId, p.memberId, p.side, p.shares, p.costBasisPerShare, p.amount, p.gain ?? null, p.feesCharged ?? null, p.realizedGain ?? null]
+       ("ledger_entry_id", "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain", "shares_held_before")
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [ledgerEntryId, p.memberId, p.side, p.shares, p.costBasisPerShare, p.amount, p.gain ?? null, p.feesCharged ?? null, p.realizedGain ?? null, p.sharesHeldBefore ?? null]
   );
 }
 
@@ -359,16 +362,16 @@ export interface ShareLotInput {
   memberId: string;
   sourceEntryId: string;
   acquiredDate: string;
-  shares: number | null; // signed; null only with pendingConversion
+  kind: "OPENING" | "TRANSFER_IN" | "TRANSFER_OUT";
+  shares: number; // signed
   costBasis: number; // signed total dollars
-  pendingConversion?: boolean;
 }
 
 export async function insertShareLot(client: PoolClient, l: ShareLotInput): Promise<void> {
   await client.query(
-    `INSERT INTO "share_lot" ("company_id", "member_id", "source_entry_id", "acquired_date", shares, "cost_basis", "pending_conversion", "created_at")
+    `INSERT INTO "share_lot" ("company_id", "member_id", "source_entry_id", "acquired_date", kind, shares, "cost_basis", "created_at")
      VALUES ($1, $2, $3, $4, $5, $6, $7, now())`,
-    [l.companyId, l.memberId, l.sourceEntryId, l.acquiredDate, l.shares, l.costBasis, l.pendingConversion ?? false]
+    [l.companyId, l.memberId, l.sourceEntryId, l.acquiredDate, l.kind, l.shares, l.costBasis]
   );
 }
 

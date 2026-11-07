@@ -16,12 +16,16 @@ import { SCENARIO_TO_ENUM, type LegacyScenario } from "../lib/enumMap";
 export interface RecordInternalTransferInput {
   company: string;
   date: string; // YYYY-MM-DD
+  transferKind?: "Sale" | "Replacement"; // default Sale
   referenceRoundName?: string;
-  roundPricePerShare: number;
-  transferPricePerShare: number;
-  sellers: Record<string, number>; // memberId -> shares sold
-  buyers: Record<string, number>; // memberId -> dollars paid
-  legalCosts?: number; // omit to derive as spread - carry
+  roundPricePerShare?: number; // Sale only
+  transferPricePerShare?: number; // Sale only
+  sellers: Record<string, number>; // memberId -> shares moved out
+  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
+  // Each seller's whole holding BEFORE this transfer. Needed the first time a member sells in a
+  // company (there is no round-time backfill); cost_basis defaults to their invested dollars.
+  holdingsBefore?: Record<string, { shares: number; cost_basis?: number }>;
+  legalCosts?: number; // Sale only; omit to derive as spread - carry
   docLink?: string;
   notes?: string;
   preview?: boolean;
@@ -47,10 +51,12 @@ export const ledgerRecordInternalTransfer = onCall<RecordInternalTransferInput, 
       type: "Internal_Transfer",
       company: d.company.trim(),
       date: d.date,
-      round_price_per_share: d.roundPricePerShare,
-      transfer_price_per_share: d.transferPricePerShare,
+      transfer_kind: d.transferKind ?? "Sale",
+      ...(d.roundPricePerShare !== undefined ? { round_price_per_share: d.roundPricePerShare } : {}),
+      ...(d.transferPricePerShare !== undefined ? { transfer_price_per_share: d.transferPricePerShare } : {}),
       sellers: d.sellers,
       buyers: d.buyers,
+      ...(d.holdingsBefore && Object.keys(d.holdingsBefore).length ? { holdings_before: d.holdingsBefore } : {}),
       ...(d.referenceRoundName ? { reference_round_name: d.referenceRoundName } : {}),
       ...(d.legalCosts !== undefined ? { legal_costs: d.legalCosts } : {}),
       ...(d.docLink ? { doc_link: d.docLink } : {}),
@@ -67,8 +73,9 @@ export const ledgerRecordInternalTransfer = onCall<RecordInternalTransferInput, 
     if (preview.errors.length > 0) {
       throw new HttpsError("failed-precondition", preview.errors.join("; "));
     }
-    // errors is empty, so this is a full TransferResult; pin the derived legal total into the record.
-    const record = { ...base, legal_costs: (preview as TransferResult).legalCosts };
+    // errors is empty, so this is a full TransferResult; for a sale, pin the derived legal total into the record.
+    const result = preview as TransferResult;
+    const record = result.kind === "SALE" ? { ...base, legal_costs: result.legalCosts } : base;
 
     await withTransaction(async (client) => {
       for (const scenario of SCENARIOS) {
