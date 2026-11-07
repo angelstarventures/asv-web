@@ -22,18 +22,31 @@ function assertAdditive(statements) {
   const bad = statements.find(
     (s) =>
       /^(DROP|DELETE|TRUNCATE|UPDATE)\b/i.test(s) ||
-      !(NEW_TABLES.some((t) => s.includes(t)) || /transfer_side|fee_kind|ADD VALUE 'INTERNAL_TRANSFER'/.test(s))
+      !(NEW_TABLES.some((t) => s.includes(t)) || /transfer_side|fee_kind|transfer_kind|lot_kind|ADD VALUE 'INTERNAL_TRANSFER'/.test(s))
   );
   if (bad) throw new Error('Refusing a statement outside the additive internal-transfer migration: ' + bad.slice(0, 80));
 }
+
+const PROD_DATABASE = 'asvtrackerdb';
+const flag = (name) => {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
 
 async function main() {
   const statements = loadStatements();
   assertAdditive(statements);
   if (!process.argv.includes('--apply')) {
     console.log(statements.join(';\n') + ';');
-    console.log('Dry run only. Pass --apply after reviewing and taking a verified Cloud SQL backup.');
+    console.log('Dry run only. Pass --apply --instance <project:region:instance> --database <db> after reviewing and taking a verified Cloud SQL backup.');
     return;
+  }
+  // No defaults: the target must be named explicitly, and production needs a second opt-in.
+  const instance = flag('--instance');
+  const database = flag('--database');
+  if (!instance || !database) throw new Error('--apply requires --instance <project:region:instance> and --database <db>.');
+  if (database === PROD_DATABASE && !process.argv.includes('--production')) {
+    throw new Error('Database "' + PROD_DATABASE + '" is production. Pass --production to confirm, or target a dev database.');
   }
   const { Connector, IpAddressTypes, AuthTypes } = require('@google-cloud/cloud-sql-connector');
   const { Client } = require('pg');
@@ -45,9 +58,12 @@ async function main() {
   const connector = new Connector({ auth: new FBToolsAuthClient() });
   let client;
   try {
-    const opts = await connector.getOptions({ instanceConnectionName: 'angelstar-investments:us-east1:asv-tracker-sql', ipType: IpAddressTypes.PUBLIC, authType: AuthTypes.IAM });
-    client = new Client({ ...opts, user: account.user.email, database: 'asvtrackerdb' });
+    const opts = await connector.getOptions({ instanceConnectionName: instance, ipType: IpAddressTypes.PUBLIC, authType: AuthTypes.IAM });
+    client = new Client({ ...opts, user: account.user.email, database });
     await client.connect();
+    const { rows } = await client.query('SELECT current_database() AS db');
+    if (rows[0].db !== database) throw new Error('Connected to ' + rows[0].db + ', expected ' + database);
+    console.log('Applying to ' + instance + ' / ' + rows[0].db);
     await client.query('BEGIN');
     await client.query("SET LOCAL lock_timeout='10s'");
     await client.query("SELECT pg_advisory_xact_lock(hashtext('internal-transfer-schema'))");
