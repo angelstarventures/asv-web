@@ -5,6 +5,8 @@
 
 ALTER TYPE "public"."ledger_entry_type" ADD VALUE 'INTERNAL_TRANSFER';
 
+ALTER TYPE "public"."document_type" ADD VALUE 'TRANSFER_AGREEMENT';
+
 CREATE TYPE "public"."transfer_side" AS ENUM ('SELLER', 'BUYER');
 
 CREATE TYPE "public"."fee_kind" AS ENUM ('DD_LEAD_CARRY', 'MANAGEMENT_CARRY', 'LEGAL_COSTS', 'OTHER');

@@ -22,7 +22,7 @@ function assertAdditive(statements) {
   const bad = statements.find(
     (s) =>
       /^(DROP|DELETE|TRUNCATE|UPDATE)\b/i.test(s) ||
-      !(NEW_TABLES.some((t) => s.includes(t)) || /transfer_side|fee_kind|transfer_kind|lot_kind|ADD VALUE 'INTERNAL_TRANSFER'/.test(s))
+      !(NEW_TABLES.some((t) => s.includes(t)) || /transfer_side|fee_kind|transfer_kind|lot_kind|ADD VALUE 'INTERNAL_TRANSFER'|ADD VALUE 'TRANSFER_AGREEMENT'/.test(s))
   );
   if (bad) throw new Error('Refusing a statement outside the additive internal-transfer migration: ' + bad.slice(0, 80));
 }

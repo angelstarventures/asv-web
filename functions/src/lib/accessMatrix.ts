@@ -7,7 +7,8 @@ export type DocumentType =
   | "DATA_ROOM"
   | "COMPANY_UPDATE_DOC"
   | "SPA"
-  | "ALLOCATION_SCHEDULE";
+  | "ALLOCATION_SCHEDULE"
+  | "TRANSFER_AGREEMENT";
 
 // Deliberately not filtered by company status or scenario — queries the immutable
 // Allocation/MemberValuation history directly, so access survives a full exit, write-off,
@@ -58,7 +59,7 @@ export async function checkDocumentAccess(
     return { granted: true, reason: "admin" };
   }
 
-  if (docType === "SPA" || docType === "ALLOCATION_SCHEDULE") {
+  if (docType === "SPA" || docType === "ALLOCATION_SCHEDULE" || docType === "TRANSFER_AGREEMENT") {
     return { granted: false, reason: "admin-only document type" };
   }
 

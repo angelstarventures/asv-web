@@ -12,6 +12,7 @@ const DOC_TYPE_OPTIONS: { value: ManualDocumentType; label: string }[] = [
   { value: "COMPANY_UPDATE_DOC", label: "Company update document" },
   { value: "SPA", label: "SPA (deal paperwork)" },
   { value: "ALLOCATION_SCHEDULE", label: "Allocation schedule" },
+  { value: "TRANSFER_AGREEMENT", label: "Transfer agreement (member to member)" },
 ];
 
 // Manual alternative to the AI-analysis intake flow above it — for a document that doesn't need

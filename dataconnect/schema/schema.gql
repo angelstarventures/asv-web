@@ -124,6 +124,7 @@ enum DocumentType {
   COMPANY_UPDATE_DOC
   SPA
   ALLOCATION_SCHEDULE
+  TRANSFER_AGREEMENT   # member-to-member transfer paperwork: names other members, so admin-only like SPA
 }
 
 enum DocumentAccessDecision {

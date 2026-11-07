@@ -23,7 +23,7 @@ export function canViewDocument(
     return isOrgMember;
   }
   if (role === "site_admin" || role === "dev_site_admin") return true;
-  if (docType === DocumentType.SPA || docType === DocumentType.ALLOCATION_SCHEDULE) return false;
+  if (docType === DocumentType.SPA || docType === DocumentType.ALLOCATION_SCHEDULE || docType === DocumentType.TRANSFER_AGREEMENT) return false;
   if (docType === DocumentType.PITCH_DECK || docType === DocumentType.DD_REPORT) return true;
   return hasHeldAllocation; // DATA_ROOM / COMPANY_UPDATE_DOC
 }

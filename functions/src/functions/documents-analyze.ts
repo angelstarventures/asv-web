@@ -12,6 +12,8 @@ import { getPromptSetting } from "../lib/aiPrompts";
 import { fetchLedgerRecordsForCompany } from "../lib/legacyRecordShape";
 import { checkValuationGuardrails } from "../lib/valuationGuardrails";
 import { fetchAllMemberIds, findUnknownMemberReferences } from "../lib/memberIds";
+import { loadMemberPositions } from "../lib/memberPositions";
+import { previewInternalTransfer } from "../lib/transferWrites";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
 import { tenantConfig } from "../lib/tenantConfig";
 
@@ -98,7 +100,7 @@ function groupRecordsByContent(records: Record<string, unknown>[]): Omit<RecordG
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024; // 25MB total across all files in one analysis call
 
 const DRAFTING_FORMAT_INSTRUCTIONS =
-  'Respond with a single JSON object of the shape {"records": [...], "warnings": [...]} — no prose, no markdown fences. `records` is an array of record objects; `warnings` is an array of plain-language strings (empty if none) describing anything you found inconsistent with the ledger history you were given, anything you couldn\'t reconcile with the source document, or any figure you had to derive rather than read directly — see the self-verification instructions above. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.';
+  'Respond with a single JSON object of the shape {"records": [...], "warnings": [...]} — no prose, no markdown fences. `records` is an array of record objects; `warnings` is an array of plain-language strings (empty if none) describing anything you found inconsistent with the ledger history you were given, anything you couldn\'t reconcile with the source document, or any figure you had to derive rather than read directly — see the self-verification instructions above. Each record needs an explicit lowercase "scenario" field ("optimistic", "balanced", or "conservative"). Investment-round records (Participating_PricedRound, Participating_SAFERound, NonParticipating_Round) and Internal_Transfer records never diverge by scenario — return one identical copy of the record per scenario (3 copies total). Other types may legitimately differ by scenario; draft your best assessment for each.';
 
 // Module-level, reused across warm invocations of this function (Cloud Functions instance
 // reuse) — the schema + format instructions are ~200 lines and identical on every call
@@ -308,6 +310,8 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   let companyName: string;
   let existingLedger: Record<string, unknown>[] = [];
   let memberAllocationTotals: { memberId: string; total: number }[] = [];
+  // Recorded share holdings, so a drafted Internal_Transfer never invents one (see aiPrompts.ts).
+  let recordedHoldings: { memberId: string; name: string; shares: number | null; costBasis: number }[] = [];
   if (companyId) {
     const companies = await query<{ name: string }>(`SELECT name FROM "company" WHERE id = $1`, [companyId]);
     const company = companies[0];
@@ -337,6 +341,8 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
        ORDER BY a."member_id"`,
       [companyId]
     );
+    const positions = await loadMemberPositions((text, params) => query(text, params), companyId);
+    recordedHoldings = positions.map((p) => ({ memberId: p.memberId, name: p.displayName, shares: p.shares, costBasis: p.basis }));
   } else {
     companyName = newCompanyName as string;
   }
@@ -387,6 +393,10 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
       : `This is a brand-new company ${tenantConfig.orgAbbreviation} has no prior ledger history with — draft its first investment round record(s) from the document.`,
     companyId
       ? `Each member's cumulative cash allocation into this company to date (memberId -> total dollars invested, balanced scenario, which equals every scenario since investment-round records never diverge by scenario). Use this to compute member_valuations proportionally whenever you draft a Transaction_ValuationChange or Internal_ValuationAssessment record for this company: member_valuations[memberId] = (that member's total here / sum of all totals here) * asv_total_fair_market_value:\n${JSON.stringify(memberAllocationTotals)}`
+      : null,
+    companyId && recordedHoldings.length > 0
+      ? `Each member's RECORDED position in this company (shares is null when no holding has been recorded yet — never guess it; costBasis is dollars). Use this only to resolve and sanity-check an Internal_Transfer; a seller with null shares needs holdings_before stated by the document:
+${JSON.stringify(recordedHoldings)}`
       : null,
     // Conversational refinement — revise, don't redraft from scratch, so an edit the reviewer
     // already liked (or made by hand in the review UI) doesn't get silently reverted.
@@ -567,6 +577,25 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   // database yet); only "error" severity actually blocks at commit time.
   const guardrailFindings = await checkValuationGuardrails(proposedRecords);
   const guardrailWarnings = guardrailFindings.map((f) => f.message);
+
+  // Dry-run each drafted transfer (one balanced copy is enough: the scenario copies are identical)
+  // through the same calculator that records it, so an invented holding, an oversold seller, or a
+  // missing DD lead / carry recipient shows up now rather than at commit.
+  if (companyId) {
+    for (const record of proposedRecords) {
+      if (record.type !== "Internal_Transfer" || String(record.scenario ?? "").toLowerCase() !== "balanced") continue;
+      const label = `Internal_Transfer on ${record.date}`;
+      let preview: Awaited<ReturnType<typeof previewInternalTransfer>>;
+      try {
+        preview = await previewInternalTransfer((text, params) => query(text, params), record);
+      } catch {
+        guardrailWarnings.push(`${label}: could not be checked (the draft is missing required transfer fields).`);
+        continue;
+      }
+      for (const e of preview.errors) guardrailWarnings.push(`${label}: ${e}`);
+      if ("warnings" in preview) for (const w of preview.warnings) guardrailWarnings.push(`${label}: ${w}`);
+    }
+  }
 
   // Consolidation + silent-add (plan §3): group identical-content scenario copies into one
   // reviewable unit, then mark each group visible/hidden per the REVIEWER's own per-member

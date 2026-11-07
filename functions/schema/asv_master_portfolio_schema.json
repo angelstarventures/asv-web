@@ -143,7 +143,8 @@
           "total_exit_value": { "type": "number", "minimum": 0 },
           "asv_total_payout": { "type": "number", "minimum": 0 },
           "doc_link": { "type": "string", "format": "uri", "description": "Optional — omit when the round was reported via plain text/email rather than an actual document." },
-          "member_payouts": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 } }
+          "member_payouts": { "type": "object", "additionalProperties": { "type": "number", "minimum": 0 }, "description": "GROSS payout per member. When fund carry is configured, DD-lead and management carry are charged on each member's gain (payout minus cost basis) and stored separately; these amounts are never reduced." },
+          "apply_carry": { "type": "boolean", "description": "Optional. Set false to skip DD-lead and management carry on this exit. Default: carry applies once a management-carry recipient is configured." }
         }
       }
     },

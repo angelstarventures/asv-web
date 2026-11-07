@@ -453,3 +453,49 @@ export function computeTransfer(input: TransferInput): TransferResult {
     legalDerived,
   };
 }
+
+// --- Full exit carry ---------------------------------------------------------------------------
+// The same DD-lead and management carry applies to a complete exit: each member's gain is their
+// payout minus their position's cost basis (never negative, never netted across members). The
+// recorded payouts stay GROSS (ASV's total payout is unchanged); the carry is stored as fee lines
+// and member views show payout minus the carry charged to that member.
+
+export interface ExitCarryInput {
+  payouts: Record<string, number>; // memberId -> gross payout
+  basis: Record<string, number>; // memberId -> cost basis of their position (0 when unknown)
+  ddLeadMemberId: string;
+  managementMemberId: string;
+  ddLeadPercent?: number;
+  managementPercent?: number;
+}
+
+export interface ExitCarryResult {
+  feeLines: FeeLineOut[];
+  gains: Record<string, number>; // carry base per member (floored at 0)
+  net: Record<string, number>; // payout minus carry charged to that member
+  totalCarry: number;
+}
+
+export function computeExitCarry(input: ExitCarryInput): ExitCarryResult {
+  const gains: Record<string, number> = {};
+  const sellers: SellerGainInput[] = [];
+  for (const [memberId, payout] of Object.entries(input.payouts)) {
+    const gain = Math.max(0, round2(payout - (input.basis[memberId] ?? 0)));
+    gains[memberId] = gain;
+    if (gain > 0) sellers.push({ memberId, gain });
+  }
+  const feeLines = computeFeeLines({
+    sellers,
+    ddLeadMemberId: input.ddLeadMemberId,
+    managementMemberId: input.managementMemberId,
+    ddLeadPercent: input.ddLeadPercent,
+    managementPercent: input.managementPercent,
+    legalCosts: 0,
+  });
+  const net: Record<string, number> = {};
+  for (const [memberId, payout] of Object.entries(input.payouts)) {
+    const charged = feeLines.filter((l) => l.chargedToMemberId === memberId).reduce((n, l) => n + l.amount, 0);
+    net[memberId] = round2(payout - charged);
+  }
+  return { feeLines, gains, net, totalCarry: round2(feeLines.reduce((n, l) => n + l.amount, 0)) };
+}

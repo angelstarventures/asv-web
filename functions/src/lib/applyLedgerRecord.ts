@@ -16,6 +16,7 @@ import {
 } from "./ledgerWriteBuilders";
 import { contentHashOf } from "./importDiff";
 import { applyInternalTransfer } from "./transferWrites";
+import { applyExitCarry } from "./exitCarry";
 
 // The one place a legacy-shaped record (asv_master_portfolio_schema.json shape) becomes DB
 // rows. Shared by ledger-massImportCommit AND functions/scripts/migrate-legacy-data.ts, so
@@ -127,6 +128,8 @@ async function insertDetailForType(
         docLink: record.doc_link as string | undefined,
       });
       await insertMemberValuations(client, ledgerEntryId, (record.member_payouts as Record<string, number>) ?? {});
+      // Carry on the exit (no-op until a management-carry recipient is configured, or when the record opts out).
+      await applyExitCarry(client, { ledgerEntryId, companyId, record });
       await updateCompanyStatusForExit(client, companyId, exitType);
       break;
     }

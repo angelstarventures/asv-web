@@ -104,7 +104,7 @@ export async function documentsShareCompanyUpdateEach(
 
 // Manual "Company Documents/Updates" upload — mirrors functions/src/functions/
 // documents-onDriveUpload.ts exactly.
-export type ManualDocumentType = "PITCH_DECK" | "DD_REPORT" | "DATA_ROOM" | "COMPANY_UPDATE_DOC" | "SPA" | "ALLOCATION_SCHEDULE";
+export type ManualDocumentType = "PITCH_DECK" | "DD_REPORT" | "DATA_ROOM" | "COMPANY_UPDATE_DOC" | "SPA" | "ALLOCATION_SCHEDULE" | "TRANSFER_AGREEMENT";
 export interface DocumentsOnDriveUploadInput {
   companyId: string;
   docType: ManualDocumentType;

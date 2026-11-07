@@ -72,7 +72,26 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "optimistic/balanced/conservative — use that verbatim for market_research_grounding and " +
     "valuation_impact_summary rather than inventing your own; only fall back to your own " +
     "best-effort text if no research was provided. For CompanyUpdate, also copy the given source " +
-    "URLs into web_sources (omit it if none were given). Never fabricate a URL yourself.",
+    "URLs into web_sources (omit it if none were given). Never fabricate a URL yourself. " +
+    // Member-to-member transfers (House of Biryan case).
+    "A document that moves shares from one existing member to another (a transfer agreement, " +
+    "assignment, or buy-out/replacement letter) is an Internal_Transfer record, NOT a round, and " +
+    "needs no member_valuations or allocations. Set transfer_kind to \"Replacement\" when the " +
+    "document simply changes who owns all or part of a holding (no price, carry or fees: buyers " +
+    "maps member IDs to SHARES received); set it to \"Sale\" only when buyers pay the round price, " +
+    "sellers are paid a lower transfer price, and the spread funds carry and legal costs (then " +
+    "give round_price_per_share, transfer_price_per_share and reference_round_name, and put the " +
+    "DOLLARS each buyer paid in buyers). sellers always maps member IDs to the SHARES they sold. " +
+    "NEVER compute or supply cost basis, gains, carry, fee lines, or legal costs unless the " +
+    "document states a legal-cost figure explicitly — the system derives all of them. " +
+    "holdings_before declares each seller's WHOLE holding before the transfer: include it ONLY " +
+    "when the document itself states that seller's total share count (and cost basis, if given); " +
+    "if the ledger context below already lists a recorded holding for that seller, omit " +
+    "holdings_before unless the document contradicts it (and say so in warnings). NEVER invent, " +
+    "estimate, or back-calculate a holding from dollars invested — if a seller has no recorded " +
+    "holding and the document does not state one, omit holdings_before and add a warning naming " +
+    "that member so the reviewer can supply it. Like a round, an Internal_Transfer never diverges " +
+    "by scenario: return one identical copy per scenario (3 copies).",
   portfolio_chat:
     `You are a portfolio assistant for ${ORG}, a venture investment fund. ` +
     "CRITICAL RULE, check this FIRST for every question, before anything else in this prompt: " +
@@ -95,7 +114,15 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "individual data, since admins already have that access elsewhere in the app. " +
     "Format every normal answer in Markdown (headings, bold, bullet lists, and tables where a " +
     "breakdown is being shown) rather than a single block of prose. Keep answers concise and " +
-    "cite the specific numbers you're using.",
+    "cite the specific numbers you're using. " +
+    "Ledger data may include Internal_Transfer records: member-to-member share transfers. A " +
+    "\"Replacement\" is a plain change of owner at the seller's cost basis (buyers is shares); a " +
+    "\"Sale\" is bought at the round price and sold at a lower transfer price, with the spread " +
+    "funding carry (DD lead and management) and legal costs. Carry is charged on each seller's " +
+    "gain only, never on a loss. A member's own transfer records show only their own side. " +
+    "The same carry applies to a full exit: payouts are recorded gross and carry is deducted " +
+    "from each member's proceeds. Never guess a member's share count; say it is not recorded " +
+    "if the data does not include it.",
 };
 
 export async function getPromptSetting(key: AiPromptSettingKey): Promise<string> {

@@ -214,6 +214,28 @@ async function main() {
     assert(near(Object.values(v).reduce((n, x) => n + x, 0), 16000), "value conserved");
     ok("recorded member value follows the shares across both transfers (16,000 conserved)");
 
+    // --- E3. Carry on a full exit (Phase 7) -------------------------------------------------
+    const exitRecord = {
+      ...base, type: "Exit_Event", date: "2026-09-01", exit_type: "Acquisition", total_exit_value: 1000000, asv_total_payout: 18000,
+      member_payouts: { [buyerA]: 9000, [buyerB]: 5000, [newOwner]: 4000 }, // gain 3000 / loss / break-even
+    };
+    const exitId = await applyLedgerRecord(client, exitRecord, { scenario: "BALANCED", createdBy: ddLead });
+    const exitFees = (await client.query(`SELECT kind::text AS kind, "recipient_id" AS recipient, "charged_to_member_id" AS charged, amount FROM "fee_line" WHERE "ledger_entry_id" = $1 ORDER BY kind`, [exitId])).rows;
+    assert.equal(exitFees.length, 2, JSON.stringify(exitFees));
+    assert(exitFees.every((f) => f.charged === buyerA), "only the member with a gain is charged");
+    assert(near(exitFees.find((f) => f.kind === "DD_LEAD_CARRY").amount, 90) && exitFees.find((f) => f.kind === "DD_LEAD_CARRY").recipient === ddLead);
+    assert(near(exitFees.find((f) => f.kind === "MANAGEMENT_CARRY").amount, 150) && exitFees.find((f) => f.kind === "MANAGEMENT_CARRY").recipient === mgmt);
+    assert.equal(
+      Number((await client.query(`SELECT SUM(value) AS t FROM "member_valuation" WHERE "ledger_entry_id" = $1`, [exitId])).rows[0].t), 18000,
+      "member payouts stay gross"
+    );
+    ok("full exit: carry 90 + 150 charged only to the member with a gain; payouts stay gross (18,000)");
+    await deleteLedgerEntry(client, exitId);
+    const optOut = await applyLedgerRecord(client, { ...exitRecord, date: "2026-09-02", apply_carry: false }, { scenario: "BALANCED", createdBy: ddLead });
+    assert.equal((await client.query(`SELECT count(*)::int AS n FROM "fee_line" WHERE "ledger_entry_id" = $1`, [optOut])).rows[0].n, 0);
+    await deleteLedgerEntry(client, optOut);
+    ok("apply_carry:false opts an exit out of carry");
+
     // --- F. Guards --------------------------------------------------------------------------
     await expectFailure(client, "repeating the sale (sellers now hold nothing)", /holds only/, () =>
       applyLedgerRecord(client, { ...saleRecord, date: "2026-05-01", holdings_before: undefined }, { scenario: "BALANCED", createdBy: ddLead })
