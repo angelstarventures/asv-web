@@ -6342,6 +6342,7 @@ export interface ListTransferPartiesForScenarioData {
     feesCharged?: number | null;
     realizedGain?: number | null;
     sharesHeldBefore?: number | null;
+    costBasisBefore?: number | null;
     member: {
       id: string;
       authUid?: string | null;
@@ -6360,6 +6361,8 @@ export interface ListTransferPartiesForScenarioData {
       internalTransferDetail_on_ledgerEntry?: {
         kind: TransferKind;
         referenceRoundName?: string | null;
+        sourceRoundName?: string | null;
+        sourceRoundDate?: DateString | null;
         roundPricePerShare?: number | null;
         transferPricePerShare?: number | null;
         docLink?: string | null;

@@ -1,5 +1,6 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ledgerRecordExit, type ExitType, type RecordExitInput, type RecordExitOutput } from "@/lib/functions/exits";
@@ -70,8 +71,8 @@ export function ExitForm({ companies, members }: { companies: CompanyOption[]; m
     try {
       const h = await ledgerTransferHoldings(id);
       setHoldings(h);
-      // Everyone who still holds a position starts with a payout row (shares 0 means fully sold out).
-      setRows(h.holders.filter((x) => x.basis > 0.005 || (x.shares ?? 0) > 0).map((x) => newRow(x.memberId)));
+      // Everyone who still holds a position (cost basis left) starts with a payout row.
+      setRows(h.holders.filter((x) => x.basis > 0.005).map((x) => newRow(x.memberId)));
     } catch (err) {
       setHoldingsError(err instanceof Error ? err.message : "Could not load this company's holders.");
     } finally {
@@ -261,7 +262,7 @@ export function ExitForm({ companies, members }: { companies: CompanyOption[]; m
                     Member
                     <select value={r.memberId} onChange={(e) => patchRow(r.key, { memberId: e.target.value })} className={inputCls}>
                       <option value="">Select…</option>
-                      {members
+                      {sortByName(members)
                         .filter((m) => m.id === r.memberId || !used.has(m.id))
                         .map((m) => (
                           <option key={m.id} value={m.id}>
@@ -277,7 +278,6 @@ export function ExitForm({ companies, members }: { companies: CompanyOption[]; m
                   {holder && (
                     <span className="pb-2 text-xs text-zinc-500">
                       cost basis {money(holder.basis)}
-                      {holder.shares != null ? ` · ${holder.shares} sh` : ""}
                     </span>
                   )}
                   <button type="button" onClick={() => setRows((rs) => rs.filter((x) => x.key !== r.key))} className="pb-2 text-xs text-red-600 underline underline-offset-2 dark:text-red-400">

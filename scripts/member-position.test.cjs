@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Plain Node CommonJS assertion harness. */
-// Member positions assembled from sparse share lots, and the proportional move of recorded member
-// value across transfers that happen after the latest valuation. Pure math only (positionCalc.ts).
+// Per-round member positions (derived from allocations plus recorded transfers) and the move of
+// recorded member value across transfers after the latest valuation. Pure math only (positionCalc.ts).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -10,80 +10,75 @@ const Module = require('node:module');
 const filename = path.resolve('functions/src/lib/positionCalc.ts');
 const mod = new Module(filename, module); mod.filename = filename; mod.paths = module.paths;
 mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, filename);
-const { computePosition, applyTransfersToValues } = mod.exports;
+const { buildRoundBook, negativePositions, applyTransfersToValues, roundKey } = mod.exports;
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps;
 
-// --- computePosition ---------------------------------------------------------------------------
-// Invested, nothing recorded: basis = invested, shares unknown (never guessed).
-let p = computePosition('A', 5000, []);
-assert.equal(p.basis, 5000); assert.equal(p.shares, null); assert(!p.hasLots);
+const R24 = { key: roundKey('2024-01-01', '2024 round'), name: '2024 round', date: '2024-01-01', price: 1000 };
+const SAFE = { key: roundKey('2025-01-01', 'SAFE'), name: 'SAFE', date: '2025-01-01', price: null };
+const alloc = (round, memberId, amount) => ({ roundKey: round.key, memberId, amount });
+const position = (book, round, id) => book.rounds.find((r) => r.key === round.key).positions[id];
 
-// Declared opening lot IS the whole holding; allocations are not added on top.
-p = computePosition('A', 5000, [{ kind: 'OPENING', shares: 5, costBasis: 5000 }]);
-assert.equal(p.basis, 5000); assert.equal(p.shares, 5); assert(p.hasOpening);
+// --- Allocations alone: shares = dollars / price; a priceless round uses 1 (shares = dollars) ----
+let book = buildRoundBook([R24, SAFE], [alloc(R24, 'A', 5000), alloc(R24, 'B', 3000), alloc(SAFE, 'A', 2000)], []);
+assert(near(position(book, R24, 'A').shares, 5) && near(position(book, R24, 'A').basis, 5000));
+assert(near(position(book, SAFE, 'A').shares, 2000) && near(position(book, SAFE, 'A').basis, 2000));
+assert(near(book.companyBasis.A, 7000) && near(book.invested.A, 7000) && near(book.companyBasis.B, 3000));
 
-// After selling 2 of 5: proportional basis leaves, shares known.
-p = computePosition('A', 5000, [
-  { kind: 'OPENING', shares: 5, costBasis: 5000 },
-  { kind: 'TRANSFER_OUT', shares: -2, costBasis: -2000 },
+// --- A transfer moves shares and basis within the ONE round it came from ------------------------
+// A sells 2 of its 5 shares (basis 1000/share); C buys them and pays 2300/share (a Sale).
+const move = (side, memberId, shares, cbps) => ({ roundKey: R24.key, memberId, side, shares, costBasisPerShare: cbps });
+book = buildRoundBook([R24, SAFE], [alloc(R24, 'A', 5000), alloc(SAFE, 'A', 2000)], [move('SELLER', 'A', 2, 1000), move('BUYER', 'C', 2, 2300)]);
+assert(near(position(book, R24, 'A').shares, 3) && near(position(book, R24, 'A').basis, 3000));
+assert(near(position(book, R24, 'C').shares, 2) && near(position(book, R24, 'C').basis, 4600), 'the buyer carries what they paid');
+assert(near(position(book, SAFE, 'A').shares, 2000), 'other rounds are untouched');
+assert(near(book.companyBasis.A, 5000) && near(book.companyBasis.C, 4600), 'company basis = allocations - moved out + received');
+assert(near(book.invested.A, 7000) && book.invested.C === undefined, 'invested stays original capital');
+
+// Whole position out: the member drops out of the round entirely.
+book = buildRoundBook([R24], [alloc(R24, 'A', 5000)], [move('SELLER', 'A', 5, 1000), move('BUYER', 'C', 5, 1000)]);
+assert.equal(position(book, R24, 'A'), undefined);
+assert(near(book.companyBasis.A, 0));
+assert.deepEqual(negativePositions(book), []);
+
+// A buyer can later sell what they received: positions chain through the round.
+book = buildRoundBook([R24], [alloc(R24, 'A', 5000)], [
+  move('SELLER', 'A', 5, 1000), move('BUYER', 'C', 5, 1000),
+  move('SELLER', 'C', 2, 1000), move('BUYER', 'D', 2, 1000),
 ]);
-assert.equal(p.basis, 3000); assert.equal(p.shares, 3);
+assert(near(position(book, R24, 'C').shares, 3) && near(position(book, R24, 'D').shares, 2));
 
-// Sold everything: zero basis, zero shares (not null, not negative noise).
-p = computePosition('A', 5000, [
-  { kind: 'OPENING', shares: 5, costBasis: 5000 },
-  { kind: 'TRANSFER_OUT', shares: -5, costBasis: -5000 },
+// Overselling (e.g. the transfer that gave C their shares was deleted) is reported per (round, member).
+book = buildRoundBook([R24], [alloc(R24, 'A', 5000)], [move('SELLER', 'C', 2, 1000), move('BUYER', 'D', 2, 1000)]);
+assert.deepEqual(negativePositions(book), [{ roundName: '2024 round', roundDate: '2024-01-01', memberId: 'C' }]);
+
+// Moves with no source round (not possible for new transfers) only affect company basis.
+book = buildRoundBook([R24], [alloc(R24, 'A', 5000)], [{ roundKey: null, memberId: 'A', side: 'SELLER', shares: 1, costBasisPerShare: 1000 }]);
+assert(near(book.companyBasis.A, 4000) && near(position(book, R24, 'A').shares, 5));
+
+// --- Moving recorded value ---------------------------------------------------------------------
+const t = (date, sellers, buyers) => ({ date, sellers, buyers });
+let out = applyTransfersToValues(
+  { A: 8000, Z: 500 },
+  [t('2026-06-01', [{ memberId: 'A', costBasisMoved: 2000, costBasisBefore: 8000 }], [{ memberId: 'B', cost: 4600 }])]
+);
+assert(near(out.values.A, 6000), 'seller falls by moved basis / basis before (25%)');
+assert(near(out.values.B, 4600), 'buyer is valued at what they paid');
+assert(near(out.values.Z, 500));
+assert.deepEqual(out.warnings, []);
+
+// Whole basis moved -> the seller is left at zero.
+out = applyTransfersToValues({ A: 8000 }, [t('2026-06-01', [{ memberId: 'A', costBasisMoved: 5000, costBasisBefore: 5000 }], [{ memberId: 'N', cost: 5000 }])]);
+assert(near(out.values.A, 0) && near(out.values.N, 5000));
+
+// Unknown basis: the seller's value is left alone with a warning (the buyer still gets their cost).
+out = applyTransfersToValues({ A: 8000 }, [t('2026-06-01', [{ memberId: 'A', costBasisMoved: 2000, costBasisBefore: null }], [{ memberId: 'B', cost: 2000 }])]);
+assert(near(out.values.A, 8000) && out.warnings.length === 1 && near(out.values.B, 2000));
+
+// Sequential transfers chain: A -> B, then B -> C.
+out = applyTransfersToValues({ A: 4000 }, [
+  t('2026-06-01', [{ memberId: 'A', costBasisMoved: 4000, costBasisBefore: 4000 }], [{ memberId: 'B', cost: 4000 }]),
+  t('2026-07-01', [{ memberId: 'B', costBasisMoved: 4000, costBasisBefore: 4000 }], [{ memberId: 'C', cost: 4000 }]),
 ]);
-assert.equal(p.basis, 0); assert.equal(p.shares, 0);
-
-// Pure transferee (no allocations): lots are the whole holding, shares known.
-p = computePosition('B', 0, [{ kind: 'TRANSFER_IN', shares: 5, costBasis: 10000 }]);
-assert.equal(p.basis, 10000); assert.equal(p.shares, 5);
-
-// Existing investor who also received shares, with no opening declaration: basis adds the
-// transferred-in basis to what they invested, but shares are NOT known (their own holding is not).
-p = computePosition('C', 3000, [{ kind: 'TRANSFER_IN', shares: 2, costBasis: 4000 }]);
-assert.equal(p.basis, 7000); assert.equal(p.shares, null);
-
-// Seller who partially sold without an opening lot would have negative lots only; basis = invested + (-x).
-p = computePosition('D', 5000, [{ kind: 'TRANSFER_OUT', shares: -2, costBasis: -2000 }]);
-assert.equal(p.basis, 3000); assert.equal(p.shares, null);
-
-// --- applyTransfersToValues --------------------------------------------------------------------
-// Full replacement: the whole value moves to the new owner.
-let r = applyTransfersToValues({ A: 12000, X: 500 }, [
-  { date: '2026-04-01', sellers: [{ memberId: 'A', shares: 5, sharesHeldBefore: 5 }], buyers: [{ memberId: 'N', shares: 5 }] },
-]);
-assert(near(r.values.A, 0) && near(r.values.N, 12000) && near(r.values.X, 500));
-assert.deepEqual(r.warnings, []);
-
-// Partial: 2 of 5 shares moves 40% of the seller's value, split across buyers by shares received.
-r = applyTransfersToValues({ A: 10000 }, [
-  { date: '2026-04-01', sellers: [{ memberId: 'A', shares: 2, sharesHeldBefore: 5 }], buyers: [{ memberId: 'N', shares: 1 }, { memberId: 'M', shares: 1 }] },
-]);
-assert(near(r.values.A, 6000) && near(r.values.N, 2000) && near(r.values.M, 2000));
-
-// Total value is conserved across any set of transfers.
-const total = (v) => Object.values(v).reduce((n, x) => n + x, 0);
-r = applyTransfersToValues({ A: 8000, B: 4000 }, [
-  { date: '2026-04-01', sellers: [{ memberId: 'A', shares: 3, sharesHeldBefore: 6 }, { memberId: 'B', shares: 1, sharesHeldBefore: 4 }], buyers: [{ memberId: 'C', shares: 4 }] },
-  { date: '2026-05-01', sellers: [{ memberId: 'C', shares: 2, sharesHeldBefore: 4 }], buyers: [{ memberId: 'D', shares: 2 }] },
-]);
-assert(near(total(r.values), 12000));
-assert(near(r.values.A, 4000) && near(r.values.B, 3000) && near(r.values.C, 2500) && near(r.values.D, 2500));
-
-// A seller with no recorded holding cannot be apportioned: nothing moves, and it is reported.
-r = applyTransfersToValues({ A: 1000 }, [
-  { date: '2026-04-01', sellers: [{ memberId: 'A', shares: 1, sharesHeldBefore: null }], buyers: [{ memberId: 'N', shares: 1 }] },
-]);
-assert(near(r.values.A, 1000) && r.values.N === undefined);
-assert(r.warnings.length === 1);
-
-// Moving more than the declared holding clamps at the whole value; input is never mutated.
-const input = { A: 1000 };
-r = applyTransfersToValues(input, [
-  { date: '2026-04-01', sellers: [{ memberId: 'A', shares: 9, sharesHeldBefore: 5 }], buyers: [{ memberId: 'N', shares: 9 }] },
-]);
-assert(near(r.values.A, 0) && near(r.values.N, 1000)); assert.equal(input.A, 1000);
+assert(near(out.values.A, 0) && near(out.values.B, 0) && near(out.values.C, 4000));
 
 console.log('member-position tests passed');

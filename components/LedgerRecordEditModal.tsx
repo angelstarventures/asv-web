@@ -16,7 +16,7 @@ export function LedgerRecordEditModal({
   onSaved: () => void;
 }) {
   const { id, ...recordWithoutId } = record;
-  // Transfers move share lots and fee lines; the server refuses edits (ledger-updateRecord.ts).
+  // Transfers move round positions and fee lines; the server refuses edits (ledger-updateRecord.ts).
   const isTransfer = record.type === "Internal_Transfer";
   const [text, setText] = useState(JSON.stringify(recordWithoutId, null, 2));
   const [error, setError] = useState<string | null>(null);

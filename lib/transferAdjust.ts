@@ -5,9 +5,10 @@
 //   - a seller's proceeds are realized: sale -> the amount paid to them (already net of the spread
 //     that funds carry), replacement -> the cost basis moved (transfer at cost, so MOIC is neutral)
 //   - a buyer's invested grows by what they paid (sale) or the basis they inherit (replacement)
-//   - until the next valuation record arrives, a seller's latest recorded value moves to the buyers
-//     in proportion to shares moved / shares held before, split by shares received. This mirrors
-//     functions/src/lib/positionCalc.ts applyTransfersToValues.
+//   - until the next valuation record arrives, a seller's latest recorded value falls by the share
+//     of their company cost basis that moved, and a buyer's value rises by what the shares cost
+//     them (paid, or the basis inherited). This mirrors functions/src/lib/positionCalc.ts
+//     applyTransfersToValues.
 
 export interface TransferLeg {
   entryId: string;
@@ -18,7 +19,7 @@ export interface TransferLeg {
   shares: number;
   costBasisPerShare: number;
   amount: number; // 0 for a replacement
-  sharesHeldBefore: number | null; // sellers only
+  costBasisBefore: number | null; // sellers only: total company cost basis before the transfer
 }
 
 export interface ValuationSnapshot {
@@ -42,26 +43,24 @@ export interface CompanyTransferEffect {
 
 export function applyTransfersToValues(
   values: Record<string, number>,
-  transfers: { date: string; sellers: { memberId: string; shares: number; sharesHeldBefore: number | null }[]; buyers: { memberId: string; shares: number }[] }[]
+  transfers: {
+    date: string;
+    sellers: { memberId: string; costBasisMoved: number; costBasisBefore: number | null }[];
+    buyers: { memberId: string; cost: number }[];
+  }[]
 ): { values: Record<string, number>; warnings: string[] } {
   const out: Record<string, number> = { ...values };
   const warnings: string[] = [];
   for (const t of transfers) {
-    let pool = 0;
     for (const s of t.sellers) {
-      const before = s.sharesHeldBefore;
+      const before = s.costBasisBefore;
       if (before === null || !(before > 0)) {
-        warnings.push(`Transfer on ${t.date}: seller ${s.memberId} has no recorded holding, so no value was moved.`);
+        warnings.push(`Transfer on ${t.date}: seller ${s.memberId} has no recorded cost basis, so their value was not reduced.`);
         continue;
       }
-      const moved = (out[s.memberId] ?? 0) * Math.min(1, s.shares / before);
-      out[s.memberId] = (out[s.memberId] ?? 0) - moved;
-      pool += moved;
+      out[s.memberId] = (out[s.memberId] ?? 0) * (1 - Math.min(1, s.costBasisMoved / before));
     }
-    const received = t.buyers.reduce((n, b) => n + b.shares, 0);
-    if (pool > 0 && received > 0) {
-      for (const b of t.buyers) out[b.memberId] = (out[b.memberId] ?? 0) + (pool * b.shares) / received;
-    }
+    for (const b of t.buyers) out[b.memberId] = (out[b.memberId] ?? 0) + b.cost;
   }
   for (const id of Object.keys(out)) if (Math.abs(out[id]) < 1e-9) out[id] = 0;
   return { values: out, warnings };
@@ -121,8 +120,12 @@ export function memberTransferEffects(
       const transfers = [...entries.values()]
         .map((group) => ({
           date: group[0].date,
-          sellers: group.filter((g) => g.side === "SELLER").map((g) => ({ memberId: g.memberId, shares: g.shares, sharesHeldBefore: g.sharesHeldBefore })),
-          buyers: group.filter((g) => g.side === "BUYER").map((g) => ({ memberId: g.memberId, shares: g.shares })),
+          sellers: group
+            .filter((g) => g.side === "SELLER")
+            .map((g) => ({ memberId: g.memberId, costBasisMoved: g.shares * g.costBasisPerShare, costBasisBefore: g.costBasisBefore })),
+          buyers: group
+            .filter((g) => g.side === "BUYER")
+            .map((g) => ({ memberId: g.memberId, cost: g.amount > 0 ? g.amount : g.shares * g.costBasisPerShare })),
         }))
         .sort((a, b) => a.date.localeCompare(b.date));
       const moved = applyTransfersToValues(snap.values, transfers);

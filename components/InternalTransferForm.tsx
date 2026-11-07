@@ -1,36 +1,39 @@
 "use client";
 
+import { sortByName } from "@/lib/sortMembers";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ledgerRecordInternalTransfer,
   ledgerTransferHoldings,
-  type DeclaredHolding,
   type RecordInternalTransferInput,
   type RecordInternalTransferOutput,
   type TransferHoldingsOutput,
   type TransferKind,
   type TransferResult,
+  type TransferRound,
 } from "@/lib/functions/transfers";
 
-// Records an internal (member-to-member) transfer. Two kinds:
-//   Replacement - a plain change of owner for all or part of a holding: no price, carry or costs;
-//                 the buyer inherits the seller's cost basis. Buyers are given in SHARES.
+// Records an internal (member-to-member) transfer of shares from ONE round. Positions are tracked
+// per round in original cost (shares x the round's price), so there are no share counts to enter.
+// Two kinds:
+//   Replacement - a plain change of owner: no price, carry or costs; the buyer inherits the
+//                 seller's cost basis. Buyers are given as original cost received.
 //   Sale        - buyers pay the round price, sellers receive the lower transfer price, and the
-//                 spread funds DD-lead + management carry and legal costs. Buyers are given in DOLLARS.
-// Holdings are never derived from old rounds: a seller with no recorded holding must have their
-// whole holding declared here ("shares held before this transfer"). Every figure shown comes from
-// the same server calculator that records the transfer (the callable's preview mode).
+//                 spread funds DD-lead + management carry and legal costs. Buyers are given in dollars.
+// Every figure shown comes from the same server calculator that records the transfer (the
+// callable's preview mode).
 
 type CompanyOption = { id: string; name: string; label: string };
 type MemberOption = { id: string; displayName: string };
-type SellerRow = { key: number; memberId: string; shares: string; correct: boolean; heldShares: string; heldBasis: string; soldBasis: string };
+type SellerRow = { key: number; memberId: string; amount: string };
 type BuyerRow = { key: number; memberId: string; value: string };
 
 const inputCls = "rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
-const qty = (n: number) => (Math.round(n * 1e6) / 1e6).toLocaleString("en-US", { maximumFractionDigits: 6 });
 const num = (s: string) => (s.trim() === "" ? NaN : Number(s));
+const pos = (s: string) => (num(s) > 0 ? num(s) : 0);
+const r2 = (n: number) => Math.round(n * 100) / 100;
 const isFull = (r: RecordInternalTransferOutput["preview"]): r is TransferResult => "kind" in r;
 
 const FEE_LABEL: Record<string, string> = {
@@ -41,12 +44,12 @@ const FEE_LABEL: Record<string, string> = {
 };
 
 let nextKey = 1;
-const newSeller = (): SellerRow => ({ key: nextKey++, memberId: "", shares: "", correct: false, heldShares: "", heldBasis: "", soldBasis: "" });
+const newSeller = (): SellerRow => ({ key: nextKey++, memberId: "", amount: "" });
 const newBuyer = (): BuyerRow => ({ key: nextKey++, memberId: "", value: "" });
 
 interface FormState {
   company: CompanyOption | undefined;
-  holdings: TransferHoldingsOutput | null;
+  round: TransferRound | undefined;
   kind: TransferKind;
   date: string;
   sellers: SellerRow[];
@@ -63,48 +66,29 @@ interface FormState {
 function buildInput(f: FormState): { input?: RecordInternalTransferInput; problems: string[] } {
   const problems: string[] = [];
   if (!f.company) problems.push("choose a company");
+  if (!f.round) problems.push("choose the round the shares come from");
   if (!/^\d{4}-\d{2}-\d{2}$/.test(f.date)) problems.push("enter the transfer date");
   const sale = f.kind === "Sale";
 
   const sellers: Record<string, number> = {};
-  const holdingsBefore: Record<string, DeclaredHolding> = {};
-  const soldCostBasis: Record<string, number> = {};
-  const holderById = new Map((f.holdings?.holders ?? []).map((h) => [h.memberId, h]));
   for (const s of f.sellers) {
     if (!s.memberId) continue;
-    const shares = num(s.shares);
-    if (!(shares > 0)) {
-      problems.push("enter the shares each seller is moving");
+    if (!(num(s.amount) > 0)) {
+      problems.push("enter the original cost each seller is moving");
       continue;
     }
-    sellers[s.memberId] = shares;
-    if (s.soldBasis.trim() !== "") {
-      const sold = num(s.soldBasis);
-      if (sold >= 0) soldCostBasis[s.memberId] = sold;
-      else problems.push("the cost basis of the shares sold must be 0 or more (or leave it blank)");
-    }
-    const holder = holderById.get(s.memberId);
-    if (holder?.shares == null || s.correct) {
-      const held = num(s.heldShares);
-      if (!(held > 0)) {
-        problems.push("enter each seller's whole holding before this transfer");
-        continue;
-      }
-      const basis = num(s.heldBasis);
-      holdingsBefore[s.memberId] = Number.isFinite(basis) ? { shares: held, cost_basis: basis } : { shares: held };
-    }
+    sellers[s.memberId] = num(s.amount);
   }
   if (Object.keys(sellers).length === 0) problems.push("add at least one seller");
 
   const buyers: Record<string, number> = {};
   for (const b of f.buyers) {
     if (!b.memberId) continue;
-    const v = num(b.value);
-    if (!(v > 0)) {
-      problems.push(sale ? "enter the dollars each buyer pays" : "enter the shares each buyer receives");
+    if (!(num(b.value) > 0)) {
+      problems.push(sale ? "enter the dollars each buyer pays" : "enter the original cost each buyer receives");
       continue;
     }
-    buyers[b.memberId] = v;
+    buyers[b.memberId] = num(b.value);
   }
   if (Object.keys(buyers).length === 0) problems.push("add at least one buyer");
 
@@ -114,17 +98,17 @@ function buildInput(f: FormState): { input?: RecordInternalTransferInput; proble
     if (!(round > 0)) problems.push("enter the round price per share");
     if (!(transfer >= 0)) problems.push("enter the transfer price per share");
   }
-  if (problems.length > 0 || !f.company) return { problems: [...new Set(problems)] };
+  if (problems.length > 0 || !f.company || !f.round) return { problems: [...new Set(problems)] };
 
   const legal = num(f.legalCosts);
   const input: RecordInternalTransferInput = {
     company: f.company.name,
     date: f.date,
     transferKind: f.kind,
+    sourceRoundName: f.round.name,
+    sourceRoundDate: f.round.date,
     sellers,
     buyers,
-    ...(Object.keys(holdingsBefore).length ? { holdingsBefore } : {}),
-    ...(Object.keys(soldCostBasis).length ? { soldCostBasis } : {}),
     ...(sale ? { roundPricePerShare: round, transferPricePerShare: transfer } : {}),
     ...(sale && Number.isFinite(legal) ? { legalCosts: legal } : {}),
     ...(sale && f.referenceRound.trim() ? { referenceRoundName: f.referenceRound.trim() } : {}),
@@ -139,6 +123,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
   const [holdings, setHoldings] = useState<TransferHoldingsOutput | null>(null);
   const [holdingsError, setHoldingsError] = useState<string | null>(null);
   const [loadingHoldings, setLoadingHoldings] = useState(false);
+  const [roundKey, setRoundKey] = useState("");
   const [kind, setKind] = useState<TransferKind>("Replacement");
   const [date, setDate] = useState("");
   const [sellers, setSellers] = useState<SellerRow[]>([newSeller()]);
@@ -154,15 +139,18 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
   const [recorded, setRecorded] = useState<string | null>(null);
 
   const company = companies.find((c) => c.id === companyId);
+  const round = holdings?.rounds.find((r) => r.key === roundKey);
   const nameOf = useMemo(() => {
     const m = new Map(members.map((x) => [x.id, x.displayName]));
     return (id: string) => (m.has(id) ? `${m.get(id)} (${id})` : id);
   }, [members]);
-  const holderById = useMemo(() => new Map((holdings?.holders ?? []).map((h) => [h.memberId, h])), [holdings]);
+  const holderById = useMemo(() => new Map((round?.holders ?? []).map((h) => [h.memberId, h])), [round]);
+  const unit = round?.pricePerShare && round.pricePerShare > 0 ? round.pricePerShare : 1;
+  const saleBlocked = kind === "Sale" && ((holdings?.saleBlockers.length ?? 0) > 0 || (round !== undefined && round.pricePerShare === null));
 
   const built = useMemo(
-    () => buildInput({ company, holdings, kind, date, sellers, buyers, roundPrice, transferPrice, referenceRound, legalCosts, docLink, notes }),
-    [company, holdings, kind, date, sellers, buyers, roundPrice, transferPrice, referenceRound, legalCosts, docLink, notes]
+    () => buildInput({ company, round, kind, date, sellers, buyers, roundPrice, transferPrice, referenceRound, legalCosts, docLink, notes }),
+    [company, round, kind, date, sellers, buyers, roundPrice, transferPrice, referenceRound, legalCosts, docLink, notes]
   );
   const inputKey = built.input ? JSON.stringify(built.input) : null;
 
@@ -190,6 +178,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
     setCompanyId(id);
     setHoldings(null);
     setHoldingsError(null);
+    setRoundKey("");
     setSellers([newSeller()]);
     setBuyers([newBuyer()]);
     setRecorded(null);
@@ -198,10 +187,16 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
     try {
       setHoldings(await ledgerTransferHoldings(id));
     } catch (err) {
-      setHoldingsError(err instanceof Error ? err.message : "Could not load this company's holders.");
+      setHoldingsError(err instanceof Error ? err.message : "Could not load this company's rounds.");
     } finally {
       setLoadingHoldings(false);
     }
+  }
+
+  function chooseRound(key: string) {
+    setRoundKey(key);
+    setSellers([newSeller()]);
+    setBuyers([newBuyer()]);
   }
 
   function patchSeller(key: number, patch: Partial<SellerRow>) {
@@ -211,9 +206,12 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
     setBuyers((rows) => rows.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
 
-  const sellerTotal = sellers.reduce((n, s) => n + (num(s.shares) > 0 ? num(s.shares) : 0), 0);
-  const buyerValueTotal = buyers.reduce((n, b) => n + (num(b.value) > 0 ? num(b.value) : 0), 0);
-  const saleBlocked = kind === "Sale" && (holdings?.saleBlockers.length ?? 0) > 0;
+  // Original cost the sellers are moving (shares x the round's price); for a Sale the buyers pay
+  // the round price, so the dollars that balance it are sellerTotal x roundPrice / sourcePrice.
+  const sellerTotal = sellers.reduce((n, s) => n + pos(s.amount), 0);
+  const buyerValueTotal = buyers.reduce((n, b) => n + pos(b.value), 0);
+  const saleDollarsTarget = num(roundPrice) > 0 && round?.pricePerShare ? (sellerTotal / round.pricePerShare) * num(roundPrice) : 0;
+  const buyerTarget = kind === "Sale" ? saleDollarsTarget : sellerTotal;
 
   async function record() {
     if (!built.input) return;
@@ -222,7 +220,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
     try {
       const out = await ledgerRecordInternalTransfer(built.input);
       if (!out.recorded) throw new Error("The transfer was not recorded.");
-      setRecorded(`Recorded in all three scenarios on ${built.input.date}.`);
+      const date = built.input.date;
       setSellers([newSeller()]);
       setBuyers([newBuyer()]);
       setDate("");
@@ -233,8 +231,8 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
       setDocLink("");
       setNotes("");
       setPreviewState(null);
-      await chooseCompany(companyId); // refresh recorded holdings
-      setRecorded(`Recorded in all three scenarios on ${built.input.date}.`);
+      await chooseCompany(companyId); // refresh positions
+      setRecorded(`Recorded in all three scenarios on ${date}.`);
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Could not record this transfer.");
     } finally {
@@ -286,17 +284,17 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
 
       <p className="max-w-2xl text-sm text-zinc-600 dark:text-zinc-400">
         {kind === "Replacement"
-          ? "A plain change of owner for all or part of a holding. No price, carry or costs; the new owner inherits the seller's cost basis. Enter buyers in shares."
-          : "Buyers pay the round price, sellers receive the lower transfer price, and the difference funds DD-lead and management carry plus legal costs. Enter buyers in dollars."}
+          ? "A plain change of owner for all or part of a member's position in ONE round. No price, carry or costs; the new owner inherits the seller's cost basis."
+          : "Buyers pay the round price, sellers receive the lower transfer price, and the difference funds DD-lead and management carry plus legal costs. Shares come from ONE round."}
       </p>
 
-      {loadingHoldings && <p className="text-sm text-zinc-500">Loading holders…</p>}
+      {loadingHoldings && <p className="text-sm text-zinc-500">Loading rounds…</p>}
       {holdingsError && (
         <p role="alert" className="text-sm text-red-600 dark:text-red-400">
           {holdingsError}
         </p>
       )}
-      {saleBlocked && holdings && (
+      {holdings && kind === "Sale" && holdings.saleBlockers.length > 0 && (
         <ul role="alert" className="list-disc rounded-md border border-amber-300 bg-amber-50 py-2 pl-7 pr-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
           {holdings.saleBlockers.map((b) => (
             <li key={b}>{b}</li>
@@ -304,23 +302,51 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
         </ul>
       )}
 
-      {holdings && (
+      {holdings && holdings.rounds.length === 0 && <p className="text-sm text-zinc-600">This company has no rounds with member allocations.</p>}
+
+      {holdings && holdings.rounds.length > 0 && (
+        <>
+          <section className="flex flex-col gap-2">
+            <label className="flex max-w-xl flex-col gap-1 text-sm">
+              Source round (all shares in this transfer come from this one round)
+              <select value={roundKey} onChange={(e) => chooseRound(e.target.value)} className={inputCls}>
+                <option value="">Select a round…</option>
+                {holdings.rounds.map((r) => (
+                  <option key={r.key} value={r.key}>
+                    {r.date} {r.name} — {r.pricePerShare ? `${money(r.pricePerShare)}/share` : "no share price"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {round && kind === "Sale" && round.pricePerShare === null && (
+              <p role="alert" className="text-sm text-amber-800 dark:text-amber-300">
+                This round has no price per share (for example a SAFE), so a Sale cannot be recorded from it. Use an owner replacement.
+              </p>
+            )}
+            {round && (
+              <p className="text-xs text-zinc-500">
+                Amounts below are original cost: the dollars a member put into this round. Their shares and cost basis are worked out from that.
+              </p>
+            )}
+          </section>
+        </>
+      )}
+
+      {round && (
         <>
           <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium">Sellers</h2>
+            <h2 className="text-sm font-medium">Sellers (original cost moved)</h2>
             {sellers.map((s) => {
               const holder = holderById.get(s.memberId);
-              const known = holder?.shares != null;
-              const declaring = Boolean(s.memberId) && (!known || s.correct);
               const used = new Set(sellers.filter((x) => x.key !== s.key).map((x) => x.memberId));
               return (
                 <div key={s.key} className="flex flex-col gap-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 text-sm">
                       Seller
-                      <select value={s.memberId} onChange={(e) => patchSeller(s.key, { memberId: e.target.value, correct: false, heldShares: "", heldBasis: "", soldBasis: "" })} className={inputCls}>
+                      <select value={s.memberId} onChange={(e) => patchSeller(s.key, { memberId: e.target.value, amount: "" })} className={inputCls}>
                         <option value="">Select…</option>
-                        {holdings.holders
+                        {sortByName(round.holders)
                           .filter((h) => !used.has(h.memberId))
                           .map((h) => (
                             <option key={h.memberId} value={h.memberId}>
@@ -330,11 +356,11 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                       </select>
                     </label>
                     <label className="flex flex-col gap-1 text-sm">
-                      Shares moving
-                      <input type="number" min="0" step="any" value={s.shares} onChange={(e) => patchSeller(s.key, { shares: e.target.value })} className={`${inputCls} w-36`} />
+                      Original cost moving ($)
+                      <input type="number" min="0" step="any" value={s.amount} onChange={(e) => patchSeller(s.key, { amount: e.target.value })} className={`${inputCls} w-44`} />
                     </label>
-                    {known && !s.correct && (
-                      <button type="button" onClick={() => patchSeller(s.key, { shares: String(holder.shares) })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
+                    {holder && (
+                      <button type="button" onClick={() => patchSeller(s.key, { amount: String(holder.available) })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
                         Move entire position
                       </button>
                     )}
@@ -344,62 +370,11 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                       </button>
                     )}
                   </div>
-
-                  {s.memberId && known && (
+                  {holder && (
                     <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                      Recorded holding: {qty(holder.shares as number)} shares, cost basis {money(holder.basis)}.{" "}
-                      <label className="inline-flex items-center gap-1">
-                        <input type="checkbox" checked={s.correct} onChange={(e) => patchSeller(s.key, { correct: e.target.checked })} />
-                        Correct this holding
-                      </label>
+                      Holds {money(holder.available)} of this round, cost basis {money(holder.basis)}.
+                      {pos(s.amount) > holder.available + 0.005 && <span className="text-red-600 dark:text-red-400"> That is more than they hold.</span>}
                     </p>
-                  )}
-                  {s.memberId && !known && (
-                    <p className="text-xs text-amber-800 dark:text-amber-300">
-                      No holding is recorded for this member — enter their whole holding in {holdings.companyName} before this transfer.
-                      They have {money(holder?.invested ?? 0)} invested.
-                    </p>
-                  )}
-                  {s.memberId && (
-                    <label className="flex max-w-md flex-col gap-1 text-sm">
-                      Cost basis of the shares sold ($, optional)
-                      <input
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={s.soldBasis}
-                        placeholder={known && num(s.shares) > 0 ? String(Math.round(((holder.basis * num(s.shares)) / (holder.shares as number)) * 100) / 100) : ""}
-                        onChange={(e) => patchSeller(s.key, { soldBasis: e.target.value })}
-                        className={`${inputCls} w-44`}
-                      />
-                      <span className="text-xs text-zinc-500">
-                        Leave blank to use this member&apos;s average cost. Enter the total cost of these specific shares if they came from one round (the rest of their basis stays with the shares they keep).
-                      </span>
-                    </label>
-                  )}
-                  {declaring && (
-                    <div className="flex flex-wrap items-end gap-3">
-                      <label className="flex flex-col gap-1 text-sm">
-                        Shares held before this transfer
-                        <input type="number" min="0" step="any" value={s.heldShares} onChange={(e) => patchSeller(s.key, { heldShares: e.target.value })} className={`${inputCls} w-44`} />
-                      </label>
-                      <label className="flex flex-col gap-1 text-sm">
-                        Total cost basis ($, optional)
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={s.heldBasis}
-                          placeholder={holder ? String(holder.invested) : ""}
-                          onChange={(e) => patchSeller(s.key, { heldBasis: e.target.value })}
-                          className={`${inputCls} w-44`}
-                        />
-                      </label>
-                      {s.heldShares && num(s.shares) > 0 && num(s.heldShares) > 0 && num(s.shares) === num(s.heldShares) && (
-                        <span className="text-xs text-zinc-600 dark:text-zinc-400">Whole position.</span>
-                      )}
-                      <span className="text-xs text-zinc-500">Blank cost basis defaults to the dollars they invested.</span>
-                    </div>
                   )}
                 </div>
               );
@@ -410,18 +385,18 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
           </section>
 
           <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium">Buyers {kind === "Replacement" ? "(shares received)" : "(dollars paid)"}</h2>
+            <h2 className="text-sm font-medium">Buyers {kind === "Replacement" ? "(original cost received)" : "(dollars paid)"}</h2>
             {buyers.map((b) => {
               const used = new Set([...sellers.map((x) => x.memberId), ...buyers.filter((x) => x.key !== b.key).map((x) => x.memberId)]);
-              const others = buyers.filter((x) => x.key !== b.key).reduce((n, x) => n + (num(x.value) > 0 ? num(x.value) : 0), 0);
-              const remaining = sellerTotal - others;
+              const others = buyers.filter((x) => x.key !== b.key).reduce((n, x) => n + pos(x.value), 0);
+              const remaining = r2(buyerTarget - others);
               return (
                 <div key={b.key} className="flex flex-wrap items-end gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
                   <label className="flex flex-col gap-1 text-sm">
                     Buyer
                     <select value={b.memberId} onChange={(e) => patchBuyer(b.key, { memberId: e.target.value })} className={inputCls}>
                       <option value="">Select…</option>
-                      {members
+                      {sortByName(members)
                         .filter((m) => !used.has(m.id))
                         .map((m) => (
                           <option key={m.id} value={m.id}>
@@ -431,15 +406,12 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    {kind === "Replacement" ? "Shares" : "Dollars paid"}
-                    <input type="number" min="0" step="any" value={b.value} onChange={(e) => patchBuyer(b.key, { value: e.target.value })} className={`${inputCls} w-40`} />
+                    {kind === "Replacement" ? "Original cost received ($)" : "Dollars paid"}
+                    <input type="number" min="0" step="any" value={b.value} onChange={(e) => patchBuyer(b.key, { value: e.target.value })} className={`${inputCls} w-44`} />
                   </label>
-                  {kind === "Sale" && num(roundPrice) > 0 && num(b.value) > 0 && (
-                    <span className="pb-2 text-xs text-zinc-500">= {qty(num(b.value) / num(roundPrice))} shares</span>
-                  )}
-                  {kind === "Replacement" && remaining > 0 && (
-                    <button type="button" onClick={() => patchBuyer(b.key, { value: String(Math.round(remaining * 1e6) / 1e6) })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
-                      Assign remaining ({qty(remaining)})
+                  {remaining > 0 && (
+                    <button type="button" onClick={() => patchBuyer(b.key, { value: String(remaining) })} className="rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
+                      Assign remaining ({money(remaining)})
                     </button>
                   )}
                   {buyers.length > 1 && (
@@ -453,9 +425,13 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
             <button type="button" onClick={() => setBuyers((rows) => [...rows, newBuyer()])} className="self-start rounded-full border border-zinc-300 px-3 py-1 text-xs dark:border-zinc-700">
               Add buyer
             </button>
-            {kind === "Replacement" && sellerTotal > 0 && (
+            {sellerTotal > 0 && (
               <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                {qty(sellerTotal)} shares moving; {qty(buyerValueTotal)} assigned to buyers.
+                {kind === "Replacement"
+                  ? `${money(sellerTotal)} of original cost moving; ${money(buyerValueTotal)} assigned to buyers.`
+                  : saleDollarsTarget > 0
+                    ? `Buyers should pay ${money(saleDollarsTarget)} in total at the round price; ${money(buyerValueTotal)} assigned.`
+                    : `${money(sellerTotal)} of original cost moving. Enter the round price to see what buyers should pay.`}
               </p>
             )}
           </section>
@@ -503,7 +479,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                 ))}
               </ul>
             )}
-            {previewResult && isFull(previewResult) && <PreviewPanel result={previewResult} nameOf={nameOf} />}
+            {previewResult && isFull(previewResult) && <PreviewPanel result={previewResult} nameOf={nameOf} unit={unit} />}
           </section>
 
           {submitError && (
@@ -514,7 +490,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
           <button
             type="button"
             onClick={record}
-            disabled={!canRecord}
+            disabled={!canRecord || saleBlocked}
             className="self-start rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
           >
             {busy ? "Recording…" : "Record transfer"}
@@ -528,7 +504,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
   );
 }
 
-function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id: string) => string }) {
+function PreviewPanel({ result, nameOf, unit }: { result: TransferResult; nameOf: (id: string) => string; unit: number }) {
   const sale = result.kind === "SALE";
   const th = "px-2 py-1 text-left text-xs font-medium text-zinc-500";
   const td = "px-2 py-1 text-sm tabular-nums";
@@ -540,13 +516,6 @@ function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id:
             <li key={w}>{w}</li>
           ))}
         </ul>
-      )}
-
-      {result.openingAdjustments.length > 0 && (
-        <p className="text-sm text-zinc-700 dark:text-zinc-300">
-          Declared holdings that will be recorded:{" "}
-          {result.openingAdjustments.map((o) => `${nameOf(o.memberId)} — ${qty(o.shares)} shares, ${money(o.costBasis)} basis`).join("; ")}.
-        </p>
       )}
 
       {sale && (
@@ -569,9 +538,9 @@ function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id:
           <thead>
             <tr>
               <th className={th}>Seller</th>
-              <th className={th}>Shares</th>
-              <th className={th}>Held before</th>
-              <th className={th}>Basis / share</th>
+              <th className={th}>Original cost moved</th>
+              <th className={th}>Cost basis moved</th>
+              <th className={th}>Round position left</th>
               {sale && <th className={th}>Paid to seller</th>}
               {sale && <th className={th}>Gain</th>}
               {sale && <th className={th}>Fees</th>}
@@ -582,9 +551,9 @@ function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id:
             {result.sellers.map((s) => (
               <tr key={s.memberId} className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className={td}>{nameOf(s.memberId)}</td>
-                <td className={td}>{qty(s.shares)}</td>
-                <td className={td}>{qty(s.sharesHeldBefore)}</td>
-                <td className={td}>{money(s.costBasisPerShare)}</td>
+                <td className={td}>{money(s.shares * unit)}</td>
+                <td className={td}>{money(s.shares * s.costBasisPerShare)}</td>
+                <td className={td}>{money(Math.max(0, s.sharesHeldBefore - s.shares) * unit)}</td>
                 {sale && <td className={td}>{money(s.amount)}</td>}
                 {sale && <td className={td}>{money(s.gain)}</td>}
                 {sale && <td className={td}>{money(s.feesCharged)}</td>}
@@ -600,8 +569,8 @@ function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id:
           <thead>
             <tr>
               <th className={th}>Buyer</th>
-              <th className={th}>Shares</th>
-              <th className={th}>{sale ? "Cost / share" : "Inherited basis / share"}</th>
+              <th className={th}>Original cost received</th>
+              <th className={th}>{sale ? "Cost basis (paid)" : "Cost basis (inherited)"}</th>
               {sale && <th className={th}>Pays</th>}
             </tr>
           </thead>
@@ -609,8 +578,8 @@ function PreviewPanel({ result, nameOf }: { result: TransferResult; nameOf: (id:
             {result.buyers.map((b) => (
               <tr key={b.memberId} className="border-t border-zinc-200 dark:border-zinc-800">
                 <td className={td}>{nameOf(b.memberId)}</td>
-                <td className={td}>{qty(b.shares)}</td>
-                <td className={td}>{money(b.costBasisPerShare)}</td>
+                <td className={td}>{money(b.shares * unit)}</td>
+                <td className={td}>{money(b.shares * b.costBasisPerShare)}</td>
                 {sale && <td className={td}>{money(b.amount)}</td>}
               </tr>
             ))}

@@ -40,6 +40,8 @@ export interface MemberTransferData {
     feesCharged: number | null;
     kind: "SALE" | "REPLACEMENT";
     referenceRoundName: string | null;
+    sourceRoundName: string | null;
+    sourceRoundDate: string | null;
     roundPricePerShare: number | null;
     transferPricePerShare: number | null;
     docLink: string | null;
@@ -91,7 +93,7 @@ export async function loadMemberTransferData(authUid: string, scenario: Scenario
     shares: p.shares,
     costBasisPerShare: p.costBasisPerShare,
     amount: p.amount,
-    sharesHeldBefore: p.sharesHeldBefore ?? null,
+    costBasisBefore: p.costBasisBefore ?? null,
   }));
 
   // Only companies this member took part in a transfer of matter for their own view.
@@ -135,6 +137,8 @@ export async function loadMemberTransferData(authUid: string, scenario: Scenario
               | "SALE"
               | "REPLACEMENT",
             referenceRoundName: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.referenceRoundName ?? null,
+            sourceRoundName: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.sourceRoundName ?? null,
+            sourceRoundDate: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.sourceRoundDate ?? null,
             roundPricePerShare: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.roundPricePerShare ?? null,
             transferPricePerShare: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.transferPricePerShare ?? null,
             docLink: p.ledgerEntry.internalTransferDetail_on_ledgerEntry?.docLink ?? p.ledgerEntry.sourceDocument ?? null,

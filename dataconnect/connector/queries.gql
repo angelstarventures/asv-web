@@ -763,13 +763,14 @@ query ListTransferPartiesForScenario($scenario: Scenario!) @auth(expr: "auth.tok
     feesCharged
     realizedGain
     sharesHeldBefore
+    costBasisBefore
     member { id authUid }
     ledgerEntry {
       id
       eventDate
       sourceDocument
       company { id name tradeName sector status }
-      internalTransferDetail_on_ledgerEntry { kind referenceRoundName roundPricePerShare transferPricePerShare docLink notes }
+      internalTransferDetail_on_ledgerEntry { kind referenceRoundName sourceRoundName sourceRoundDate roundPricePerShare transferPricePerShare docLink notes }
     }
   }
 }

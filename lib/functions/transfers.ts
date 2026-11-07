@@ -7,11 +7,6 @@ import { functions } from "@/lib/firebase/client";
 
 export type TransferKind = "Sale" | "Replacement";
 
-export interface DeclaredHolding {
-  shares: number; // the seller's WHOLE holding in the company before this transfer
-  cost_basis?: number; // total dollars; defaults to the member's invested dollars
-}
-
 export interface RecordInternalTransferInput {
   company: string;
   date: string; // YYYY-MM-DD
@@ -19,10 +14,10 @@ export interface RecordInternalTransferInput {
   referenceRoundName?: string;
   roundPricePerShare?: number; // Sale only
   transferPricePerShare?: number; // Sale only
-  sellers: Record<string, number>; // memberId -> shares moved out
-  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
-  holdingsBefore?: Record<string, DeclaredHolding>;
-  soldCostBasis?: Record<string, number>; // seller -> total basis of the specific shares sold; omit for average cost
+  sourceRoundName: string; // the ONE round whose shares move
+  sourceRoundDate: string; // YYYY-MM-DD
+  sellers: Record<string, number>; // memberId -> original cost moved out (dollars at the source round's price)
+  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or original cost received (Replacement)
   legalCosts?: number; // Sale only; omit to derive as spread - carry
   docLink?: string;
   notes?: string;
@@ -45,7 +40,8 @@ export interface SellerResult {
   gain: number;
   feesCharged: number;
   realizedGain: number;
-  sharesHeldBefore: number;
+  sharesHeldBefore: number; // the seller's shares in the source round before this transfer
+  costBasisBefore: number; // the seller's total cost basis in the company before this transfer
 }
 
 export interface BuyerResult {
@@ -55,15 +51,8 @@ export interface BuyerResult {
   amount: number;
 }
 
-export interface OpeningAdjustment {
-  memberId: string;
-  shares: number;
-  costBasis: number;
-}
-
 export interface TransferResult {
   kind: "SALE" | "REPLACEMENT";
-  openingAdjustments: OpeningAdjustment[];
   ok: boolean;
   errors: string[];
   warnings: string[];
@@ -90,18 +79,32 @@ export async function ledgerRecordInternalTransfer(input: RecordInternalTransfer
   return (await call(input)).data;
 }
 
-export interface TransferHolder {
+export interface RoundHolder {
+  memberId: string;
+  displayName: string;
+  available: number; // original cost still held in this round (shares x the round's price)
+  basis: number; // cost basis of that position
+}
+
+export interface TransferRound {
+  key: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  pricePerShare: number | null; // null (e.g. a SAFE): only a Replacement can be recorded from it
+  holders: RoundHolder[];
+}
+
+export interface CompanyHolder {
   memberId: string;
   displayName: string;
   invested: number;
-  basis: number;
-  shares: number | null; // null = no recorded holding yet
-  hasOpening: boolean;
+  basis: number; // current cost basis in the company after all transfers
 }
 
 export interface TransferHoldingsOutput {
   companyName: string;
-  holders: TransferHolder[];
+  rounds: TransferRound[];
+  holders: CompanyHolder[]; // company-level cost basis per member (used by the exit form)
   ddLeadMemberId: string | null;
   ddLeadName: string | null;
   managementMemberId: string | null;

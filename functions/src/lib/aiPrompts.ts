@@ -76,24 +76,24 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     // Member-to-member transfers (House of Biryan case).
     "A document that moves shares from one existing member to another (a transfer agreement, " +
     "assignment, or buy-out/replacement letter) is an Internal_Transfer record, NOT a round, and " +
-    "needs no member_valuations or allocations. Set transfer_kind to \"Replacement\" when the " +
-    "document simply changes who owns all or part of a holding (no price, carry or fees: buyers " +
-    "maps member IDs to SHARES received); set it to \"Sale\" only when buyers pay the round price, " +
-    "sellers are paid a lower transfer price, and the spread funds carry and legal costs (then " +
-    "give round_price_per_share, transfer_price_per_share and reference_round_name, and put the " +
-    "DOLLARS each buyer paid in buyers). sellers always maps member IDs to the SHARES they sold. " +
+    "needs no member_valuations or allocations. Every Internal_Transfer moves shares of exactly ONE " +
+    "source round: set source_round_name and source_round_date to that round exactly as recorded in " +
+    "the ledger context (if the shares come from several rounds, draft one transfer per round). " +
+    "Positions are tracked in ORIGINAL COST (shares x the source round's price per share); never " +
+    "supply share counts or holdings. sellers maps member IDs to the original cost, in dollars, of " +
+    "the shares they sold (shares sold x the source round's price per share, never more than the " +
+    "originalCostHeld listed for that member and round). Set transfer_kind to \"Replacement\" when " +
+    "the document simply changes who owns all or part of a position (no price, carry or fees: " +
+    "buyers maps member IDs to the original cost they receive, equal in total to the sellers' " +
+    "amounts); set it to \"Sale\" only when buyers pay the round price, sellers are paid a lower " +
+    "transfer price, and the spread funds carry and legal costs (then give round_price_per_share " +
+    "and transfer_price_per_share, and put the DOLLARS each buyer paid in buyers; a Sale cannot " +
+    "come from a round with no price per share, such as a SAFE). " +
     "NEVER compute or supply cost basis, gains, carry, fee lines, or legal costs unless the " +
-    "document states a legal-cost figure explicitly — the system derives all of them. " +
-    "holdings_before declares each seller's WHOLE holding before the transfer: include it ONLY " +
-    "when the document itself states that seller's total share count (and cost basis, if given); " +
-    "if the ledger context below already lists a recorded holding for that seller, omit " +
-    "holdings_before unless the document contradicts it (and say so in warnings). NEVER invent, " +
-    "estimate, or back-calculate a holding from dollars invested — if a seller has no recorded " +
-    "holding and the document does not state one, omit holdings_before and add a warning naming " +
-    "that member so the reviewer can supply it. sold_cost_basis (per seller, total dollars) states the " +
-    "cost of the SPECIFIC shares being sold when the seller bought in several rounds and the " +
-    "document says which round\'s shares are sold and what they cost; otherwise omit it and the " +
-    "system uses the seller\'s average cost. Never infer it. Like a round, an Internal_Transfer never diverges " +
+    "document states a legal-cost figure explicitly — the system derives all of them. If you " +
+    "cannot tell which round the shares come from, or the ledger context shows the seller does not " +
+    "hold that much of it, draft what the document says and add a warning naming the problem. " +
+    "Like a round, an Internal_Transfer never diverges " +
     "by scenario: return one identical copy per scenario (3 copies).",
   portfolio_chat:
     `You are a portfolio assistant for ${ORG}, a venture investment fund. ` +
@@ -119,13 +119,13 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "breakdown is being shown) rather than a single block of prose. Keep answers concise and " +
     "cite the specific numbers you're using. " +
     "Ledger data may include Internal_Transfer records: member-to-member share transfers. A " +
-    "\"Replacement\" is a plain change of owner at the seller's cost basis (buyers is shares); a " +
+    "\"Replacement\" is a plain change of owner at the seller's cost basis; a " +
     "\"Sale\" is bought at the round price and sold at a lower transfer price, with the spread " +
     "funding carry (DD lead and management) and legal costs. Carry is charged on each seller's " +
     "gain only, never on a loss. A member's own transfer records show only their own side. " +
     "The same carry applies to a full exit: payouts are recorded gross and carry is deducted " +
-    "from each member's proceeds. Never guess a member's share count; say it is not recorded " +
-    "if the data does not include it.",
+    "from each member's proceeds. Transfers move shares of one round, tracked in original cost (shares x the round's price); " +
+    "member share counts are not recorded, so never state one.",
 };
 
 export async function getPromptSetting(key: AiPromptSettingKey): Promise<string> {

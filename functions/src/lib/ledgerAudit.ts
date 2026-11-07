@@ -1,4 +1,6 @@
 import { query } from "./dataconnect-admin";
+import { loadRoundBook } from "./memberPositions";
+import { negativePositions } from "./positionCalc";
 import { recomputeAllRollupsAndCheckInvariants } from "./rollups";
 import { fetchPriceHistory, deriveOwnership, hasSafeRoundHistory, EXTREME_RATIO, textMentionsSplit, type PricePoint } from "./valuationGuardrails";
 
@@ -241,11 +243,15 @@ async function auditInternalTransfers(): Promise<AuditFinding[]> {
        WHERE le.type = 'INTERNAL_TRANSFER'
        GROUP BY le.id, c.name, itd."round_price_per_share", itd."transfer_price_per_share", itd.kind`
     );
-    negative = await query(
-      `SELECT c.name AS "companyName", sl."member_id" AS "memberId", SUM(sl.shares) AS shares
-       FROM "share_lot" sl JOIN "company" c ON c.id = sl."company_id"
-       GROUP BY c.name, sl."member_id" HAVING SUM(sl.shares) < -0.000001`
+    negative = [];
+    const companies = await query<{ id: string; name: string }>(
+      `SELECT DISTINCT c.id, c.name FROM "company" c JOIN "ledger_entry" le ON le."company_id" = c.id WHERE le.type = 'INTERNAL_TRANSFER'`
     );
+    for (const c of companies) {
+      for (const n of negativePositions(await loadRoundBook((text, params) => query(text, params), c.id))) {
+        negative.push({ companyName: c.name, memberId: `${n.memberId} (${n.roundName}, ${n.roundDate})`, shares: 0 });
+      }
+    }
   } catch (err) {
     if ((err as { code?: string }).code === "42P01") return [];
     throw err;
@@ -287,7 +293,7 @@ async function auditInternalTransfers(): Promise<AuditFinding[]> {
     findings.push({
       category: "transfer",
       severity: "error",
-      message: `"${n.companyName}": member ${n.memberId} has negative share holdings (${Number(n.shares)}).`,
+      message: `"${n.companyName}": member ${n.memberId} has transferred more shares of a round than they hold.`,
     });
   }
   return findings;

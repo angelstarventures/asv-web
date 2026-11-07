@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-require-imports -- Standalone deployment CLI. */
-// Applies dataconnect/schema/{pre,post}_migrations/009_internal_transfers.sql to the brownfield
+// Applies dataconnect/schema/{pre,post}_migrations/009_internal_transfers.sql and pre_migrations/010_transfer_source_round.sql to the brownfield
 // database. Dry run by default (prints the statements); pass --apply after taking a snapshot.
 // Additive only: one enum value, two enums, four new tables, constraints, and an idempotent
 // share_lot backfill from existing priced/SAFE allocations. Mirrors apply-real-estate-migration.cjs.
@@ -13,6 +13,7 @@ function loadStatements() {
   return [
     ...split(fs.readFileSync(path.join(root, 'dataconnect/schema/pre_migrations/009_internal_transfers.sql'), 'utf8')),
     ...split(fs.readFileSync(path.join(root, 'dataconnect/schema/post_migrations/009_internal_transfers.sql'), 'utf8')),
+    ...split(fs.readFileSync(path.join(root, 'dataconnect/schema/pre_migrations/010_transfer_source_round.sql'), 'utf8')),
   ];
 }
 

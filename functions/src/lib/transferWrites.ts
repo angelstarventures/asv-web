@@ -5,32 +5,24 @@ import {
   TRANSFER_SETTING_KEYS,
   DEFAULT_DD_LEAD_CARRY_PERCENT,
   DEFAULT_MANAGEMENT_CARRY_PERCENT,
-  type DeclaredHolding,
-  type Holding,
   type InternalTransferRecord,
+  type RoundPosition,
   type TransferContext,
   type TransferResult,
 } from "./transferCalc";
-import {
-  insertInternalTransferDetail,
-  insertTransferParty,
-  insertFeeLine,
-  insertShareLot,
-} from "./ledgerWriteBuilders";
+import { insertInternalTransferDetail, insertTransferParty, insertFeeLine } from "./ledgerWriteBuilders";
+import { negativePositions, roundKey, unitPrice, type RoundBook } from "./positionCalc";
+import { loadRoundBook } from "./memberPositions";
 import type { ScenarioEnum } from "./enumMap";
 
-// DB side of internal transfers: loads the inputs transferCalc needs (fund-wide fee settings,
-// the company's DD lead, each seller's recorded share lots and invested dollars), then writes the
-// detail/party/fee-line rows and the share lots. The math itself stays in transferCalc.ts.
+// DB side of internal transfers: loads the inputs transferCalc needs (fund-wide fee settings, the
+// company's DD lead, the source round's price and each seller's position in it), then writes the
+// detail/party/fee-line rows. The math itself stays in transferCalc.ts.
 //
-// Share lots exist ONLY because of transfers — there is no round-time backfill. A seller's first
-// transfer declares their whole holding (`holdings_before`); the difference from the recorded lots
-// is written as an OPENING lot, then the transfer's own TRANSFER_OUT / TRANSFER_IN lots follow.
-//
-// Lots are scenario-independent (who owns what, not a valuation view), so they are written once —
-// by the BALANCED row. The OPTIMISTIC/CONSERVATIVE rows of a transfer copy the BALANCED row's
-// computed parties/fee lines instead of recomputing, because by then the lots already reflect
-// the transfer (see applyInternalTransfer).
+// There are no stored holdings: positions are derived from round allocations plus the transfers
+// already recorded against each round (see positionCalc.ts). Transfers are scenario-independent,
+// so the BALANCED row is computed and the OPTIMISTIC/CONSERVATIVE rows copy it (see
+// applyInternalTransfer).
 
 export type Run = <T>(text: string, params?: unknown[]) => Promise<T[]>;
 
@@ -45,12 +37,12 @@ export function toTransferRecord(record: Record<string, unknown>): InternalTrans
   const kind = String(record.transfer_kind ?? "Sale");
   return {
     transfer_kind: kind.toLowerCase() === "replacement" ? "Replacement" : "Sale",
+    source_round_name: record.source_round_name != null ? String(record.source_round_name) : undefined,
+    source_round_date: record.source_round_date != null ? String(record.source_round_date) : undefined,
     round_price_per_share: record.round_price_per_share != null ? Number(record.round_price_per_share) : undefined,
     transfer_price_per_share: record.transfer_price_per_share != null ? Number(record.transfer_price_per_share) : undefined,
     sellers: (record.sellers as Record<string, number>) ?? {},
     buyers: (record.buyers as Record<string, number>) ?? {},
-    holdings_before: (record.holdings_before as Record<string, DeclaredHolding> | undefined) ?? undefined,
-    sold_cost_basis: (record.sold_cost_basis as Record<string, number> | undefined) ?? undefined,
     legal_costs: record.legal_costs != null ? Number(record.legal_costs) : undefined,
   };
 }
@@ -60,7 +52,10 @@ export async function findCompanyIdByName(run: Run, name: string): Promise<strin
   return rows[0]?.id ?? null;
 }
 
-export async function loadTransferContext(run: Run, companyId: string, sellerIds: string[]): Promise<TransferContext> {
+export type FeeContext = Pick<TransferContext, "ddLeadMemberId" | "managementMemberId" | "ddLeadPercent" | "managementPercent">;
+
+// Fund-wide carry settings and the company's DD lead.
+export async function loadFeeContext(run: Run, companyId: string): Promise<FeeContext> {
   const settings = await run<{ key: string; value: string }>(`SELECT key, value FROM "app_setting" WHERE key = ANY($1)`, [
     Object.values(TRANSFER_SETTING_KEYS),
   ]);
@@ -70,36 +65,8 @@ export async function loadTransferContext(run: Run, companyId: string, sellerIds
     return v !== undefined && v !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
   };
   const mgmt = byKey.get(TRANSFER_SETTING_KEYS.managementCarryMemberId);
-
   const company = await run<{ ddLeadId: string | null }>(`SELECT "dd_lead_id" AS "ddLeadId" FROM "company" WHERE id = $1`, [companyId]);
-
-  const lots = sellerIds.length
-    ? await run<{ memberId: string; shares: number; costBasis: number }>(
-        `SELECT "member_id" AS "memberId", SUM(shares) AS shares, SUM("cost_basis") AS "costBasis"
-         FROM "share_lot"
-         WHERE "company_id" = $1 AND "member_id" = ANY($2)
-         GROUP BY "member_id"`,
-        [companyId, sellerIds]
-      )
-    : [];
-  const holdings: Record<string, Holding> = {};
-  for (const l of lots) holdings[l.memberId] = { shares: Number(l.shares), costBasis: Number(l.costBasis) };
-
-  // Dollars each seller has invested in this company (rounds are identical across scenarios, so
-  // BALANCED alone is read) — the default cost basis for a declared holding.
-  const invested = sellerIds.length
-    ? await run<{ memberId: string; total: number }>(
-        `SELECT a."member_id" AS "memberId", SUM(a.amount) AS total
-         FROM "allocation" a JOIN "ledger_entry" le ON le.id = a."ledger_entry_id"
-         WHERE le."company_id" = $1 AND le.scenario = $2 AND a."member_id" = ANY($3)
-         GROUP BY a."member_id"`,
-        [companyId, LOT_OWNER_SCENARIO, sellerIds]
-      )
-    : [];
-
   return {
-    holdings,
-    invested: Object.fromEntries(invested.map((r) => [r.memberId, Number(r.total)])),
     ddLeadMemberId: company[0]?.ddLeadId ?? null,
     managementMemberId: mgmt && mgmt.trim() !== "" ? mgmt.trim() : null,
     ddLeadPercent: pct(TRANSFER_SETTING_KEYS.ddLeadCarryPercent, DEFAULT_DD_LEAD_CARRY_PERCENT),
@@ -107,20 +74,56 @@ export async function loadTransferContext(run: Run, companyId: string, sellerIds
   };
 }
 
-// An already-recorded BALANCED row of this same logical transfer (same company, date, kind, prices
-// and identical seller/buyer maps) — i.e. the lot-owning row. Compared on the actual parties
-// rather than the import content hash, which ignores nested keys such as member ids.
-async function findBalancedSibling(run: Run, companyId: string, eventDate: string, rec: InternalTransferRecord): Promise<string | null> {
+// The full calculator context for a record: fee settings plus the source round's price and the
+// sellers' positions in it. Returns an error string when the source round does not exist.
+export async function loadTransferContext(
+  run: Run,
+  companyId: string,
+  rec: InternalTransferRecord,
+  book?: RoundBook
+): Promise<{ ctx: TransferContext } | { error: string }> {
+  if (!rec.source_round_name || !rec.source_round_date) {
+    return { error: "Choose the source round: every transfer moves shares from exactly one round." };
+  }
+  const roundBook = book ?? (await loadRoundBook(run, companyId));
+  const round = roundBook.rounds.find((r) => r.key === roundKey(rec.source_round_date as string, rec.source_round_name as string));
+  if (!round) {
+    return { error: `"${rec.source_round_name}" (${rec.source_round_date}) is not a round of this company with member allocations.` };
+  }
+  const positions: Record<string, RoundPosition> = {};
+  const companyBasis: Record<string, number> = {};
+  for (const id of Object.keys(rec.sellers)) {
+    positions[id] = round.positions[id] ?? { shares: 0, basis: 0 };
+    companyBasis[id] = roundBook.companyBasis[id] ?? 0;
+  }
+  return { ctx: { sourcePrice: round.price, positions, companyBasis, ...(await loadFeeContext(run, companyId)) } };
+}
+
+// An already-recorded BALANCED row of this same logical transfer (same company, date, kind, prices,
+// source round and identical seller/buyer maps) — i.e. the computing row. Compared on the actual
+// parties rather than the import content hash, which ignores nested keys such as member ids.
+async function findBalancedSibling(
+  run: Run,
+  companyId: string,
+  eventDate: string,
+  rec: InternalTransferRecord,
+  sourcePrice: number | null
+): Promise<string | null> {
   const replacement = isReplacement(rec);
-  const candidates = await run<{ id: string; kind: string; roundPrice: number | null; transferPrice: number | null }>(
-    `SELECT le.id, itd.kind::text AS kind, itd."round_price_per_share" AS "roundPrice", itd."transfer_price_per_share" AS "transferPrice"
+  const candidates = await run<{
+    id: string; kind: string; roundPrice: number | null; transferPrice: number | null; sourceName: string | null; sourceDate: string | null;
+  }>(
+    `SELECT le.id, itd.kind::text AS kind, itd."round_price_per_share" AS "roundPrice", itd."transfer_price_per_share" AS "transferPrice",
+            itd."source_round_name" AS "sourceName", itd."source_round_date"::text AS "sourceDate"
      FROM "ledger_entry" le
      JOIN "internal_transfer_detail" itd ON itd."ledger_entry_id" = le.id
      WHERE le."company_id" = $1 AND le.type = 'INTERNAL_TRANSFER' AND le.scenario = $2 AND le."event_date" = $3`,
     [companyId, LOT_OWNER_SCENARIO, eventDate]
   );
+  const unit = unitPrice(sourcePrice);
   for (const c of candidates) {
     if ((c.kind === "REPLACEMENT") !== replacement) continue;
+    if (c.sourceName !== rec.source_round_name || c.sourceDate !== rec.source_round_date) continue;
     if (!replacement) {
       if (
         Math.abs(Number(c.roundPrice) - Number(rec.round_price_per_share)) > EPS ||
@@ -135,15 +138,14 @@ async function findBalancedSibling(run: Run, companyId: string, eventDate: strin
     );
     const sellers = parties.filter((p) => p.side === "SELLER");
     const buyers = parties.filter((p) => p.side === "BUYER");
+    // Record amounts are original cost (shares x the source round's price); Sale buyers are dollars paid.
     const sameSellers =
       sellers.length === Object.keys(rec.sellers).length &&
-      sellers.every((p) => rec.sellers[p.memberId] !== undefined && Math.abs(rec.sellers[p.memberId] - Number(p.shares)) < 1e-4);
-    // Sale buyers are keyed by dollars paid; replacement buyers by shares received.
-    const buyerValue = (p: { shares: number; amount: number }) => (replacement ? Number(p.shares) : Number(p.amount));
-    const tolerance = replacement ? 1e-4 : 0.01;
+      sellers.every((p) => rec.sellers[p.memberId] !== undefined && Math.abs(rec.sellers[p.memberId] - Number(p.shares) * unit) < 0.01);
+    const buyerValue = (p: { shares: number; amount: number }) => (replacement ? Number(p.shares) * unit : Number(p.amount));
     const sameBuyers =
       buyers.length === Object.keys(rec.buyers).length &&
-      buyers.every((p) => rec.buyers[p.memberId] !== undefined && Math.abs(rec.buyers[p.memberId] - buyerValue(p)) < tolerance);
+      buyers.every((p) => rec.buyers[p.memberId] !== undefined && Math.abs(rec.buyers[p.memberId] - buyerValue(p)) < 0.01);
     if (sameSellers && sameBuyers) return c.id;
   }
   return null;
@@ -157,18 +159,19 @@ export async function previewInternalTransfer(
   const rec = toTransferRecord(record);
   const companyId = await findCompanyIdByName(run, String(record.company ?? ""));
   if (!companyId) return { errors: [`"${record.company}" is not a known company.`] };
-  if (await findBalancedSibling(run, companyId, String(record.date), rec)) {
-    // Already recorded under the lot-owning scenario: holdings now reflect the transfer, so a fresh
-    // preview would wrongly flag overselling. Nothing left to validate for this sibling row.
-    // Treat each seller as holding exactly what they move so only the non-holding checks apply.
-    const holdings: Record<string, Holding> = {};
-    for (const [id, shares] of Object.entries(rec.sellers)) holdings[id] = { shares, costBasis: 0 };
-    return computeTransferFromRecord(
-      { ...rec, holdings_before: undefined, sold_cost_basis: undefined },
-      { ...(await loadTransferContext(run, companyId, [])), holdings }
-    );
+  const loaded = await loadTransferContext(run, companyId, rec);
+  if ("error" in loaded) return { errors: [loaded.error] };
+  const ctx = loaded.ctx;
+
+  if (await findBalancedSibling(run, companyId, String(record.date), rec, ctx.sourcePrice)) {
+    // Already recorded under the computing scenario: positions now reflect the transfer, so a fresh
+    // preview would wrongly flag overselling. Treat each seller as holding exactly what they move so
+    // only the non-position checks apply.
+    const unit = unitPrice(ctx.sourcePrice);
+    const positions: Record<string, RoundPosition> = {};
+    for (const [id, units] of Object.entries(rec.sellers)) positions[id] = { shares: units / unit, basis: units };
+    return computeTransferFromRecord(rec, { ...ctx, positions });
   }
-  const ctx = await loadTransferContext(run, companyId, Object.keys(rec.sellers));
   return computeTransferFromRecord(rec, ctx);
 }
 
@@ -183,21 +186,24 @@ export async function applyInternalTransfer(
 ): Promise<void> {
   const { ledgerEntryId, companyId, scenario, record } = args;
   const run = clientRunner(client);
-  // Serialize transfers/edits per company so concurrent writers can't both pass the held-shares
-  // check against the same lots.
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`share_lot:${companyId}`]);
+  // Serialize transfers/edits per company so concurrent writers can't both pass the position
+  // check against the same recorded transfers.
+  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`transfer:${companyId}`]);
 
   const eventDate = String(record.date);
   const rec = toTransferRecord(record);
+  const loaded = await loadTransferContext(run, companyId, rec);
+  if ("error" in loaded) throw new Error(`Internal transfer for "${record.company}" on ${eventDate} is invalid: ${loaded.error}`);
+  const ctx = loaded.ctx;
+
   if (scenario !== LOT_OWNER_SCENARIO) {
-    const sibling = await findBalancedSibling(run, companyId, eventDate, rec);
+    const sibling = await findBalancedSibling(run, companyId, eventDate, rec, ctx.sourcePrice);
     if (sibling) {
       await copyTransferRows(client, sibling, ledgerEntryId);
       return;
     }
   }
 
-  const ctx = await loadTransferContext(run, companyId, Object.keys(rec.sellers));
   const result = computeTransferFromRecord(rec, ctx);
   if (!result.ok) {
     throw new Error(`Internal transfer for "${record.company}" on ${eventDate} is invalid: ${result.errors.join("; ")}`);
@@ -206,6 +212,8 @@ export async function applyInternalTransfer(
   await insertInternalTransferDetail(client, ledgerEntryId, {
     kind: result.kind,
     referenceRoundName: record.reference_round_name as string | undefined,
+    sourceRoundName: rec.source_round_name as string,
+    sourceRoundDate: rec.source_round_date as string,
     roundPricePerShare: result.kind === "SALE" ? rec.round_price_per_share : undefined,
     transferPricePerShare: result.kind === "SALE" ? rec.transfer_price_per_share : undefined,
     totalShares: result.totalShares,
@@ -224,6 +232,7 @@ export async function applyInternalTransfer(
       feesCharged: s.feesCharged,
       realizedGain: s.realizedGain,
       sharesHeldBefore: s.sharesHeldBefore,
+      costBasisBefore: s.costBasisBefore,
     });
   }
   for (const b of result.buyers) {
@@ -244,61 +253,20 @@ export async function applyInternalTransfer(
       amount: f.amount,
     });
   }
-
-  if (scenario === LOT_OWNER_SCENARIO) {
-    for (const o of result.openingAdjustments) {
-      await insertShareLot(client, {
-        companyId,
-        memberId: o.memberId,
-        sourceEntryId: ledgerEntryId,
-        acquiredDate: eventDate,
-        kind: "OPENING",
-        shares: roundBasis(o.shares),
-        costBasis: roundBasis(o.costBasis),
-      });
-    }
-    for (const s of result.sellers) {
-      await insertShareLot(client, {
-        companyId,
-        memberId: s.memberId,
-        sourceEntryId: ledgerEntryId,
-        acquiredDate: eventDate,
-        kind: "TRANSFER_OUT",
-        shares: -s.shares,
-        costBasis: -roundBasis(s.shares * s.costBasisPerShare),
-      });
-    }
-    for (const b of result.buyers) {
-      await insertShareLot(client, {
-        companyId,
-        memberId: b.memberId,
-        sourceEntryId: ledgerEntryId,
-        acquiredDate: eventDate,
-        kind: "TRANSFER_IN",
-        shares: b.shares,
-        // Sale: what the buyer paid. Replacement: the basis inherited from the sellers.
-        costBasis: result.kind === "SALE" ? b.amount : roundBasis(b.shares * b.costBasisPerShare),
-      });
-    }
-  }
-}
-
-function roundBasis(n: number): number {
-  return Math.round(n * 1e6) / 1e6;
 }
 
 async function copyTransferRows(client: PoolClient, fromEntryId: string, toEntryId: string): Promise<void> {
   await client.query(
     `INSERT INTO "internal_transfer_detail"
-       ("ledger_entry_id", kind, "reference_round_name", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes)
-     SELECT $2, kind, "reference_round_name", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes
+       ("ledger_entry_id", kind, "reference_round_name", "source_round_name", "source_round_date", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes)
+     SELECT $2, kind, "reference_round_name", "source_round_name", "source_round_date", "round_price_per_share", "transfer_price_per_share", "total_shares", "gross_gain", "doc_link", notes
      FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`,
     [fromEntryId, toEntryId]
   );
   await client.query(
     `INSERT INTO "transfer_party"
-       ("ledger_entry_id", "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain", "shares_held_before")
-     SELECT $2, "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain", "shares_held_before"
+       ("ledger_entry_id", "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain", "shares_held_before", "cost_basis_before")
+     SELECT $2, "member_id", side, shares, "cost_basis_per_share", amount, gain, "fees_charged", "realized_gain", "shares_held_before", "cost_basis_before"
      FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
     [fromEntryId, toEntryId]
   );
@@ -310,24 +278,19 @@ async function copyTransferRows(client: PoolClient, fromEntryId: string, toEntry
   );
 }
 
-// Members whose net shares in the company are below zero — i.e. a delete/edit that would leave
-// someone having moved shares they no longer hold on paper (e.g. deleting the transfer whose
-// OPENING lot a later transfer relied on).
+// (round, member) pairs left with negative shares — a delete/edit that would leave a transfer
+// selling shares the member no longer holds on paper (e.g. deleting the transfer that gave a buyer
+// the shares they later sold).
 export async function findNegativeHoldings(client: PoolClient, companyId: string): Promise<string[]> {
-  const rows = await client.query<{ memberId: string; shares: number }>(
-    `SELECT "member_id" AS "memberId", SUM(shares) AS shares
-     FROM "share_lot" WHERE "company_id" = $1
-     GROUP BY "member_id" HAVING SUM(shares) < $2`,
-    [companyId, -EPS]
-  );
-  return rows.rows.map((r) => r.memberId);
+  const book = await loadRoundBook(clientRunner(client), companyId);
+  return negativePositions(book).map((n) => `${n.memberId} (${n.roundName}, ${n.roundDate})`);
 }
 
 export async function assertNoNegativeHoldings(client: PoolClient, companyId: string): Promise<void> {
   const negative = await findNegativeHoldings(client, companyId);
   if (negative.length > 0) {
     throw new Error(
-      `This change would leave member(s) ${negative.join(", ")} with negative share holdings, because later transfers moved shares this record created. Remove or re-record those transfers first.`
+      `This change would leave member(s) ${negative.join(", ")} having transferred more shares of a round than they hold, because later transfers moved shares this record created. Remove or re-record those transfers first.`
     );
   }
 }

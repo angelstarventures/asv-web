@@ -1,29 +1,45 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { requireAdmin } from "../lib/auth";
 import { query } from "../lib/dataconnect-admin";
-import { loadMemberPositions } from "../lib/memberPositions";
-import { loadTransferContext, type Run } from "../lib/transferWrites";
+import { loadMemberPositions, loadRoundBook } from "../lib/memberPositions";
+import { unitPrice } from "../lib/positionCalc";
+import { loadFeeContext, type Run } from "../lib/transferWrites";
 
-// Read-only lookup behind the admin transfer form: who holds (or has invested in) a company, what
-// is recorded for them, and whether the fund-wide carry settings are ready for a Sale. Share
-// counts are null unless known (declared on an earlier transfer) — the form then asks for them.
+// Read-only lookup behind the admin transfer form: the company's rounds, who holds what of each
+// (in original cost, i.e. shares x the round's price, plus the basis they carry), and whether the
+// fund-wide carry settings are ready for a Sale. There are no share counts: a position is derived
+// from round allocations and the transfers already recorded.
 
 export interface TransferHoldingsInput {
   companyId: string;
 }
 
-export interface TransferHolder {
+export interface RoundHolder {
+  memberId: string;
+  displayName: string;
+  available: number; // original cost still held in this round: shares x the round's price
+  basis: number; // cost basis of that position in dollars
+}
+
+export interface TransferRound {
+  key: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+  pricePerShare: number | null; // null (e.g. a SAFE): only a Replacement can be recorded from it
+  holders: RoundHolder[];
+}
+
+export interface CompanyHolder {
   memberId: string;
   displayName: string;
   invested: number;
   basis: number;
-  shares: number | null; // null = no recorded holding; ask the admin to declare it
-  hasOpening: boolean;
 }
 
 export interface TransferHoldingsOutput {
   companyName: string;
-  holders: TransferHolder[];
+  rounds: TransferRound[];
+  holders: CompanyHolder[]; // company-level cost basis per member (used by the exit form)
   ddLeadMemberId: string | null;
   ddLeadName: string | null;
   managementMemberId: string | null;
@@ -43,8 +59,15 @@ export const ledgerTransferHoldings = onCall<TransferHoldingsInput, Promise<Tran
   const company = await query<{ name: string }>(`SELECT name FROM "company" WHERE id = $1`, [companyId]);
   if (!company[0]) throw new HttpsError("not-found", "Unknown company.");
 
-  const ctx = await loadTransferContext(dbRun, companyId, []);
-  const holders = await loadMemberPositions(dbRun, companyId);
+  const fees = await loadFeeContext(dbRun, companyId);
+  const book = await loadRoundBook(dbRun, companyId);
+  const companyHolders = await loadMemberPositions(dbRun, companyId);
+
+  const memberIds = [...new Set(book.rounds.flatMap((r) => Object.keys(r.positions)))];
+  const names = memberIds.length
+    ? await query<{ id: string; displayName: string }>(`SELECT id, "display_name" AS "displayName" FROM "member" WHERE id = ANY($1)`, [memberIds])
+    : [];
+  const nameBy = new Map(names.map((n) => [n.id, n.displayName]));
 
   const nameOf = async (id: string | null): Promise<string | null> => {
     if (!id) return null;
@@ -53,25 +76,35 @@ export const ledgerTransferHoldings = onCall<TransferHoldingsInput, Promise<Tran
   };
 
   const saleBlockers: string[] = [];
-  if (!ctx.ddLeadMemberId) saleBlockers.push("This company has no DD lead. Set one under Admin > Companies.");
-  if (!ctx.managementMemberId) saleBlockers.push("No management-carry recipient is set. Choose one under Admin > Settings.");
+  if (!fees.ddLeadMemberId) saleBlockers.push("This company has no DD lead. Set one under Admin > Companies.");
+  if (!fees.managementMemberId) saleBlockers.push("No management-carry recipient is set. Choose one under Admin > Settings.");
 
   return {
     companyName: company[0].name,
-    holders: holders.map((h) => ({
-      memberId: h.memberId,
-      displayName: h.displayName,
-      invested: h.invested,
-      basis: h.basis,
-      shares: h.shares,
-      hasOpening: h.hasOpening,
-    })),
-    ddLeadMemberId: ctx.ddLeadMemberId,
-    ddLeadName: await nameOf(ctx.ddLeadMemberId),
-    managementMemberId: ctx.managementMemberId,
-    managementName: await nameOf(ctx.managementMemberId),
-    ddLeadPercent: ctx.ddLeadPercent,
-    managementPercent: ctx.managementPercent,
+    rounds: book.rounds
+      .map((r) => ({
+        key: r.key,
+        name: r.name,
+        date: r.date,
+        pricePerShare: r.price,
+        holders: Object.entries(r.positions)
+          .filter(([, p]) => p.shares > 1e-6)
+          .map(([memberId, p]) => ({
+            memberId,
+            displayName: nameBy.get(memberId) ?? memberId,
+            available: Math.round(p.shares * unitPrice(r.price) * 100) / 100,
+            basis: Math.round(p.basis * 100) / 100,
+          }))
+          .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+      }))
+      .filter((r) => r.holders.length > 0),
+    holders: companyHolders.map((h) => ({ memberId: h.memberId, displayName: h.displayName, invested: h.invested, basis: h.basis })),
+    ddLeadMemberId: fees.ddLeadMemberId,
+    ddLeadName: await nameOf(fees.ddLeadMemberId),
+    managementMemberId: fees.managementMemberId,
+    managementName: await nameOf(fees.managementMemberId),
+    ddLeadPercent: fees.ddLeadPercent,
+    managementPercent: fees.managementPercent,
     saleBlockers,
   };
 });

@@ -1,7 +1,7 @@
 import type { PoolClient } from "pg";
 import { computeExitCarry, type ExitCarryResult } from "./transferCalc";
 import { loadMemberPositions } from "./memberPositions";
-import { loadTransferContext, clientRunner, type Run } from "./transferWrites";
+import { loadFeeContext, clientRunner, type Run } from "./transferWrites";
 import { insertFeeLine } from "./ledgerWriteBuilders";
 
 // Carry on a complete exit (Phase 7). Applies once a fund-wide management-carry recipient is
@@ -33,7 +33,7 @@ export interface ExitCarryPreview {
 export async function previewExitCarry(run: Run, companyId: string, record: Record<string, unknown>): Promise<ExitCarryPreview> {
   const payouts = (record.member_payouts as Record<string, number> | undefined) ?? {};
   const payeeIds = Object.keys(payouts);
-  const ctx = await loadTransferContext(run, companyId, []);
+  const ctx = await loadFeeContext(run, companyId);
   const base = { ddLeadPercent: ctx.ddLeadPercent, managementPercent: ctx.managementPercent };
   const none = (reason: string): ExitCarryPreview => ({ applies: false, reason, errors: [], members: [], result: null, ...base });
 

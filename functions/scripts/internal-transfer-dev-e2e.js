@@ -40,7 +40,7 @@ const { applyLedgerRecord } = require("../lib/src/lib/applyLedgerRecord");
 const { deleteLedgerEntry } = require("../lib/src/lib/deleteLedgerRecord");
 const { previewInternalTransfer, clientRunner, findNegativeHoldings } = require("../lib/src/lib/transferWrites");
 const { TRANSFER_SETTING_KEYS } = require("../lib/src/lib/transferCalc");
-const { loadMemberPositions, memberValuesAfterTransfers } = require("../lib/src/lib/memberPositions");
+const { loadMemberPositions, loadRoundBook, memberValuesAfterTransfers } = require("../lib/src/lib/memberPositions");
 
 class Rollback extends Error {}
 const near = (a, b, eps = 0.01) => Math.abs(Number(a) - Number(b)) <= eps;
@@ -62,31 +62,18 @@ async function expectFailure(client, label, pattern, fn) {
   ok(`${label} -> rejected (${message.slice(0, 70)}...)`);
 }
 
-async function lotsByMember(client, companyId) {
-  const { rows } = await client.query(
-    `SELECT "member_id" AS m, SUM(shares)::float8 AS shares, SUM("cost_basis")::float8 AS basis
-     FROM "share_lot" WHERE "company_id" = $1 GROUP BY "member_id"`,
-    [companyId]
-  );
-  return Object.fromEntries(rows.map((r) => [r.m, { shares: r.shares, basis: r.basis }]));
-}
-
 async function main() {
   console.log(`Target: ${instance} / ${database}`);
   await withTransaction(async (client) => {
     const db = await client.query("SELECT current_database() AS db");
     assert.equal(db.rows[0].db, database, "connected to a different database than requested");
-    const tables = await client.query(
-      `SELECT to_regclass('public.share_lot') AS lot, to_regclass('public.transfer_party') AS party`
+    const cols = await client.query(
+      `SELECT count(*)::int AS n FROM information_schema.columns
+       WHERE (table_name = 'internal_transfer_detail' AND column_name IN ('source_round_name', 'source_round_date'))
+          OR (table_name = 'transfer_party' AND column_name IN ('cost_basis_before', 'shares_held_before'))`
     );
-    assert(tables.rows[0].lot && tables.rows[0].party, "Migration 009 is not applied to this database.");
-    assert.equal(
-      (await client.query(`SELECT count(*)::int AS n FROM information_schema.columns WHERE table_name = 'share_lot' AND column_name IN ('kind', 'shares')`)).rows[0].n,
-      2,
-      "share_lot has the wrong shape - run scripts/reset-internal-transfer-dev.cjs and re-apply the migration"
-    );
-    assert.equal((await client.query(`SELECT count(*)::int AS n FROM "share_lot"`)).rows[0].n, 0, "dev share_lot should start empty (no backfill)");
-    ok("migration 009 present in its current shape; no backfilled lots");
+    assert.equal(cols.rows[0].n, 4, "Migration 009 + 010 are not both applied to this database (run scripts/apply-internal-transfer-migration.cjs against it).");
+    ok("migrations 009 and 010 present in their current shape");
 
     // --- Fixtures (all rolled back) ---------------------------------------------------------
     const members = (await client.query(`SELECT id FROM "member" ORDER BY id LIMIT 7`)).rows.map((r) => r.id);
@@ -96,16 +83,31 @@ async function main() {
     const base = { company: COMPANY, company_url: "https://example.com", sector: "Test", date: "2025-01-15" };
     const SCENARIOS = ["BALANCED", "OPTIMISTIC", "CONSERVATIVE"];
 
-    const roundRecord = {
+    // Series A at 1,000/share: sellerA 5 shares, sellerB 3. Series B at 2,000/share: sellerA 2 more shares.
+    const seriesA = {
       ...base, type: "Participating_PricedRound", doc_link: "https://example.com/round", round_name: "Series A",
-      asv_total: 8000, price_per_share: 0, post_money_valuation: 10000000, // price 0 on purpose: shares are never derived
+      asv_total: 8000, price_per_share: 1000, post_money_valuation: 10000000,
       allocations: { [sellerA]: 5000, [sellerB]: 3000 },
     };
-    for (const scenario of SCENARIOS) await applyLedgerRecord(client, roundRecord, { scenario, createdBy: ddLead });
+    const seriesB = {
+      ...seriesA, date: "2025-06-01", round_name: "Series B", asv_total: 4000, price_per_share: 2000,
+      allocations: { [sellerA]: 4000 },
+    };
+    for (const scenario of SCENARIOS) {
+      await applyLedgerRecord(client, seriesA, { scenario, createdBy: ddLead });
+      await applyLedgerRecord(client, seriesB, { scenario, createdBy: ddLead });
+    }
     const companyId = (await client.query(`SELECT id FROM "company" WHERE name = $1`, [COMPANY])).rows[0].id;
     await client.query(`UPDATE "company" SET "dd_lead_id" = $2 WHERE id = $1`, [companyId, ddLead]);
-    assert.deepEqual(await lotsByMember(client, companyId), {});
-    ok("recording rounds (even a price-0 one) writes no share lots");
+    const run = clientRunner(client);
+    const roundPos = async (roundName) => {
+      const book = await loadRoundBook(run, companyId);
+      return book.rounds.find((r) => r.name === roundName).positions;
+    };
+    let posA = await roundPos("Series A");
+    assert(near(posA[sellerA].shares, 5) && near(posA[sellerA].basis, 5000) && near(posA[sellerB].shares, 3));
+    assert(near((await roundPos("Series B"))[sellerA].shares, 2));
+    ok("positions come from round allocations: Series A 5 + 3 shares, Series B 2 shares (dollars / the round's price)");
 
     const upsert = (key, value) =>
       client.query(
@@ -113,14 +115,13 @@ async function main() {
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
         [key, value, ddLead]
       );
-    const holdingsBefore = { [sellerA]: { shares: 5 }, [sellerB]: { shares: 3 } }; // cost basis defaults to invested dollars
+    // Amounts are ORIGINAL COST (shares x the source round's price): sellerA moves all 5 Series A shares.
     const sale = {
       ...base, type: "Internal_Transfer", date: "2026-03-01", reference_round_name: "2026 round",
+      source_round_name: "Series A", source_round_date: "2025-01-15",
       round_price_per_share: 2000, transfer_price_per_share: 1800,
-      sellers: { [sellerA]: 5, [sellerB]: 3 }, buyers: { [buyerA]: 10000, [buyerB]: 6000 },
-      holdings_before: holdingsBefore,
+      sellers: { [sellerA]: 5000, [sellerB]: 3000 }, buyers: { [buyerA]: 10000, [buyerB]: 6000 },
     };
-    const run = clientRunner(client);
 
     // --- B. Settings gate -------------------------------------------------------------------
     await client.query(`DELETE FROM "app_setting" WHERE key = $1`, [TRANSFER_SETTING_KEYS.managementCarryMemberId]);
@@ -131,18 +132,20 @@ async function main() {
     await upsert(TRANSFER_SETTING_KEYS.ddLeadCarryPercent, "3");
     await upsert(TRANSFER_SETTING_KEYS.managementCarryPercent, "5");
 
-    // --- C. Preview math, declared holdings, oversell ---------------------------------------
+    // --- C. Preview math and the oversell guard ---------------------------------------------
     preview = await previewInternalTransfer(run, sale);
     assert.deepEqual(preview.errors, [], preview.errors.join("; "));
     assert(near(preview.grossGain, 8000) && near(preview.totalFees, 1600) && near(preview.legalCosts, 960));
-    assert.equal(preview.openingAdjustments.length, 2);
-    assert(near(preview.openingAdjustments.find((o) => o.memberId === sellerA).costBasis, 5000), "basis should default to invested dollars");
-    ok("sale preview with declared holdings: gain 8,000, DD 240 + mgmt 400 + derived legal 960; basis defaults to invested $");
-    const noDecl = await previewInternalTransfer(run, { ...sale, holdings_before: undefined });
-    assert(noDecl.errors.some((e) => /holds only 0/.test(e)));
-    const oversell = await previewInternalTransfer(run, { ...sale, sellers: { [sellerA]: 6, [sellerB]: 3 } });
-    assert(oversell.errors.some((e) => /holds only 5/.test(e)));
-    ok("no declaration and no lots, or selling more than declared -> preview error");
+    const pa = preview.sellers.find((x) => x.memberId === sellerA);
+    assert(near(pa.shares, 5) && near(pa.costBasisPerShare, 1000) && near(pa.costBasisBefore, 9000), JSON.stringify(pa));
+    ok("sale preview: gain 8,000, DD 240 + mgmt 400 + derived legal 960; basis from the round; seller's company basis before 9,000");
+    const oversell = await previewInternalTransfer(run, { ...sale, sellers: { [sellerA]: 5001, [sellerB]: 3000 }, buyers: { [buyerA]: 10002, [buyerB]: 6000 } });
+    assert(oversell.errors.some((e) => /moving 5001 of "Series A" but has only 5000/.test(e)), oversell.errors.join("; "));
+    const noRound = await previewInternalTransfer(run, { ...sale, source_round_name: "Series Z" });
+    assert(noRound.errors.some((e) => /not a round of this company/.test(e)));
+    const wrongRound = await previewInternalTransfer(run, { ...sale, source_round_name: "Series B", source_round_date: "2025-06-01" });
+    assert(wrongRound.errors.some((e) => /has only 0 of it/.test(e)), "sellerB holds nothing of Series B");
+    ok("selling more than held of the round, an unknown round, or a round the member is not in -> preview error");
 
     // --- D. Record the sale in three scenarios ----------------------------------------------
     const saleRecord = { ...sale, legal_costs: preview.legalCosts };
@@ -152,37 +155,37 @@ async function main() {
     for (const id of Object.values(saleIds)) {
       assert.equal(await count("internal_transfer_detail", id), 1);
       assert.equal(await count("transfer_party", id), 4);
+      const d = (await client.query(`SELECT "source_round_name" AS n, "source_round_date"::text AS d FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`, [id])).rows[0];
+      assert.deepEqual(d, { n: "Series A", d: "2025-01-15" });
     }
     const feeTotals = async (id) =>
       Object.fromEntries((await client.query(`SELECT kind::text AS k, SUM(amount)::float8 AS a FROM "fee_line" WHERE "ledger_entry_id" = $1 GROUP BY kind`, [id])).rows.map((r) => [r.k, r.a]));
     const f = await feeTotals(saleIds.BALANCED);
     assert(near(f.DD_LEAD_CARRY, 240) && near(f.MANAGEMENT_CARRY, 400) && near(f.LEGAL_COSTS, 960), JSON.stringify(f));
     for (const sc of ["OPTIMISTIC", "CONSERVATIVE"]) assert.deepEqual(await feeTotals(saleIds[sc]), f);
-    const held = (await client.query(`SELECT "shares_held_before"::float8 AS h FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2 AND side = 'SELLER'`, [saleIds.BALANCED, sellerA])).rows[0].h;
-    assert(near(held, 5, 1e-6));
-    ok("sale: 3 rows each hold 1 detail + 4 parties; fee lines identical; seller held-before recorded");
-    const lotKinds = await client.query(
-      `SELECT kind::text AS k, count(*)::int AS n, bool_and("source_entry_id" = $2) AS own FROM "share_lot" WHERE "company_id" = $1 GROUP BY kind ORDER BY kind`,
-      [companyId, saleIds.BALANCED]
-    );
-    assert.deepEqual(lotKinds.rows.map((r) => [r.k, r.n, r.own]), [["OPENING", 2, true], ["TRANSFER_IN", 2, true], ["TRANSFER_OUT", 2, true]]);
-    let lots = await lotsByMember(client, companyId);
-    assert(near(lots[sellerA].shares, 0, 1e-6) && near(lots[sellerB].shares, 0, 1e-6));
-    assert(near(lots[buyerA].shares, 5, 1e-6) && near(lots[buyerB].shares, 3, 1e-6));
-    assert(near(lots[buyerA].basis, 10000) && near(lots[buyerB].basis, 6000));
+    const sellerRow = (await client.query(`SELECT "shares_held_before"::float8 AS h, "cost_basis_before"::float8 AS b FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2 AND side = 'SELLER'`, [saleIds.OPTIMISTIC, sellerA])).rows[0];
+    assert(near(sellerRow.h, 5, 1e-6) && near(sellerRow.b, 9000));
+    ok("sale: 3 rows each hold 1 detail (with the source round) + 4 parties; fee lines identical; seller before-figures recorded");
+    posA = await roundPos("Series A");
+    assert.equal(posA[sellerA], undefined, "sellerA sold their whole Series A position");
+    assert.equal(posA[sellerB], undefined);
+    assert(near(posA[buyerA].shares, 5, 1e-6) && near(posA[buyerA].basis, 10000));
+    assert(near(posA[buyerB].shares, 3, 1e-6) && near(posA[buyerB].basis, 6000));
+    assert(near((await roundPos("Series B"))[sellerA].shares, 2), "the other round is untouched");
     assert.deepEqual(await findNegativeHoldings(client, companyId), []);
-    ok("lots (BALANCED row only): opening x2, out x2, in x2; sellers 0 shares, buyers 5 + 3 at cost 10,000 + 6,000");
+    ok("positions after the sale: Series A moved to buyers at what they paid (10,000 + 6,000); Series B untouched");
     assert.deepEqual((await previewInternalTransfer(run, saleRecord)).errors, []);
     ok("re-previewing a recorded transfer does not false-flag overselling");
 
     // --- E. Plain replacement: partial, buyer inherits basis, no fee lines ------------------
     const replacement = {
       ...base, type: "Internal_Transfer", transfer_kind: "Replacement", date: "2026-04-01",
-      sellers: { [buyerA]: 2 }, buyers: { [newOwner]: 2 }, // no prices, no holdings_before: buyerA's lots are recorded
+      source_round_name: "Series A", source_round_date: "2025-01-15",
+      sellers: { [buyerA]: 2000 }, buyers: { [newOwner]: 2000 }, // 2 of buyerA's 5 shares (original cost 2 x 1,000)
     };
     const replPreview = await previewInternalTransfer(run, replacement);
     assert.deepEqual(replPreview.errors, [], replPreview.errors.join("; "));
-    assert(near(replPreview.buyers[0].costBasisPerShare, 2000));
+    assert(near(replPreview.buyers[0].costBasisPerShare, 2000), "the buyer inherits what buyerA paid (2,000/share), not the round's original price");
     const replIds = {};
     for (const scenario of SCENARIOS) replIds[scenario] = await applyLedgerRecord(client, replacement, { scenario, createdBy: ddLead });
     for (const id of Object.values(replIds)) {
@@ -190,18 +193,19 @@ async function main() {
       assert.equal(await count("fee_line", id), 0);
       assert.equal((await client.query(`SELECT kind::text AS k FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`, [id])).rows[0].k, "REPLACEMENT");
     }
-    lots = await lotsByMember(client, companyId);
-    assert(near(lots[buyerA].shares, 3, 1e-6) && near(lots[buyerA].basis, 6000));
-    assert(near(lots[newOwner].shares, 2, 1e-6) && near(lots[newOwner].basis, 4000));
+    posA = await roundPos("Series A");
+    assert(near(posA[buyerA].shares, 3, 1e-6) && near(posA[buyerA].basis, 6000));
+    assert(near(posA[newOwner].shares, 2, 1e-6) && near(posA[newOwner].basis, 4000));
     ok("replacement: 2 of 5 shares move with proportional basis (4,000), no fee lines, same in all 3 scenarios");
 
-    // --- E2. Member positions and value moved across transfers (Phase 3) --------------------
+    // --- E2. Member positions and value moved across transfers ------------------------------
     const positions = Object.fromEntries((await loadMemberPositions(run, companyId)).map((p) => [p.memberId, p]));
-    assert(near(positions[sellerA].basis, 0) && positions[sellerA].shares === 0, "sold-out seller");
-    assert(near(positions[buyerA].basis, 6000) && near(positions[buyerA].shares, 3), "partial seller / buyer");
-    assert(near(positions[newOwner].basis, 4000) && near(positions[newOwner].shares, 2), "replacement buyer");
-    ok("member positions: sold-out seller 0, partial holder 3 sh / $6,000, replacement buyer 2 sh / $4,000");
-    // A valuation dated BEFORE both transfers; its values must be carried across them.
+    assert(near(positions[sellerA].basis, 4000) && near(positions[sellerA].invested, 9000), "sellerA keeps Series B");
+    assert(near(positions[sellerB].basis, 0));
+    assert(near(positions[buyerA].basis, 6000) && near(positions[buyerA].invested, 0));
+    assert(near(positions[newOwner].basis, 4000) && near(positions[buyerB].basis, 6000));
+    ok("company cost basis: sellerA 4,000 (Series B left), sellerB 0, buyerA 6,000, replacement buyer 4,000, buyerB 6,000");
+    // A valuation dated BEFORE both transfers; its values are carried across them.
     await applyLedgerRecord(client, {
       ...base, type: "Transaction_ValuationChange", date: "2026-02-01", driving_event_date: "2026-02-01",
       asv_total_fair_market_value: 16000, member_valuations: { [sellerA]: 10000, [sellerB]: 6000 },
@@ -209,30 +213,33 @@ async function main() {
     const moved = await memberValuesAfterTransfers(run, companyId, "BALANCED");
     assert.equal(moved.asOfDate, "2026-02-01");
     const v = moved.values;
-    assert(near(v[sellerA], 0) && near(v[sellerB], 0), "sellers' value moved out");
-    assert(near(v[buyerA], 6000) && near(v[buyerB], 6000) && near(v[newOwner], 4000), JSON.stringify(v));
-    assert(near(Object.values(v).reduce((n, x) => n + x, 0), 16000), "value conserved");
-    ok("recorded member value follows the shares across both transfers (16,000 conserved)");
+    assert(near(v[sellerA], 10000 * (1 - 5000 / 9000)), "sellerA falls by the share of basis that moved (5,000 of 9,000)");
+    assert(near(v[sellerB], 0), "sellerB moved all their basis");
+    assert(near(v[buyerB], 6000), "a buyer is valued at what they paid");
+    assert(near(v[buyerA], 10000 * (1 - 4000 / 10000)), "buyerA paid 10,000, then moved 4,000 of basis out");
+    assert(near(v[newOwner], 4000), "the replacement buyer is valued at the inherited basis");
+    ok("recorded member value: sellers fall by basis moved, buyers are valued at cost");
 
-    // --- E2b. Selling specific shares: sold_cost_basis (buyerA holds 3 shares, basis 6,000) ---------
-    const specific = {
+    // --- E2b. A transfer of a different round (single-round rule) ----------------------------
+    const roundB = {
       ...base, type: "Internal_Transfer", transfer_kind: "Replacement", date: "2026-06-01",
-      sellers: { [buyerA]: 1 }, buyers: { [sellerB]: 1 }, sold_cost_basis: { [buyerA]: 1500 }, // average would be 2,000
+      source_round_name: "Series B", source_round_date: "2025-06-01",
+      sellers: { [sellerA]: 4000 }, buyers: { [sellerB]: 4000 }, // all of sellerA's Series B (2 shares x 2,000)
     };
-    const specificPreview = await previewInternalTransfer(run, specific);
-    assert.deepEqual(specificPreview.errors, [], JSON.stringify(specificPreview.errors));
-    assert(near(specificPreview.buyers[0].costBasisPerShare, 1500), "buyer inherits the stated basis");
-    const specificId = await applyLedgerRecord(client, specific, { scenario: "BALANCED", createdBy: ddLead });
-    const afterSpecific = Object.fromEntries((await loadMemberPositions(run, companyId)).map((p) => [p.memberId, p]));
-    assert(near(afterSpecific[buyerA].basis, 4500) && near(afterSpecific[buyerA].shares, 2), "seller keeps the rest of the basis");
-    assert(near(afterSpecific[sellerB].basis, 1500) && near(afterSpecific[sellerB].shares, 1), "buyer holds the shares at the stated basis");
-    await expectFailure(client, "sold_cost_basis above the whole recorded basis", /exceeds the whole recorded basis/, () =>
-      applyLedgerRecord(client, { ...specific, date: "2026-06-02", sold_cost_basis: { [buyerA]: 99999 } }, { scenario: "BALANCED", createdBy: ddLead })
+    const roundBPreview = await previewInternalTransfer(run, roundB);
+    assert.deepEqual(roundBPreview.errors, [], JSON.stringify(roundBPreview.errors));
+    assert(near(roundBPreview.buyers[0].costBasisPerShare, 2000));
+    const roundBId = await applyLedgerRecord(client, roundB, { scenario: "BALANCED", createdBy: ddLead });
+    assert.equal((await roundPos("Series B"))[sellerA], undefined);
+    assert(near((await roundPos("Series B"))[sellerB].basis, 4000));
+    assert(near((await roundPos("Series A"))[buyerA].shares, 3), "Series A is unaffected by a Series B transfer");
+    await expectFailure(client, "moving more of Series B than sellerA still holds", /has only 0 of it/, () =>
+      applyLedgerRecord(client, { ...roundB, date: "2026-06-02" }, { scenario: "BALANCED", createdBy: ddLead })
     );
-    await deleteLedgerEntry(client, specificId);
-    ok("selling specific shares: stated basis 1,500 moves (not the 2,000 average); seller keeps 4,500 on 2 shares");
+    await deleteLedgerEntry(client, roundBId);
+    ok("a Series B transfer moves only Series B; a repeat is rejected once the position is gone");
 
-    // --- E3. Carry on a full exit (Phase 7) -------------------------------------------------
+    // --- E3. Carry on a full exit -----------------------------------------------------------
     const exitRecord = {
       ...base, type: "Exit_Event", date: "2026-09-01", exit_type: "Acquisition", total_exit_value: 1000000, asv_total_payout: 18000,
       member_payouts: { [buyerA]: 9000, [buyerB]: 5000, [newOwner]: 4000 }, // gain 3000 / loss / break-even
@@ -255,23 +262,24 @@ async function main() {
     ok("apply_carry:false opts an exit out of carry");
 
     // --- F. Guards --------------------------------------------------------------------------
-    await expectFailure(client, "repeating the sale (sellers now hold nothing)", /holds only/, () =>
-      applyLedgerRecord(client, { ...saleRecord, date: "2026-05-01", holdings_before: undefined }, { scenario: "BALANCED", createdBy: ddLead })
+    await expectFailure(client, "repeating the sale (sellers now hold nothing of Series A)", /has only 0 of it/, () =>
+      applyLedgerRecord(client, { ...saleRecord, date: "2026-05-01" }, { scenario: "BALANCED", createdBy: ddLead })
     );
-    await expectFailure(client, "deleting the sale the replacement relied on", /negative share holdings/, () =>
+    await expectFailure(client, "deleting the sale the replacement relied on", /more shares of a round than they hold/, () =>
       deleteLedgerEntry(client, saleIds.BALANCED)
     );
 
-    // --- G. Delete everything -> lots gone --------------------------------------------------
+    // --- G. Delete everything -> rows gone --------------------------------------------------
     for (const group of [replIds, saleIds]) {
       for (const sc of ["OPTIMISTIC", "CONSERVATIVE", "BALANCED"]) await deleteLedgerEntry(client, group[sc]);
     }
-    assert.deepEqual(await lotsByMember(client, companyId), {});
     const allIds = [...Object.values(saleIds), ...Object.values(replIds)];
     for (const t of ["transfer_party", "fee_line", "internal_transfer_detail"]) {
       assert.equal((await client.query(`SELECT count(*)::int AS n FROM "${t}" WHERE "ledger_entry_id" = ANY($1)`, [allIds])).rows[0].n, 0, `${t} rows left behind`);
     }
-    ok("deleting the replacement then the sale removes all rows and lots");
+    posA = await roundPos("Series A");
+    assert(near(posA[sellerA].shares, 5) && near(posA[sellerB].shares, 3), "positions return to the round allocations");
+    ok("deleting the replacement then the sale removes all rows; positions return to the allocations");
 
     throw new Rollback(); // never commit: leave the dev database untouched
   }).catch((e) => {

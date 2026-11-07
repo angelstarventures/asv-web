@@ -20,13 +20,10 @@ export interface RecordInternalTransferInput {
   referenceRoundName?: string;
   roundPricePerShare?: number; // Sale only
   transferPricePerShare?: number; // Sale only
-  sellers: Record<string, number>; // memberId -> shares moved out
-  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
-  // Each seller's whole holding BEFORE this transfer. Needed the first time a member sells in a
-  // company (there is no round-time backfill); cost_basis defaults to their invested dollars.
-  holdingsBefore?: Record<string, { shares: number; cost_basis?: number }>;
-  // Per seller: total cost basis (dollars) of the specific shares being sold; omit for the average cost.
-  soldCostBasis?: Record<string, number>;
+  sourceRoundName: string; // the ONE round whose shares move
+  sourceRoundDate: string; // YYYY-MM-DD
+  sellers: Record<string, number>; // memberId -> original cost moved out (dollars at the source round's price)
+  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or original cost received (Replacement)
   legalCosts?: number; // Sale only; omit to derive as spread - carry
   docLink?: string;
   notes?: string;
@@ -56,10 +53,10 @@ export const ledgerRecordInternalTransfer = onCall<RecordInternalTransferInput, 
       transfer_kind: d.transferKind ?? "Sale",
       ...(d.roundPricePerShare !== undefined ? { round_price_per_share: d.roundPricePerShare } : {}),
       ...(d.transferPricePerShare !== undefined ? { transfer_price_per_share: d.transferPricePerShare } : {}),
+      source_round_name: d.sourceRoundName,
+      source_round_date: d.sourceRoundDate,
       sellers: d.sellers,
       buyers: d.buyers,
-      ...(d.holdingsBefore && Object.keys(d.holdingsBefore).length ? { holdings_before: d.holdingsBefore } : {}),
-      ...(d.soldCostBasis && Object.keys(d.soldCostBasis).length ? { sold_cost_basis: d.soldCostBasis } : {}),
       ...(d.referenceRoundName ? { reference_round_name: d.referenceRoundName } : {}),
       ...(d.legalCosts !== undefined ? { legal_costs: d.legalCosts } : {}),
       ...(d.docLink ? { doc_link: d.docLink } : {}),

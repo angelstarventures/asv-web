@@ -170,18 +170,18 @@ export async function fetchDetailForEntry(
     }
     case "INTERNAL_TRANSFER": {
       const rows = await query<Record<string, unknown>>(
-        `SELECT kind::text AS kind, "reference_round_name", "round_price_per_share", "transfer_price_per_share", notes
+        `SELECT kind::text AS kind, "reference_round_name", "source_round_name", "source_round_date"::text AS "source_round_date", "round_price_per_share", "transfer_price_per_share", notes
          FROM "internal_transfer_detail" WHERE "ledger_entry_id" = $1`,
         [ledgerEntryId]
       );
       // Member-scoped reads (AI chat "mine" scope) see only the member's own leg — never the
       // counterparties, their amounts, or fees charged to anyone else.
       const parties = await query<{
-        memberId: string; side: string; shares: number; amount: number; costBasisPerShare: number; heldBefore: number | null;
+        memberId: string; side: string; shares: number; amount: number; costBasisPerShare: number;
       }>(
         memberScopeId
-          ? `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare", "shares_held_before" AS "heldBefore" FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2`
-          : `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare", "shares_held_before" AS "heldBefore" FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
+          ? `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare" FROM "transfer_party" WHERE "ledger_entry_id" = $1 AND "member_id" = $2`
+          : `SELECT "member_id" AS "memberId", side::text AS side, shares, amount, "cost_basis_per_share" AS "costBasisPerShare" FROM "transfer_party" WHERE "ledger_entry_id" = $1`,
         memberScopeId ? [ledgerEntryId, memberScopeId] : [ledgerEntryId]
       );
       const legal = await query<{ total: number }>(
@@ -190,23 +190,35 @@ export async function fetchDetailForEntry(
           : `SELECT COALESCE(SUM(amount), 0) AS total FROM "fee_line" WHERE "ledger_entry_id" = $1 AND kind = 'LEGAL_COSTS'`,
         memberScopeId ? [ledgerEntryId, memberScopeId] : [ledgerEntryId]
       );
-      // The record stores inputs only (sellers' shares, buyers' dollars); cost basis, gains and
-      // fee lines are re-derived on write. legal_costs is kept because it is a manual input.
+      // The record stores inputs only (original cost moved by each seller, buyers' dollars paid or
+      // original cost received); share counts, cost basis, gains and fee lines are re-derived on
+      // write. legal_costs is kept because it is a manual input. Original cost = shares x the
+      // source round's price (1 when the round has none).
       const { kind, ...detail } = (rows[0] ?? {}) as Record<string, unknown>;
       const replacement = kind === "REPLACEMENT";
       const sellers = parties.filter((p) => p.side === "SELLER");
-      // The declared holding is exported so a re-import into an empty ledger reproduces the same lots.
-      const holdingsBefore = Object.fromEntries(
-        sellers
-          .filter((p) => p.heldBefore != null)
-          .map((p) => [p.memberId, { shares: p.heldBefore, cost_basis: Math.round(Number(p.heldBefore) * p.costBasisPerShare * 10000) / 10000 }])
-      );
+      const sourceName = (detail as Record<string, unknown>).source_round_name;
+      const sourceDate = (detail as Record<string, unknown>).source_round_date;
+      let unit = 1;
+      if (typeof sourceName === "string" && typeof sourceDate === "string") {
+        const priced = await query<{ price: number | null }>(
+          `SELECT COALESCE(p."price_per_share", n."new_price_per_share") AS price
+           FROM "ledger_entry" le
+           JOIN "ledger_entry" me ON me."company_id" = le."company_id"
+           LEFT JOIN "priced_round_detail" p ON p."ledger_entry_id" = me.id
+           LEFT JOIN "non_participating_round_detail" n ON n."ledger_entry_id" = me.id
+           WHERE le.id = $1 AND me.scenario = le.scenario AND me."event_date" = $3::date AND COALESCE(p."round_name", n."round_name") = $2
+           LIMIT 1`,
+          [ledgerEntryId, sourceName, sourceDate]
+        );
+        if (priced[0]?.price != null && Number(priced[0].price) > 0) unit = Number(priced[0].price);
+      }
+      const cost = (shares: number) => Math.round(Number(shares) * unit * 100) / 100;
       return {
         ...omitNullish(detail),
         transfer_kind: replacement ? "Replacement" : "Sale",
-        sellers: Object.fromEntries(sellers.map((p) => [p.memberId, p.shares])),
-        buyers: Object.fromEntries(parties.filter((p) => p.side === "BUYER").map((p) => [p.memberId, replacement ? p.shares : p.amount])),
-        ...(Object.keys(holdingsBefore).length ? { holdings_before: holdingsBefore } : {}),
+        sellers: Object.fromEntries(sellers.map((p) => [p.memberId, cost(p.shares)])),
+        buyers: Object.fromEntries(parties.filter((p) => p.side === "BUYER").map((p) => [p.memberId, replacement ? cost(p.shares) : p.amount])),
         ...(replacement ? {} : { legal_costs: Number(legal[0]?.total ?? 0) }),
       };
     }

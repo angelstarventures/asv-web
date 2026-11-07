@@ -98,6 +98,7 @@ export interface TransferSellerInput {
   shares: number;
   costBasisPerShare: number;
   heldShares?: number; // when provided, selling more than this is an error
+  costBasisBefore?: number; // total company basis before the transfer (carried through to the result)
 }
 
 export interface TransferBuyerInput {
@@ -126,7 +127,8 @@ export interface SellerResult {
   gain: number; // carry base at the round price, floored at 0
   feesCharged: number;
   realizedGain: number; // amount - shares x cost basis
-  sharesHeldBefore: number; // the seller's whole holding going into this transfer
+  sharesHeldBefore: number; // the seller's shares in the source round going into this transfer
+  costBasisBefore: number; // the seller's total cost basis in the company going into this transfer
 }
 
 export interface BuyerResult {
@@ -138,17 +140,8 @@ export interface BuyerResult {
 
 export type TransferKind = "SALE" | "REPLACEMENT";
 
-// Lot adjustment that makes a seller's recorded holding equal what the admin declared on the
-// transfer (holdings_before). Written once, by the lot-owning scenario row.
-export interface OpeningAdjustment {
-  memberId: string;
-  shares: number; // signed delta vs. the share lots already recorded (full amount when none)
-  costBasis: number; // signed delta in total dollars
-}
-
 export interface TransferResult {
   kind: TransferKind;
-  openingAdjustments: OpeningAdjustment[];
   ok: boolean;
   errors: string[];
   warnings: string[];
@@ -167,162 +160,139 @@ export interface TransferResult {
 // The legacy-schema record shape for type "Internal_Transfer" (asv_master_portfolio_schema.json).
 // Only inputs are stored on the record; cost basis, gains and fee lines are always derived.
 //
+// Every transfer moves shares of ONE source round. Positions are tracked per round, in the round's
+// own terms: shares = dollars / the round's price per share (never declared or stored as a holding),
+// basis = what the member paid. Amounts on the record are "original cost": dollars at the SOURCE
+// ROUND's price (shares x that price), so a seller moves $5,000 of a round that cost $5,000
+// regardless of what the shares are worth now.
+//
 // Two kinds:
 //   Sale (default)  - buyers pay the round price, sellers get the transfer price, the spread funds
 //                     carry + legal costs. `buyers` maps member -> dollars paid.
-//   Replacement     - a plain change of owner: shares (all or part of a holding) move from sellers
-//                     to buyers with no price, carry or costs; the buyer inherits the seller's cost
-//                     basis. `buyers` maps member -> shares received.
-export interface DeclaredHolding {
-  shares: number; // the seller's whole holding in the company BEFORE this transfer
-  cost_basis?: number; // total dollars; defaults to the member's invested dollars in the company
-}
-
+//   Replacement     - a plain change of owner with no price, carry or costs; the buyer inherits the
+//                     seller's basis. `buyers` maps member -> original cost received.
 export interface InternalTransferRecord {
   transfer_kind?: "Sale" | "Replacement";
-  round_price_per_share?: number;
-  transfer_price_per_share?: number;
-  sellers: Record<string, number>; // memberId -> shares moved out
-  buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
-  holdings_before?: Record<string, DeclaredHolding>; // authoritative holding for these sellers
-  // Optional, per seller: the TOTAL cost basis (dollars) of the shares being sold, for a seller who bought in
-  // different rounds and is selling a specific round's shares. Omit to use the seller's average cost.
-  sold_cost_basis?: Record<string, number>;
+  source_round_name?: string;
+  source_round_date?: string; // YYYY-MM-DD, the round's event date
+  round_price_per_share?: number; // Sale: the price buyers pay
+  transfer_price_per_share?: number; // Sale: the price sellers are paid
+  sellers: Record<string, number>; // memberId -> original cost moved out (dollars at the source round's price)
+  buyers: Record<string, number>; // Sale: dollars paid. Replacement: original cost received.
   legal_costs?: number;
 }
 
-export interface Holding {
-  shares: number; // net shares held per the recorded lots (acquisitions minus disposals)
-  costBasis: number; // net total cost basis in dollars for those shares
+// A member's position in the source round: shares derived from dollars / the round's price.
+export interface RoundPosition {
+  shares: number;
+  basis: number; // total cost basis in dollars of those shares
 }
 
 export interface TransferContext {
-  holdings: Record<string, Holding>; // recorded lots by seller member id; missing = none recorded
-  invested?: Record<string, number>; // member's total allocated dollars in this company (cost-basis default)
+  sourcePrice: number | null; // the source round's price per share; null when it has none (a SAFE)
+  positions: Record<string, RoundPosition>; // sellers' positions in the source round (missing = none)
+  companyBasis?: Record<string, number>; // sellers' total cost basis in the company before this transfer
   ddLeadMemberId: string | null;
   managementMemberId: string | null;
   ddLeadPercent: number;
   managementPercent: number;
 }
 
-// Cost basis per share of the shares a seller is moving: the stated basis of those specific shares when
-// given, otherwise the average across the whole holding (disposals then remove basis proportionally).
-function movedBasisPerShare(rec: InternalTransferRecord, memberId: string, shares: number, h: Holding | undefined): number {
-  const stated = rec.sold_cost_basis?.[memberId];
-  if (stated !== undefined && shares > 0) return stated / shares;
-  return h && h.shares > 0 ? h.costBasis / h.shares : 0;
+export const isReplacement = (rec: Pick<InternalTransferRecord, "transfer_kind">): boolean => rec.transfer_kind === "Replacement";
+
+const COST_TOLERANCE = 0.01; // dollars (a cent: amounts are entered to the cent, positions are not)
+
+interface ResolvedSeller {
+  memberId: string;
+  shares: number;
+  costBasisPerShare: number;
+  positionShares: number;
+  costBasisBefore: number;
 }
 
-function soldBasisErrors(rec: InternalTransferRecord, holdings: Record<string, Holding>): string[] {
+// Turns each seller's original-cost amount into shares and the basis those shares carry, checking it
+// against what they hold of the source round.
+function resolveSellers(rec: InternalTransferRecord, ctx: TransferContext, errors: string[]): ResolvedSeller[] {
+  const unitPrice = ctx.sourcePrice && ctx.sourcePrice > 0 ? ctx.sourcePrice : 1;
+  return Object.entries(rec.sellers).map(([memberId, units]) => {
+    const pos = ctx.positions[memberId] ?? { shares: 0, basis: 0 };
+    const available = pos.shares * unitPrice;
+    if (!(units > 0)) errors.push(`Seller ${memberId}: the amount moved must be greater than 0.`);
+    let shares = units / unitPrice;
+    if (units > available + COST_TOLERANCE) {
+      errors.push(
+        `Seller ${memberId} is moving ${round2(units)} of "${rec.source_round_name ?? "the source round"}" but has only ${round2(available)} of it.`
+      );
+    } else if (Math.abs(units - available) <= COST_TOLERANCE) {
+      shares = pos.shares; // the whole position: no rounding dust left behind
+    }
+    return {
+      memberId,
+      shares,
+      costBasisPerShare: pos.shares > 0 ? pos.basis / pos.shares : 0,
+      positionShares: pos.shares,
+      costBasisBefore: ctx.companyBasis?.[memberId] ?? 0,
+    };
+  });
+}
+
+function sourceRoundErrors(rec: InternalTransferRecord): string[] {
   const errors: string[] = [];
-  for (const [memberId, stated] of Object.entries(rec.sold_cost_basis ?? {})) {
-    const shares = rec.sellers[memberId];
-    if (shares === undefined) {
-      errors.push(`sold_cost_basis names ${memberId}, who is not a seller in this transfer.`);
-      continue;
-    }
-    if (!(stated >= 0)) {
-      errors.push(`Seller ${memberId}: sold_cost_basis must be 0 or more.`);
-      continue;
-    }
-    const h = holdings[memberId];
-    if (!h || h.shares <= 0) continue; // the "holds only" error already covers this
-    if (stated > h.costBasis + 0.005) {
-      errors.push(`Seller ${memberId}: the cost basis of the shares sold (${stated}) exceeds the whole recorded basis (${h.costBasis}).`);
-    } else if (shares >= h.shares - 1e-6 && Math.abs(stated - h.costBasis) > 0.005) {
-      errors.push(`Seller ${memberId} is selling the whole holding, so the cost basis sold must be the whole basis (${h.costBasis}); correct the holding first if it is wrong.`);
-    }
-  }
+  if (!rec.source_round_name || !rec.source_round_name.trim()) errors.push("Choose the source round: every transfer moves shares from exactly one round.");
+  if (!rec.source_round_date || !/^\d{4}-\d{2}-\d{2}$/.test(rec.source_round_date)) errors.push("The source round's date is required.");
   return errors;
 }
 
-export const isReplacement = (rec: Pick<InternalTransferRecord, "transfer_kind">): boolean => rec.transfer_kind === "Replacement";
-
-// A seller's holding for this transfer: the declared `holdings_before` when given (authoritative;
-// the difference from the recorded lots becomes an opening adjustment), otherwise the recorded lots.
-function resolveSellerHoldings(
-  sellerIds: string[],
-  declared: Record<string, DeclaredHolding> | undefined,
-  ctx: TransferContext
-): { holdings: Record<string, Holding>; opening: OpeningAdjustment[]; errors: string[]; warnings: string[] } {
-  const holdings: Record<string, Holding> = {};
-  const opening: OpeningAdjustment[] = [];
-  const errors: string[] = [];
-  const warnings: string[] = [];
-  for (const id of sellerIds) {
-    const lot = ctx.holdings[id] ?? { shares: 0, costBasis: 0 };
-    const d = declared?.[id];
-    if (!d) {
-      holdings[id] = lot.shares > 0 ? lot : { shares: 0, costBasis: 0 };
-      continue;
-    }
-    if (!(d.shares > 0)) {
-      errors.push(`Seller ${id}: holdings_before shares must be greater than 0.`);
-      continue;
-    }
-    const basis = d.cost_basis ?? ctx.invested?.[id];
-    if (basis === undefined || !(basis >= 0)) {
-      errors.push(`Seller ${id}: no cost basis for the declared holding — enter holdings_before.cost_basis (no investment on record to default from).`);
-      continue;
-    }
-    if (Math.abs(d.shares - lot.shares) > 1e-6 || Math.abs(basis - lot.costBasis) > 0.005) {
-      if (lot.shares > 1e-6) {
-        warnings.push(`Seller ${id}: declared holding (${d.shares} shares) replaces the ${lot.shares} shares recorded in the ledger.`);
-      }
-      opening.push({ memberId: id, shares: d.shares - lot.shares, costBasis: basis - lot.costBasis });
-    }
-    holdings[id] = { shares: d.shares, costBasis: basis };
-  }
-  return { holdings, opening, errors, warnings };
-}
-
 export function computeTransferFromRecord(rec: InternalTransferRecord, ctx: TransferContext): TransferResult {
-  const resolved = resolveSellerHoldings(Object.keys(rec.sellers), rec.holdings_before, ctx);
-  const base = isReplacement(rec) ? computeReplacement(rec, resolved.holdings) : computeSale(rec, ctx, resolved.holdings);
-  const errors = [...resolved.errors, ...soldBasisErrors(rec, resolved.holdings), ...base.errors];
-  return {
-    ...base,
-    errors,
-    warnings: [...resolved.warnings, ...base.warnings],
-    ok: errors.length === 0,
-    openingAdjustments: resolved.opening,
-  };
+  const roundErrors = sourceRoundErrors(rec);
+  const base = isReplacement(rec) ? computeReplacement(rec, ctx) : computeSale(rec, ctx);
+  const errors = [...roundErrors, ...base.errors];
+  return { ...base, errors, ok: errors.length === 0 };
 }
 
 // Plain owner replacement: no money, no fee lines. Buyers inherit the moved basis, blended across
 // sellers (total basis moved / total shares moved).
-function computeReplacement(rec: InternalTransferRecord, holdings: Record<string, Holding>): TransferResult {
+function computeReplacement(rec: InternalTransferRecord, ctx: TransferContext): TransferResult {
   const errors: string[] = [];
+  const unitPrice = ctx.sourcePrice && ctx.sourcePrice > 0 ? ctx.sourcePrice : 1;
   const sellerIds = Object.keys(rec.sellers);
   const buyerIds = Object.keys(rec.buyers);
   if (sellerIds.length === 0) errors.push("At least one seller is required.");
   if (buyerIds.length === 0) errors.push("At least one buyer is required.");
 
+  const resolved = resolveSellers(rec, ctx, errors);
   let movedBasis = 0;
-  const sellers: SellerResult[] = sellerIds.map((memberId) => {
-    const shares = rec.sellers[memberId];
-    const h = holdings[memberId] ?? { shares: 0, costBasis: 0 };
-    if (!(shares > 0)) errors.push(`Seller ${memberId}: shares must be greater than 0.`);
-    if (shares > h.shares + 1e-6) errors.push(`Seller ${memberId} is transferring ${shares} shares but holds only ${h.shares}.`);
-    const costBasisPerShare = movedBasisPerShare(rec, memberId, shares, h);
-    movedBasis += shares * costBasisPerShare;
-    return { memberId, shares, costBasisPerShare, amount: 0, gain: 0, feesCharged: 0, realizedGain: 0, sharesHeldBefore: h.shares };
+  const sellers: SellerResult[] = resolved.map((r) => {
+    movedBasis += r.shares * r.costBasisPerShare;
+    return {
+      memberId: r.memberId,
+      shares: r.shares,
+      costBasisPerShare: r.costBasisPerShare,
+      amount: 0,
+      gain: 0,
+      feesCharged: 0,
+      realizedGain: 0,
+      sharesHeldBefore: r.positionShares,
+      costBasisBefore: r.costBasisBefore,
+    };
   });
   const totalShares = sellers.reduce((n, s) => n + s.shares, 0);
-  const received = buyerIds.reduce((n, id) => n + rec.buyers[id], 0);
-  if (Math.abs(totalShares - received) > 1e-4) {
-    errors.push(`Seller shares (${totalShares}) must equal buyer shares (${received}).`);
+  const buyerUnits = buyerIds.reduce((n, id) => n + rec.buyers[id], 0);
+  const sellerUnits = sellerIds.reduce((n, id) => n + rec.sellers[id], 0);
+  if (Math.abs(sellerUnits - buyerUnits) > COST_TOLERANCE) {
+    errors.push(`Amount moved by sellers (${round2(sellerUnits)}) must equal the amount received by buyers (${round2(buyerUnits)}).`);
   }
   const inheritedBasis = totalShares > 0 ? movedBasis / totalShares : 0;
   const buyers: BuyerResult[] = buyerIds.map((memberId) => {
-    if (!(rec.buyers[memberId] > 0)) errors.push(`Buyer ${memberId}: shares must be greater than 0.`);
+    if (!(rec.buyers[memberId] > 0)) errors.push(`Buyer ${memberId}: the amount received must be greater than 0.`);
     if (rec.sellers[memberId] !== undefined) errors.push(`Member ${memberId} cannot be both buyer and seller in one transfer.`);
-    return { memberId, shares: rec.buyers[memberId], costBasisPerShare: inheritedBasis, amount: 0 };
+    // Scale to the sellers' exact shares so rounding never leaves the books a sliver apart.
+    const shares = buyerUnits > 0 ? (totalShares * rec.buyers[memberId]) / buyerUnits : rec.buyers[memberId] / unitPrice;
+    return { memberId, shares, costBasisPerShare: inheritedBasis, amount: 0 };
   });
 
   return {
     kind: "REPLACEMENT",
-    openingAdjustments: [],
     ok: errors.length === 0,
     errors,
     warnings: [],
@@ -339,22 +309,22 @@ function computeReplacement(rec: InternalTransferRecord, holdings: Record<string
   };
 }
 
-function computeSale(rec: InternalTransferRecord, ctx: TransferContext, holdings: Record<string, Holding>): TransferResult {
-  return computeTransfer({
+function computeSale(rec: InternalTransferRecord, ctx: TransferContext): TransferResult {
+  const preErrors: string[] = [];
+  if (!(ctx.sourcePrice && ctx.sourcePrice > 0)) {
+    preErrors.push("A Sale cannot be recorded from a round with no price per share (for example a SAFE); record a Replacement instead.");
+  }
+  const resolved = resolveSellers(rec, ctx, preErrors);
+  const result = computeTransfer({
     roundPricePerShare: Number(rec.round_price_per_share),
     transferPricePerShare: Number(rec.transfer_price_per_share),
-    sellers: Object.entries(rec.sellers).map(([memberId, shares]) => {
-      const h = holdings[memberId];
-      const held = h && h.shares > 0 ? h.shares : 0;
-      return {
-        memberId,
-        shares,
-        // The stated basis of the specific shares sold, else the average across the whole holding
-        // (disposals remove basis proportionally, so the average is stable across partial sales).
-        costBasisPerShare: movedBasisPerShare(rec, memberId, shares, h),
-        heldShares: held,
-      };
-    }),
+    sellers: resolved.map((r) => ({
+      memberId: r.memberId,
+      shares: r.shares,
+      costBasisPerShare: r.costBasisPerShare,
+      heldShares: r.positionShares,
+      costBasisBefore: r.costBasisBefore,
+    })),
     buyers: Object.entries(rec.buyers).map(([memberId, amount]) => ({ memberId, amount })),
     ddLeadMemberId: ctx.ddLeadMemberId,
     managementMemberId: ctx.managementMemberId,
@@ -362,6 +332,8 @@ function computeSale(rec: InternalTransferRecord, ctx: TransferContext, holdings
     managementPercent: ctx.managementPercent,
     legalCosts: rec.legal_costs,
   });
+  const errors = [...preErrors, ...result.errors];
+  return { ...result, errors, ok: errors.length === 0 };
 }
 
 const SHARE_EPS = 1e-6;
@@ -466,12 +438,12 @@ export function computeTransfer(input: TransferInput): TransferResult {
       feesCharged,
       realizedGain: round2(x.amount - x.s.shares * x.s.costBasisPerShare),
       sharesHeldBefore: x.s.heldShares ?? x.s.shares,
+      costBasisBefore: x.s.costBasisBefore ?? 0,
     };
   });
 
   return {
     kind: "SALE",
-    openingAdjustments: [],
     ok: errors.length === 0,
     errors,
     warnings,

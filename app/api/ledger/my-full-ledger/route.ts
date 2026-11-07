@@ -136,15 +136,13 @@ export async function GET(request: Request) {
       ...(t.referenceRoundName ? { reference_round_name: t.referenceRoundName } : {}),
       ...(!replacement && t.roundPricePerShare !== null ? { round_price_per_share: t.roundPricePerShare } : {}),
       ...(!replacement && t.transferPricePerShare !== null ? { transfer_price_per_share: t.transferPricePerShare } : {}),
+      ...(t.sourceRoundName ? { source_round_name: t.sourceRoundName } : {}),
+      ...(t.sourceRoundDate ? { source_round_date: t.sourceRoundDate } : {}),
       ...(t.docLink ? { doc_link: t.docLink } : {}),
+      // Amounts are the member's own cost basis moved (what the shares cost them), not counterparties' figures.
       ...(seller
-        ? {
-            sellers: { [member.memberId]: t.shares },
-            ...(t.sharesHeldBefore !== null
-              ? { holdings_before: { [member.memberId]: { shares: t.sharesHeldBefore, cost_basis: Math.round(t.sharesHeldBefore * t.costBasisPerShare * 10000) / 10000 } } }
-              : {}),
-          }
-        : { buyers: { [member.memberId]: replacement ? t.shares : t.amount } }),
+        ? { sellers: { [member.memberId]: Math.round(t.shares * t.costBasisPerShare * 100) / 100 } }
+        : { buyers: { [member.memberId]: replacement ? Math.round(t.shares * t.costBasisPerShare * 100) / 100 : t.amount } }),
     });
   }
   records.sort((a, b) => String(b.date).localeCompare(String(a.date))); // same newest-first order as the ledger query

@@ -12,7 +12,8 @@ import { getPromptSetting } from "../lib/aiPrompts";
 import { fetchLedgerRecordsForCompany } from "../lib/legacyRecordShape";
 import { checkValuationGuardrails } from "../lib/valuationGuardrails";
 import { fetchAllMemberIds, findUnknownMemberReferences } from "../lib/memberIds";
-import { loadMemberPositions } from "../lib/memberPositions";
+import { loadRoundBook } from "../lib/memberPositions";
+import { unitPrice } from "../lib/positionCalc";
 import { previewInternalTransfer } from "../lib/transferWrites";
 import portfolioSchema from "../../schema/asv_master_portfolio_schema.json";
 import { tenantConfig } from "../lib/tenantConfig";
@@ -311,7 +312,7 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
   let existingLedger: Record<string, unknown>[] = [];
   let memberAllocationTotals: { memberId: string; total: number }[] = [];
   // Recorded share holdings, so a drafted Internal_Transfer never invents one (see aiPrompts.ts).
-  let recordedHoldings: { memberId: string; name: string; shares: number | null; costBasis: number }[] = [];
+  let roundPositions: { roundName: string; roundDate: string; pricePerShare: number | null; holders: { memberId: string; name: string; originalCostHeld: number; costBasis: number }[] }[] = [];
   if (companyId) {
     const companies = await query<{ name: string }>(`SELECT name FROM "company" WHERE id = $1`, [companyId]);
     const company = companies[0];
@@ -341,8 +342,19 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
        ORDER BY a."member_id"`,
       [companyId]
     );
-    const positions = await loadMemberPositions((text, params) => query(text, params), companyId);
-    recordedHoldings = positions.map((p) => ({ memberId: p.memberId, name: p.displayName, shares: p.shares, costBasis: p.basis }));
+    const book = await loadRoundBook((text, params) => query(text, params), companyId);
+    const holderNames = await query<{ id: string; displayName: string }>(`SELECT id, "display_name" AS "displayName" FROM "member"`);
+    const nameOfMember = new Map(holderNames.map((n) => [n.id, n.displayName]));
+    roundPositions = book.rounds
+      .map((r) => ({
+        roundName: r.name,
+        roundDate: r.date,
+        pricePerShare: r.price,
+        holders: Object.entries(r.positions)
+          .filter(([, p]) => p.shares > 1e-6)
+          .map(([memberId, p]) => ({ memberId, name: nameOfMember.get(memberId) ?? memberId, originalCostHeld: Math.round(p.shares * unitPrice(r.price) * 100) / 100, costBasis: Math.round(p.basis * 100) / 100 })),
+      }))
+      .filter((r) => r.holders.length > 0);
   } else {
     companyName = newCompanyName as string;
   }
@@ -394,9 +406,9 @@ async function documentsAnalyzeImpl(request: CallableRequest<DocumentsAnalyzeInp
     companyId
       ? `Each member's cumulative cash allocation into this company to date (memberId -> total dollars invested, balanced scenario, which equals every scenario since investment-round records never diverge by scenario). Use this to compute member_valuations proportionally whenever you draft a Transaction_ValuationChange or Internal_ValuationAssessment record for this company: member_valuations[memberId] = (that member's total here / sum of all totals here) * asv_total_fair_market_value:\n${JSON.stringify(memberAllocationTotals)}`
       : null,
-    companyId && recordedHoldings.length > 0
-      ? `Each member's RECORDED position in this company (shares is null when no holding has been recorded yet — never guess it; costBasis is dollars). Use this only to resolve and sanity-check an Internal_Transfer; a seller with null shares needs holdings_before stated by the document:
-${JSON.stringify(recordedHoldings)}`
+    companyId && roundPositions.length > 0
+      ? `Each member's RECORDED position in each round of this company, in ORIGINAL COST (originalCostHeld = shares x that round's pricePerShare; costBasis is what they paid). An Internal_Transfer moves shares of exactly ONE of these rounds: use the round's roundName and roundDate as source_round_name / source_round_date, and express each seller's sellers amount as the original cost of the shares sold (shares sold x pricePerShare, never more than originalCostHeld):
+${JSON.stringify(roundPositions)}`
       : null,
     // Conversational refinement — revise, don't redraft from scratch, so an edit the reviewer
     // already liked (or made by hand in the review UI) doesn't get silently reverted.
