@@ -2,11 +2,14 @@
 // Data Connect also reconciles CHECKs/JSONB in COMPATIBLE mode. Save exact SQL objects,
 // normalize only reviewed differences, deploy, and restore the objects even on failure.
 // Recovery after process interruption: node scripts/deploy-dataconnect-preserving-sql.cjs --restore
+// Options: --diff <file> (a fresh `firebase dataconnect:sql:diff --json` output; the default is the old real-estate
+// one, which is stale for any later release) and --force (acknowledge breaking connector changes such as new enum values).
 const fs=require('node:fs');const path=require('node:path');const cp=require('node:child_process');
 const {Connector,IpAddressTypes,AuthTypes}=require('@google-cloud/cloud-sql-connector');const {Client}=require('pg');const {FBToolsAuthClient}=require('firebase-tools/lib/gcp/cloudsql/fbToolsAuthClient');const {getGlobalDefaultAccount}=require('firebase-tools/lib/auth');const {requireAuth}=require('firebase-tools/lib/requireAuth');
 const root=path.resolve(__dirname,'..'),saved=path.join(root,'.firebase/real-estate-sql-restore.json');const q=s=>'"'+s.replaceAll('"','""')+'"';
 async function main(){
- const diff=JSON.parse(fs.readFileSync(path.join(root,'.firebase/real-estate-after-diff.json'),'utf8').replace(/^\uFEFF/,''));
+ const di=process.argv.indexOf('--diff');const diffFile=di>=0?path.resolve(process.argv[di+1]):path.join(root,'.firebase/real-estate-after-diff.json');
+ const diff=JSON.parse(fs.readFileSync(diffFile,'utf8').replace(/^\uFEFF/,''));
  const statements=diff.result.diffs.map(d=>d.sql);
  if(statements.some(s=>!/^(ALTER TABLE .* (DROP CONSTRAINT|ALTER COLUMN)|DROP INDEX |CREATE INDEX )/.test(s)||/DROP (COLUMN|TABLE)|\b(DELETE FROM|TRUNCATE)\b/.test(s)))throw new Error('Unreviewed schema changes; refusing deployment.');
  if(!process.argv.includes('--apply')&&!process.argv.includes('--restore')){console.log('Dry run: '+statements.length+' reviewed normalization statements; exact objects restored after deploy.');return;}
@@ -26,7 +29,7 @@ async function main(){
    }catch(e){await c.query('ROLLBACK');throw e;}
   }
   let deploy;
-  try{if(!process.argv.includes('--restore')){deploy=cp.spawnSync(process.execPath,[path.join(root,'node_modules/firebase-tools/lib/bin/firebase.js'),'deploy','--only','dataconnect','--project','angelstar-investments','--non-interactive','--json'],{cwd:root,encoding:'utf8',timeout:180000,maxBuffer:5_000_000});fs.writeFileSync(path.join(root,'.firebase/real-estate-dataconnect-publish.json'),deploy.stdout??'');console.log('Data Connect deployment exit: '+deploy.status);}}
+  try{if(!process.argv.includes('--restore')){deploy=cp.spawnSync(process.execPath,[path.join(root,'node_modules/firebase-tools/lib/bin/firebase.js'),'deploy','--only','dataconnect','--project','angelstar-investments','--non-interactive','--json',...(process.argv.includes('--force')?['--force']:[])],{cwd:root,encoding:'utf8',timeout:180000,maxBuffer:5_000_000});fs.writeFileSync(path.join(root,'.firebase/real-estate-dataconnect-publish.json'),deploy.stdout??'');console.log('Data Connect deployment exit: '+deploy.status);}}
   finally{
    await c.query('BEGIN');try{
     for(const col of original.columns){const table='public.'+q(col.table);if(col.data_type==='jsonb')await c.query('ALTER TABLE '+table+' ALTER COLUMN '+q(col.column)+' TYPE jsonb USING '+q(col.column)+'::jsonb');if(col.column_default!=null)await c.query('ALTER TABLE '+table+' ALTER COLUMN '+q(col.column)+' SET DEFAULT '+col.column_default);}

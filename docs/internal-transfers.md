@@ -65,7 +65,15 @@ Not yet done. In order:
 1. Take a verified Cloud SQL backup.
 2. Dry run: `node scripts/apply-internal-transfer-migration.cjs` and read the statements.
 3. Apply: `node scripts/apply-internal-transfer-migration.cjs --apply --instance angelstar-investments:us-east1:asv-tracker-sql --database asvtrackerdb --production`.
-4. `firebase deploy --only dataconnect --force` (the new enum values need acknowledgement).
+4. Deploy Data Connect with the preserving wrapper. **Do not run a plain `firebase deploy --only dataconnect --force`.** This is a brownfield database: Data Connect offers to drop the hand-written CHECK constraints and partial indexes as "destructive", then refuses to run SQL on a protected database ("Brownfield database are protected"), failing before it changes anything. The wrapper temporarily normalizes only those reviewed differences, deploys, and restores every constraint, index, default and JSONB column even if the deploy fails (the same procedure as the real-estate release):
+
+   ```powershell
+   firebase dataconnect:sql:diff --json | Out-File -Encoding utf8 .firebase/internal-transfer-diff.json
+   node scripts/deploy-dataconnect-preserving-sql.cjs --diff .firebase/internal-transfer-diff.json
+   node scripts/deploy-dataconnect-preserving-sql.cjs --diff .firebase/internal-transfer-diff.json --apply --force
+   ```
+
+   The first wrapper command is a dry run; it refuses any statement outside CHECK/index/default/JSONB normalization. `--force` acknowledges the breaking-change notice for the new enum values. Always generate a fresh diff, because the wrapper's default diff file is the old real-estate one. If the process is interrupted, run it again with `--restore`.
 5. `firebase deploy --only functions`, then hosting (functions before hosting).
 6. Configure the settings above.
 
