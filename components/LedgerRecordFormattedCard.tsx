@@ -12,6 +12,7 @@ const ROUND_TYPE_LABEL: Record<string, string> = {
   Internal_ValuationAssessment: "Internal Assessment",
   Compliance_FlagChange: "Compliance Flag",
   CompanyUpdate: "Company Update",
+  Internal_Transfer: "Member Transfer",
 };
 
 const SCENARIO_DISPLAY: Record<string, string> = {
@@ -80,6 +81,34 @@ function buildFields(type: string, record: Record<string, unknown>, memberNames?
         discount ? field("Discount", `${discount}%`) : null,
         notes ? field("Notes", notes, true) : null,
         buildAllocationsField(allocations, memberNames),
+      ].filter((f) => f !== null) as Field[];
+    }
+
+    case "Internal_Transfer": {
+      const replacement = record.transfer_kind === "Replacement";
+      const dict = (v: unknown, fmt: (n: number) => string): string | null => {
+        if (!v || typeof v !== "object") return null;
+        const entries = Object.entries(v as Record<string, unknown>);
+        if (entries.length === 0) return null;
+        return entries
+          .map(([memberId, n]) => {
+            const name = memberNames?.[memberId];
+            const label = name ? `${name} (${memberId})` : memberId;
+            return `  ${label}: ${typeof n === "number" ? fmt(n) : String(n)}`;
+          })
+          .join("\n");
+      };
+      const shares = (n: number) => `${n} shares`;
+      const sellers = dict(record.sellers, shares);
+      const buyers = dict(record.buyers, replacement ? shares : formatCurrencyCompact);
+      return [
+        field("Type", replacement ? "Owner replacement" : "Sale with carry"),
+        !replacement && record.round_price_per_share ? numberField("Round price / share", record.round_price_per_share) : null,
+        !replacement && record.transfer_price_per_share !== undefined ? numberField("Transfer price / share", record.transfer_price_per_share) : null,
+        !replacement && record.legal_costs ? numberField("Legal costs", record.legal_costs) : null,
+        sellers ? { label: "Sellers", value: sellers, fullWidth: true } : null,
+        buyers ? { label: replacement ? "Buyers (shares)" : "Buyers (paid)", value: buyers, fullWidth: true } : null,
+        record.notes ? field("Notes", record.notes, true) : null,
       ].filter((f) => f !== null) as Field[];
     }
 

@@ -155,7 +155,9 @@ query ListAllocationsForScenario($scenario: Scenario!) @auth(level: USER, insecu
 }
 
 query ListLedgerEntriesForScenario($scenario: Scenario!) @auth(level: USER, insecureReason: "Ledger detail table — sort/filter/document-link visibility happen in the server component (plan §4, wireframe 4); access to financial detail fields is still gated per-type by the app, this just lists the base rows.") {
-  ledgerEntries(where: { scenario: { eq: $scenario } }, orderBy: { eventDate: DESC }, limit: 1000) {
+  # INTERNAL_TRANSFER rows are excluded on purpose: a transfer names other members and their prices, so members never
+  # see it in this portfolio-wide list (a member's own legs come from the member-scoped export instead).
+  ledgerEntries(where: { scenario: { eq: $scenario }, type: { ne: INTERNAL_TRANSFER } }, orderBy: { eventDate: DESC }, limit: 1000) {
     id
     eventDate
     type

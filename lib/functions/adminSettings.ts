@@ -45,7 +45,13 @@ export async function updateAiProviderSetting(input: UpdateAiProviderSettingInpu
   return res.data;
 }
 
-export type AppSettingKey = "member_annual_dues_amount" | "associate_annual_dues_amount" | "dues_reminder_template";
+export type AppSettingKey =
+  | "member_annual_dues_amount"
+  | "associate_annual_dues_amount"
+  | "dues_reminder_template"
+  | "transfer_dd_lead_carry_percent"
+  | "transfer_management_carry_percent"
+  | "transfer_management_carry_member_id";
 
 export interface UpdateAppSettingInput {
   key: AppSettingKey;

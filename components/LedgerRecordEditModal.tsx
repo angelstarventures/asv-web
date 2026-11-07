@@ -16,6 +16,8 @@ export function LedgerRecordEditModal({
   onSaved: () => void;
 }) {
   const { id, ...recordWithoutId } = record;
+  // Transfers move share lots and fee lines; the server refuses edits (ledger-updateRecord.ts).
+  const isTransfer = record.type === "Internal_Transfer";
   const [text, setText] = useState(JSON.stringify(recordWithoutId, null, 2));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,7 +48,13 @@ export function LedgerRecordEditModal({
         className="flex max-h-[85vh] w-full max-w-2xl flex-col gap-3 overflow-y-auto rounded-lg border border-zinc-200 bg-card p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-medium">Edit ledger entry</h2>
+        <h2 className="text-sm font-medium">{isTransfer ? "Member transfer" : "Edit ledger entry"}</h2>
+        {isTransfer && (
+          <p role="note" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+            A recorded transfer can&apos;t be edited. To change it, delete its three scenario rows (Optimistic, Balanced and
+            Conservative) and record it again from Ledger &gt; Record a Transfer.
+          </p>
+        )}
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           Saving replaces this entry entirely with the edited JSON below — validated against the
           ledger schema and cross-checked against existing ledger data before anything changes.
@@ -73,7 +81,7 @@ export function LedgerRecordEditModal({
           <button
             type="button"
             onClick={handleSave}
-            disabled={busy}
+            disabled={busy || isTransfer}
             className="rounded-full bg-foreground px-5 py-2 text-sm font-medium text-background disabled:opacity-50"
           >
             {busy ? "Saving..." : "Save"}

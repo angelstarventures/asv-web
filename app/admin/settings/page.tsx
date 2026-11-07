@@ -1,17 +1,19 @@
-import { listAiPromptSettings, listAiProviderSettings, listAppSettings } from "@/lib/dataconnect/client";
+import { listAiPromptSettings, listAiProviderSettings, listAllMembers, listAppSettings } from "@/lib/dataconnect/client";
 import { AiPromptSettingsForm } from "@/components/AiPromptSettingsForm";
 import { AiProviderSettingsForm } from "@/components/AiProviderSettingsForm";
 import { AppSettingsForm } from "@/components/AppSettingsForm";
+import { TransferFeeSettingsForm } from "@/components/TransferFeeSettingsForm";
 import { tenantConfig } from "@/lib/config/tenant";
 import type { AiProvider, SearchBackend } from "@/lib/functions/adminSettings";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminSettingsPage() {
-  const [{ aiPromptSettings }, { aiProviderSettings }, { appSettings }] = await Promise.all([
+  const [{ aiPromptSettings }, { aiProviderSettings }, { appSettings }, { members }] = await Promise.all([
     listAiPromptSettings(),
     listAiProviderSettings(),
     listAppSettings(),
+    listAllMembers(),
   ]);
   const byKey = new Map(aiPromptSettings.map((s) => [s.key, s.prompt]));
   const providerByKey = new Map(
@@ -38,6 +40,13 @@ export default async function AdminSettingsPage() {
           appByKey.get("dues_reminder_template") ??
           tenantConfig.duesReminderTemplateDefault
         }
+      />
+
+      <TransferFeeSettingsForm
+        ddLeadPercent={appByKey.get("transfer_dd_lead_carry_percent") ?? "3"}
+        managementPercent={appByKey.get("transfer_management_carry_percent") ?? "5"}
+        managementMemberId={appByKey.get("transfer_management_carry_member_id") ?? ""}
+        members={members.map((m) => ({ id: m.id, displayName: m.displayName }))}
       />
 
       <AiPromptSettingsForm
