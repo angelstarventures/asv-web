@@ -41,6 +41,8 @@ const ADMIN_GROUPS: { id: AdminGroupId; label: string; shortLabel: string; tabs:
       { href: "/admin/deals", label: "Deals" },
       { href: "/admin/documents/investment", label: "Add Startup Investment" },
       { href: "/admin/documents/updates", label: "Add Startup Updates" },
+      { href: "/admin/transfers", label: "Record Transfer" },
+      { href: "/admin/exits", label: "Record Exit" },
       { href: "/admin/real-estate", label: "Real Estate" },
       { href: "/admin/companies", label: "Companies" },
     ],

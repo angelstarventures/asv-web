@@ -3,7 +3,6 @@ import { listCustomEventTypes } from "@/lib/dataconnect/client";
 
 const PRIMARY_ACTIONS = [
   { href: "/admin/ledger/record", label: "Record a JSON Entry" },
-  { href: "/admin/ledger/transfer", label: "Record a Transfer" },
   { href: "/admin/ledger/manage", label: "Manage Ledger" },
   { href: "/admin/ledger/export", label: "Export Ledger" },
   { href: "/admin/ledger/import", label: "Import Ledger" },
