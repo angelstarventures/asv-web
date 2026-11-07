@@ -22,6 +22,7 @@ export interface RecordInternalTransferInput {
   sellers: Record<string, number>; // memberId -> shares moved out
   buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
   holdingsBefore?: Record<string, DeclaredHolding>;
+  soldCostBasis?: Record<string, number>; // seller -> total basis of the specific shares sold; omit for average cost
   legalCosts?: number; // Sale only; omit to derive as spread - carry
   docLink?: string;
   notes?: string;

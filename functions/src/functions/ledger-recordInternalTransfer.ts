@@ -25,6 +25,8 @@ export interface RecordInternalTransferInput {
   // Each seller's whole holding BEFORE this transfer. Needed the first time a member sells in a
   // company (there is no round-time backfill); cost_basis defaults to their invested dollars.
   holdingsBefore?: Record<string, { shares: number; cost_basis?: number }>;
+  // Per seller: total cost basis (dollars) of the specific shares being sold; omit for the average cost.
+  soldCostBasis?: Record<string, number>;
   legalCosts?: number; // Sale only; omit to derive as spread - carry
   docLink?: string;
   notes?: string;
@@ -57,6 +59,7 @@ export const ledgerRecordInternalTransfer = onCall<RecordInternalTransferInput, 
       sellers: d.sellers,
       buyers: d.buyers,
       ...(d.holdingsBefore && Object.keys(d.holdingsBefore).length ? { holdings_before: d.holdingsBefore } : {}),
+      ...(d.soldCostBasis && Object.keys(d.soldCostBasis).length ? { sold_cost_basis: d.soldCostBasis } : {}),
       ...(d.referenceRoundName ? { reference_round_name: d.referenceRoundName } : {}),
       ...(d.legalCosts !== undefined ? { legal_costs: d.legalCosts } : {}),
       ...(d.docLink ? { doc_link: d.docLink } : {}),

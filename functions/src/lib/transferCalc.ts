@@ -185,6 +185,9 @@ export interface InternalTransferRecord {
   sellers: Record<string, number>; // memberId -> shares moved out
   buyers: Record<string, number>; // memberId -> dollars paid (Sale) or shares received (Replacement)
   holdings_before?: Record<string, DeclaredHolding>; // authoritative holding for these sellers
+  // Optional, per seller: the TOTAL cost basis (dollars) of the shares being sold, for a seller who bought in
+  // different rounds and is selling a specific round's shares. Omit to use the seller's average cost.
+  sold_cost_basis?: Record<string, number>;
   legal_costs?: number;
 }
 
@@ -200,6 +203,37 @@ export interface TransferContext {
   managementMemberId: string | null;
   ddLeadPercent: number;
   managementPercent: number;
+}
+
+// Cost basis per share of the shares a seller is moving: the stated basis of those specific shares when
+// given, otherwise the average across the whole holding (disposals then remove basis proportionally).
+function movedBasisPerShare(rec: InternalTransferRecord, memberId: string, shares: number, h: Holding | undefined): number {
+  const stated = rec.sold_cost_basis?.[memberId];
+  if (stated !== undefined && shares > 0) return stated / shares;
+  return h && h.shares > 0 ? h.costBasis / h.shares : 0;
+}
+
+function soldBasisErrors(rec: InternalTransferRecord, holdings: Record<string, Holding>): string[] {
+  const errors: string[] = [];
+  for (const [memberId, stated] of Object.entries(rec.sold_cost_basis ?? {})) {
+    const shares = rec.sellers[memberId];
+    if (shares === undefined) {
+      errors.push(`sold_cost_basis names ${memberId}, who is not a seller in this transfer.`);
+      continue;
+    }
+    if (!(stated >= 0)) {
+      errors.push(`Seller ${memberId}: sold_cost_basis must be 0 or more.`);
+      continue;
+    }
+    const h = holdings[memberId];
+    if (!h || h.shares <= 0) continue; // the "holds only" error already covers this
+    if (stated > h.costBasis + 0.005) {
+      errors.push(`Seller ${memberId}: the cost basis of the shares sold (${stated}) exceeds the whole recorded basis (${h.costBasis}).`);
+    } else if (shares >= h.shares - 1e-6 && Math.abs(stated - h.costBasis) > 0.005) {
+      errors.push(`Seller ${memberId} is selling the whole holding, so the cost basis sold must be the whole basis (${h.costBasis}); correct the holding first if it is wrong.`);
+    }
+  }
+  return errors;
 }
 
 export const isReplacement = (rec: Pick<InternalTransferRecord, "transfer_kind">): boolean => rec.transfer_kind === "Replacement";
@@ -245,7 +279,7 @@ function resolveSellerHoldings(
 export function computeTransferFromRecord(rec: InternalTransferRecord, ctx: TransferContext): TransferResult {
   const resolved = resolveSellerHoldings(Object.keys(rec.sellers), rec.holdings_before, ctx);
   const base = isReplacement(rec) ? computeReplacement(rec, resolved.holdings) : computeSale(rec, ctx, resolved.holdings);
-  const errors = [...resolved.errors, ...base.errors];
+  const errors = [...resolved.errors, ...soldBasisErrors(rec, resolved.holdings), ...base.errors];
   return {
     ...base,
     errors,
@@ -270,7 +304,7 @@ function computeReplacement(rec: InternalTransferRecord, holdings: Record<string
     const h = holdings[memberId] ?? { shares: 0, costBasis: 0 };
     if (!(shares > 0)) errors.push(`Seller ${memberId}: shares must be greater than 0.`);
     if (shares > h.shares + 1e-6) errors.push(`Seller ${memberId} is transferring ${shares} shares but holds only ${h.shares}.`);
-    const costBasisPerShare = h.shares > 0 ? h.costBasis / h.shares : 0;
+    const costBasisPerShare = movedBasisPerShare(rec, memberId, shares, h);
     movedBasis += shares * costBasisPerShare;
     return { memberId, shares, costBasisPerShare, amount: 0, gain: 0, feesCharged: 0, realizedGain: 0, sharesHeldBefore: h.shares };
   });
@@ -315,9 +349,9 @@ function computeSale(rec: InternalTransferRecord, ctx: TransferContext, holdings
       return {
         memberId,
         shares,
-        // Average cost across the seller's holding; disposals remove basis proportionally, so the
-        // average is stable across repeated partial sales.
-        costBasisPerShare: held > 0 ? h.costBasis / held : 0,
+        // The stated basis of the specific shares sold, else the average across the whole holding
+        // (disposals remove basis proportionally, so the average is stable across partial sales).
+        costBasisPerShare: movedBasisPerShare(rec, memberId, shares, h),
         heldShares: held,
       };
     }),

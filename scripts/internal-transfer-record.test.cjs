@@ -119,4 +119,29 @@ r = computeTransferFromRecord({ ...repl, sellers: { '00010': 9 }, buyers: { '000
 assert.deepEqual(r.errors, []);
 assert.equal(r.openingAdjustments[0].shares, 9);
 
+// Specific-round sale: the seller holds 2 shares bought at 1111.11 plus 3 bought at 2300 (5 shares, 9122.22 basis)
+// and sells the 2 cheap shares. sold_cost_basis makes gain/carry use THEIR cost, not the 1824.44 average.
+const mixed = { holdings: { '00010': { shares: 5, costBasis: 2222.22 + 6900 } }, ddLeadMemberId: '00002', managementMemberId: '00001', ddLeadPercent: 3, managementPercent: 5 };
+const specificSale = { ...record, sellers: { '00010': 2 }, buyers: { '00020': 4600 }, legal_costs: 0 };
+const avg = computeTransferFromRecord(specificSale, mixed);
+assert.deepEqual(avg.errors, []);
+assert(Math.abs(avg.sellers[0].gain - (4600 - 2 * ((2222.22 + 6900) / 5))) < 0.01, 'blended basis when sold_cost_basis is omitted');
+const spec = computeTransferFromRecord({ ...specificSale, sold_cost_basis: { '00010': 2222.22 } }, mixed);
+assert.deepEqual(spec.errors, []);
+assert(Math.abs(spec.sellers[0].gain - (4600 - 2222.22)) < 0.01, 'gain uses the stated basis');
+assert(Math.abs(spec.sellers[0].costBasisPerShare * 2 - 2222.22) < 1e-9);
+assert(Math.abs(mixed.holdings['00010'].costBasis - spec.sellers[0].costBasisPerShare * 2 - 6900) < 0.01, 'the rest of the basis stays with the kept shares');
+assert(validate({ ...specificSale, sold_cost_basis: { '00010': 2222.22 } }), JSON.stringify(validate.errors));
+assert(!validate({ ...specificSale, sold_cost_basis: { '00010': -1 } }));
+// A replacement hands the buyer exactly the stated basis.
+r = computeTransferFromRecord({ transfer_kind: 'Replacement', sellers: { '00010': 2 }, buyers: { '00030': 2 }, sold_cost_basis: { '00010': 2222.22 } }, mixed);
+assert.deepEqual(r.errors, []);
+assert(Math.abs(r.buyers[0].costBasisPerShare - 1111.11) < 1e-9);
+// Guards.
+const errs = (rec) => computeTransferFromRecord({ ...specificSale, ...rec }, mixed).errors.join(' | ');
+assert(/exceeds the whole recorded basis/.test(errs({ sold_cost_basis: { '00010': 99999 } })));
+assert(/whole holding/.test(errs({ sellers: { '00010': 5 }, buyers: { '00020': 11500 }, sold_cost_basis: { '00010': 2222.22 } })));
+assert(/not a seller/.test(errs({ sold_cost_basis: { '00099': 100 } })));
+assert.equal(errs({ sellers: { '00010': 5 }, buyers: { '00020': 11500 }, sold_cost_basis: { '00010': 2222.22 + 6900 } }), '', 'selling everything with the whole basis is fine');
+
 console.log('internal-transfer-record tests passed');

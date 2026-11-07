@@ -50,6 +50,7 @@ export function toTransferRecord(record: Record<string, unknown>): InternalTrans
     sellers: (record.sellers as Record<string, number>) ?? {},
     buyers: (record.buyers as Record<string, number>) ?? {},
     holdings_before: (record.holdings_before as Record<string, DeclaredHolding> | undefined) ?? undefined,
+    sold_cost_basis: (record.sold_cost_basis as Record<string, number> | undefined) ?? undefined,
     legal_costs: record.legal_costs != null ? Number(record.legal_costs) : undefined,
   };
 }
@@ -163,7 +164,7 @@ export async function previewInternalTransfer(
     const holdings: Record<string, Holding> = {};
     for (const [id, shares] of Object.entries(rec.sellers)) holdings[id] = { shares, costBasis: 0 };
     return computeTransferFromRecord(
-      { ...rec, holdings_before: undefined },
+      { ...rec, holdings_before: undefined, sold_cost_basis: undefined },
       { ...(await loadTransferContext(run, companyId, [])), holdings }
     );
   }

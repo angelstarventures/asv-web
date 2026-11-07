@@ -90,7 +90,10 @@ export const BUILTIN_PROMPTS: Record<AiPromptSettingKey, string> = {
     "holdings_before unless the document contradicts it (and say so in warnings). NEVER invent, " +
     "estimate, or back-calculate a holding from dollars invested — if a seller has no recorded " +
     "holding and the document does not state one, omit holdings_before and add a warning naming " +
-    "that member so the reviewer can supply it. Like a round, an Internal_Transfer never diverges " +
+    "that member so the reviewer can supply it. sold_cost_basis (per seller, total dollars) states the " +
+    "cost of the SPECIFIC shares being sold when the seller bought in several rounds and the " +
+    "document says which round\'s shares are sold and what they cost; otherwise omit it and the " +
+    "system uses the seller\'s average cost. Never infer it. Like a round, an Internal_Transfer never diverges " +
     "by scenario: return one identical copy per scenario (3 copies).",
   portfolio_chat:
     `You are a portfolio assistant for ${ORG}, a venture investment fund. ` +

@@ -25,11 +25,12 @@ Worked example (House of Biryan): 2024 round at $1,111.11/share ($5,000 for 4.5 
 
 ## Recording a transfer
 
-Admin > Ledger > **Record a Transfer** (`/admin/ledger/transfer`).
+Admin > Portfolio Management > **Record Transfer** (`/admin/transfers`).
 
 1. Pick the company and date, and the kind.
 2. Add sellers (shares moved) and buyers (shares for a Replacement, dollars for a Sale). "Move entire position" and "Assign remaining" shortcuts help.
 3. **Holdings.** The form shows each seller's recorded holding. If none is recorded, enter the seller's **whole holding** (shares, and optionally total cost basis; cost basis defaults to the dollars the member invested in that company). Tick "Correct this holding" to replace a recorded one. After a new round, the next transfer re-declares holdings: the earlier declaration does not include later investments.
+   **Selling shares from a specific round.** A holding is one blended position, so by default a partial sale takes the seller's *average* cost per share. If the seller bought in several rounds and is selling one round's shares, enter **Cost basis of the shares sold** (total dollars for those shares) on the seller row. Gain and carry (Sale) or the basis the buyer inherits (Replacement) then use that figure, and the rest of the seller's basis stays with the shares they keep. It cannot exceed the seller's whole recorded basis, and selling the whole holding must use the whole basis. The record field is `sold_cost_basis` (member ID to total dollars). Limitation: exporting and re-importing such a transfer into an empty ledger reproduces the transfer's own figures, but the seller's leftover basis comes back as an average, because only the per-share basis of the shares sold is stored on the transfer.
 4. For a Sale also enter round price, transfer price, optional legal costs and the reference round.
 5. The reconciliation panel runs the same calculator that records. **Record** is enabled only when it reports no errors. Read the warnings and the opening-holdings list before recording.
 
@@ -38,6 +39,8 @@ A transfer is written as three identical scenario rows (Optimistic, Balanced, Co
 Transfers can also arrive through mass import and through AI drafting from a transfer agreement (upload with document type "Transfer agreement"; admin-only because it names other members). The AI never invents holdings; drafted transfers are dry-run and problems appear as review warnings.
 
 ## Full exit
+
+Record an exit from Admin > Portfolio Management > **Record Exit** (`/admin/exits`): company, date, exit type, total exit value, ASV total payout and each member's gross payout (they must add up to the ASV total within $50; a split-by-cost-basis button gives a starting point). The live panel shows each member's gain, carry and net payout from the same server code that records. An exit can't be edited; delete its three rows in Manage Ledger and re-record it. Exits can still arrive through AI drafting or JSON.
 
 When an `Exit_Event` is written and a management-carry recipient is configured, carry is charged on each member's gain, where gain = `payout - position cost basis`, floored at 0. Fee lines are stored on the exit entry.
 

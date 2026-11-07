@@ -24,7 +24,7 @@ import {
 
 type CompanyOption = { id: string; name: string; label: string };
 type MemberOption = { id: string; displayName: string };
-type SellerRow = { key: number; memberId: string; shares: string; correct: boolean; heldShares: string; heldBasis: string };
+type SellerRow = { key: number; memberId: string; shares: string; correct: boolean; heldShares: string; heldBasis: string; soldBasis: string };
 type BuyerRow = { key: number; memberId: string; value: string };
 
 const inputCls = "rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900";
@@ -41,7 +41,7 @@ const FEE_LABEL: Record<string, string> = {
 };
 
 let nextKey = 1;
-const newSeller = (): SellerRow => ({ key: nextKey++, memberId: "", shares: "", correct: false, heldShares: "", heldBasis: "" });
+const newSeller = (): SellerRow => ({ key: nextKey++, memberId: "", shares: "", correct: false, heldShares: "", heldBasis: "", soldBasis: "" });
 const newBuyer = (): BuyerRow => ({ key: nextKey++, memberId: "", value: "" });
 
 interface FormState {
@@ -68,6 +68,7 @@ function buildInput(f: FormState): { input?: RecordInternalTransferInput; proble
 
   const sellers: Record<string, number> = {};
   const holdingsBefore: Record<string, DeclaredHolding> = {};
+  const soldCostBasis: Record<string, number> = {};
   const holderById = new Map((f.holdings?.holders ?? []).map((h) => [h.memberId, h]));
   for (const s of f.sellers) {
     if (!s.memberId) continue;
@@ -77,6 +78,11 @@ function buildInput(f: FormState): { input?: RecordInternalTransferInput; proble
       continue;
     }
     sellers[s.memberId] = shares;
+    if (s.soldBasis.trim() !== "") {
+      const sold = num(s.soldBasis);
+      if (sold >= 0) soldCostBasis[s.memberId] = sold;
+      else problems.push("the cost basis of the shares sold must be 0 or more (or leave it blank)");
+    }
     const holder = holderById.get(s.memberId);
     if (holder?.shares == null || s.correct) {
       const held = num(s.heldShares);
@@ -118,6 +124,7 @@ function buildInput(f: FormState): { input?: RecordInternalTransferInput; proble
     sellers,
     buyers,
     ...(Object.keys(holdingsBefore).length ? { holdingsBefore } : {}),
+    ...(Object.keys(soldCostBasis).length ? { soldCostBasis } : {}),
     ...(sale ? { roundPricePerShare: round, transferPricePerShare: transfer } : {}),
     ...(sale && Number.isFinite(legal) ? { legalCosts: legal } : {}),
     ...(sale && f.referenceRound.trim() ? { referenceRoundName: f.referenceRound.trim() } : {}),
@@ -311,7 +318,7 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                   <div className="flex flex-wrap items-end gap-3">
                     <label className="flex flex-col gap-1 text-sm">
                       Seller
-                      <select value={s.memberId} onChange={(e) => patchSeller(s.key, { memberId: e.target.value, correct: false, heldShares: "", heldBasis: "" })} className={inputCls}>
+                      <select value={s.memberId} onChange={(e) => patchSeller(s.key, { memberId: e.target.value, correct: false, heldShares: "", heldBasis: "", soldBasis: "" })} className={inputCls}>
                         <option value="">Select…</option>
                         {holdings.holders
                           .filter((h) => !used.has(h.memberId))
@@ -352,6 +359,23 @@ export function InternalTransferForm({ companies, members }: { companies: Compan
                       No holding is recorded for this member — enter their whole holding in {holdings.companyName} before this transfer.
                       They have {money(holder?.invested ?? 0)} invested.
                     </p>
+                  )}
+                  {s.memberId && (
+                    <label className="flex max-w-md flex-col gap-1 text-sm">
+                      Cost basis of the shares sold ($, optional)
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={s.soldBasis}
+                        placeholder={known && num(s.shares) > 0 ? String(Math.round(((holder.basis * num(s.shares)) / (holder.shares as number)) * 100) / 100) : ""}
+                        onChange={(e) => patchSeller(s.key, { soldBasis: e.target.value })}
+                        className={`${inputCls} w-44`}
+                      />
+                      <span className="text-xs text-zinc-500">
+                        Leave blank to use this member&apos;s average cost. Enter the total cost of these specific shares if they came from one round (the rest of their basis stays with the shares they keep).
+                      </span>
+                    </label>
                   )}
                   {declaring && (
                     <div className="flex flex-wrap items-end gap-3">

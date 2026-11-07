@@ -214,6 +214,24 @@ async function main() {
     assert(near(Object.values(v).reduce((n, x) => n + x, 0), 16000), "value conserved");
     ok("recorded member value follows the shares across both transfers (16,000 conserved)");
 
+    // --- E2b. Selling specific shares: sold_cost_basis (buyerA holds 3 shares, basis 6,000) ---------
+    const specific = {
+      ...base, type: "Internal_Transfer", transfer_kind: "Replacement", date: "2026-06-01",
+      sellers: { [buyerA]: 1 }, buyers: { [sellerB]: 1 }, sold_cost_basis: { [buyerA]: 1500 }, // average would be 2,000
+    };
+    const specificPreview = await previewInternalTransfer(run, specific);
+    assert.deepEqual(specificPreview.errors, [], JSON.stringify(specificPreview.errors));
+    assert(near(specificPreview.buyers[0].costBasisPerShare, 1500), "buyer inherits the stated basis");
+    const specificId = await applyLedgerRecord(client, specific, { scenario: "BALANCED", createdBy: ddLead });
+    const afterSpecific = Object.fromEntries((await loadMemberPositions(run, companyId)).map((p) => [p.memberId, p]));
+    assert(near(afterSpecific[buyerA].basis, 4500) && near(afterSpecific[buyerA].shares, 2), "seller keeps the rest of the basis");
+    assert(near(afterSpecific[sellerB].basis, 1500) && near(afterSpecific[sellerB].shares, 1), "buyer holds the shares at the stated basis");
+    await expectFailure(client, "sold_cost_basis above the whole recorded basis", /exceeds the whole recorded basis/, () =>
+      applyLedgerRecord(client, { ...specific, date: "2026-06-02", sold_cost_basis: { [buyerA]: 99999 } }, { scenario: "BALANCED", createdBy: ddLead })
+    );
+    await deleteLedgerEntry(client, specificId);
+    ok("selling specific shares: stated basis 1,500 moves (not the 2,000 average); seller keeps 4,500 on 2 shares");
+
     // --- E3. Carry on a full exit (Phase 7) -------------------------------------------------
     const exitRecord = {
       ...base, type: "Exit_Event", date: "2026-09-01", exit_type: "Acquisition", total_exit_value: 1000000, asv_total_payout: 18000,
