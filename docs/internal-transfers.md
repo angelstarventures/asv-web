@@ -15,6 +15,8 @@ There are no declared holdings and no member share counts. A member's position i
 - A transfer takes shares and basis out of each seller (at the seller's average cost in that round) and gives the buyer shares at what they paid (Sale) or at the basis they inherit (Replacement).
 - A member's company-level cost basis is their allocations plus basis received minus basis moved out, across all rounds. Invested stays the original capital.
 
+**The round price comes from the ledger.** The source round's price per share is read from the round's own record, and every share count is derived from it. If it is slightly off (for example 1,111.11 against an exact 5,000 / 4.5), correct the round in Manage Ledger **before** recording transfers of that round. Positions then follow the corrected price everywhere. A transfer already recorded keeps the share counts it was recorded with, so if transfers of that round already exist, delete and re-record them after the correction.
+
 Amounts on a transfer are entered as **original cost**: the dollars at the source round's own price (shares x that price). A seller who put $5,000 into a round moves "$5,000" to move all of it, whatever the shares are worth now. The form's "Move entire position" button fills this in.
 
 ## Rules

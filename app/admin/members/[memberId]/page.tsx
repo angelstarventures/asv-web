@@ -3,7 +3,9 @@ import Link from "next/link";
 import { getMemberById } from "@/lib/dataconnect/client";
 import { MemberActions } from "@/components/MemberActions";
 import { EditMemberForm } from "@/components/EditMemberForm";
+import { MemberAiSettings } from "@/components/MemberAiSettings";
 import { AdminPhotoUpload } from "@/components/AdminPhotoUpload";
+import type { ScenarioLockValue } from "@/lib/functions/adminMembers";
 import { getCurrentMember } from "@/lib/auth/currentMember";
 
 export const dynamic = "force-dynamic";
@@ -16,6 +18,7 @@ export default async function AdminMemberDetailPage({
   const { memberId } = await params;
   const [{ member }, viewer] = await Promise.all([getMemberById({ id: memberId }), getCurrentMember()]);
   if (!member) notFound();
+  const viewerIsSiteAdmin = viewer?.role === "site_admin" || viewer?.role === "dev_site_admin" || viewer?.role === "developer";
 
   return (
     <div className="flex flex-col gap-6 px-6 py-10">
@@ -61,6 +64,14 @@ export default async function AdminMemberDetailPage({
         interests={member.interests ?? null}
         expertise={member.expertise ?? null}
       />
+
+      {viewerIsSiteAdmin && (
+        <MemberAiSettings
+          memberId={member.id}
+          aiChatEnabled={member.aiChatEnabled}
+          lockedScenario={(member.lockedScenario?.toLowerCase() ?? "") as ScenarioLockValue}
+        />
+      )}
 
       <MemberActions
         memberId={member.id}
