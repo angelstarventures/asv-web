@@ -193,13 +193,21 @@ export async function recomputeAllRollupsAndCheckInvariants(): Promise<{ warning
     }
   });
 
+  // Compare each member's TOTAL per scenario for (company, date). Comparing individual amounts
+  // across scenarios mis-fires when a company has two rounds on the same date (e.g. a round and
+  // its pro-rata round), because one scenario's two rows then look like differing amounts.
   const divergent = await query<{ eventDate: string; companyId: string; distinctAmounts: string }>(
-    `SELECT le."event_date" AS "eventDate", le."company_id" AS "companyId", COUNT(DISTINCT a.amount) AS "distinctAmounts"
-     FROM "ledger_entry" le
-     JOIN "allocation" a ON a."ledger_entry_id" = le.id
-     WHERE le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')
-     GROUP BY le."event_date", le."company_id", a."member_id"
-     HAVING COUNT(DISTINCT a.amount) > 1`
+    `SELECT "eventDate", "companyId", COUNT(DISTINCT total) AS "distinctAmounts"
+     FROM (
+       SELECT le."event_date" AS "eventDate", le."company_id" AS "companyId", a."member_id" AS "memberId", le.scenario,
+              SUM(a.amount) AS total
+       FROM "ledger_entry" le
+       JOIN "allocation" a ON a."ledger_entry_id" = le.id
+       WHERE le.type IN ('PARTICIPATING_PRICED_ROUND', 'PARTICIPATING_SAFE_ROUND', 'NON_PARTICIPATING_ROUND')
+       GROUP BY le."event_date", le."company_id", a."member_id", le.scenario
+     ) per_scenario
+     GROUP BY "eventDate", "companyId", "memberId"
+     HAVING COUNT(DISTINCT total) > 1`
   );
   for (const row of divergent) {
     warnings.push(
